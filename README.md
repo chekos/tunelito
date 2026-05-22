@@ -1,12 +1,23 @@
 # Tunelito
 
+[![CI](https://github.com/chekos/tunelito/actions/workflows/ci.yml/badge.svg)](https://github.com/chekos/tunelito/actions/workflows/ci.yml)
+
 Tunelito turns any local HTML file into a temporary live review room.
 
-You run one command, share the local or tunnel URL on a call, and reviewers can select text on the page to leave live comments. Your HTML file stays the source of truth: edit it in your normal editor, save, and connected browsers reload.
+Run one command, share the printed URL on a call, and reviewers can select text on the page to leave live comments. You keep editing the HTML in your normal editor; connected browsers reload when the file changes. Comments are saved as readable markdown beside the page.
 
-Tunelito is local-first. The public URL is a temporary tunnel to your laptop, and comments are written to a markdown file beside the HTML page.
+Tunelito is local-first: your file stays on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
-## Quick Start
+## Install
+
+Tunelito requires Node.js 22 or newer.
+
+For the current GitHub beta:
+
+```bash
+npm install -g github:chekos/tunelito
+tunelito --version
+```
 
 From a clone:
 
@@ -16,30 +27,48 @@ npm link
 tunelito ./examples/simple-review.html
 ```
 
-For a friend testing the beta from GitHub:
+## Start a Review
 
 ```bash
-npm install -g github:chekos/tunelito
 tunelito ./page.html
 ```
 
-For local-only testing:
+Tunelito prints:
+
+```text
+Tunelito is running
+Local:   http://127.0.0.1:4317/?tunelito_key=...
+Comments: /path/to/page.comments.md
+Access:  review key required by the printed URLs
+Public:  https://example.trycloudflare.com/?tunelito_key=...
+```
+
+Share the `Public:` URL with the person on your call. Open the `Local:` URL yourself if you want to watch the same session.
+
+For local-only work:
 
 ```bash
 tunelito ./page.html --no-tunnel --open
 ```
 
-Tunelito prints:
+## What Reviewers Can Do
 
-- a local URL
-- a public Cloudflare Tunnel URL when `cloudflared` is installed, or when `npx cloudflared@latest` can run
-- the markdown file where comments are written
-- live viewer/comment events
+- Select text on desktop or mobile.
+- Tap `Comment` and leave a note.
+- See other comments appear live.
+- Open the generated markdown comments file from the panel.
 
-## Options
+## What You Control
+
+- The source HTML file remains untouched.
+- Edits happen in your editor only.
+- Saved HTML changes trigger a live reload in connected browsers.
+- Comments persist to `<page>.comments.md` unless you choose another path with `--out`.
+
+## CLI
 
 ```text
-Tunelito 0.1.1-beta.0
+Tunelito 0.1.1-beta.1
 
 Usage: tunelito <page.html> [options]
 
@@ -48,75 +77,84 @@ Options:
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page>.comments.md)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
+  --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
   -v, --version         Show version
-  -h, --help            Show help
+  -h, --help            Show this help
 ```
 
 ## How It Works
 
-Tunelito serves the HTML from disk and injects a small annotation client into the response. It does not modify the HTML file.
+Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. The injected client handles selection, comment composition, highlights, live WebSocket sync, and reload notices. The original HTML file is not modified.
 
-The injected client:
-
-- shows a compact comments button
-- lets reviewers select text and comment on the selection, including on mobile browsers
-- syncs comments live over WebSocket
-- highlights comment anchors with the browser Highlight API when available
-- reloads when the source HTML changes on disk
-
-The local server:
+The server also:
 
 - serves sibling assets relative to the HTML file
-- persists comments to markdown in real time
-- restores comments from Tunelito metadata in that markdown if restarted
-- optionally starts `cloudflared tunnel --url <local-url>` for a temporary public URL, falling back to `npx cloudflared@latest`
+- writes comments to markdown atomically
+- restores prior comments from hidden Tunelito metadata in that markdown
+- starts `cloudflared tunnel --url <local-url>` when available
+- falls back to `npx cloudflared@latest` when `cloudflared` is not installed
+
+## Access Model
+
+Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
+
+Use `--no-auth` only for local demos or trusted networks. For sensitive material, prefer `--no-tunnel` or avoid sharing the session link.
 
 ## Comment Files
 
-By default, comments are written next to the source page:
+By default:
 
 ```text
 page.html
 page.comments.md
 ```
 
-The markdown is readable as-is and includes hidden metadata comments so Tunelito can restore live state after a restart.
+The markdown is meant to be readable in any editor:
 
-## Beta Test Checklist
+```markdown
+# Tunelito comments for `page.html`
 
-Use this before sharing a session link with someone else:
+## Jane at 2026-05-22 18:00:00 UTC
 
-1. Start with a simple HTML page that does not already include another review system.
-2. Run `tunelito ./page.html`.
-3. Wait for the `Public:` URL.
-4. Open the public URL on your phone.
-5. Select text, tap the Tunelito `Comment` button, and submit a short comment.
-6. Confirm the terminal logs `Comment from ...`.
-7. Confirm `<page>.comments.md` exists and contains the comment.
-8. Edit and save the HTML file; the phone should reload.
+> selected text
+
+This sentence needs a clearer verb.
+```
+
+Tunelito also stores hidden metadata comments so the live session can be restored after a restart.
+
+## Beta Checklist
+
+Before sharing a live session:
+
+1. Run `tunelito ./page.html`.
+2. Wait for the `Public:` URL.
+3. Open that URL on your phone.
+4. Select text and submit a short comment.
+5. Confirm the terminal logs `Comment from ...`.
+6. Confirm `<page>.comments.md` contains the comment.
+7. Edit and save the HTML file; the phone should reload.
 
 ## Packaging a Beta Tarball
 
-To send a standalone beta build without publishing to npm:
-
 ```bash
+npm run ci
 npm pack
+npm install -g ./tunelito-0.1.1-beta.1.tgz
 ```
 
-Send the generated `tunelito-*.tgz` file. Your tester can install it with:
+The package includes the CLI, runtime source, examples, docs, changelog, license, and security policy.
 
-```bash
-npm install -g ./tunelito-0.1.1-beta.0.tgz
-```
+## Project Docs
 
-The package intentionally includes only the CLI, runtime source, README, license, and examples.
+- [Security policy](./SECURITY.md)
+- [Release process](./docs/RELEASING.md)
+- [Examples](./examples/README.md)
 
-## Notes
+## Current Limits
 
 - Text annotations work best on real DOM text.
 - Canvas, video, images, and cross-origin iframes are not yet annotatable.
-- If you edit the exact text someone commented on, the comment remains in markdown and the sidebar, but the highlight may not reattach.
+- If the exact commented text changes, the comment remains in markdown and the sidebar, but the highlight may not reattach.
 - Strict in-page CSP meta tags are removed from the served response so the injected same-origin client can run.
-- Use `--no-tunnel` when you want to avoid starting any public tunnel process.
-- Anyone with the temporary public URL can view the page and leave comments. Do not use a tunnel session for sensitive material unless you are comfortable with that exposure.

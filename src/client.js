@@ -2,6 +2,7 @@
   const script = document.currentScript;
   const sourceName = script?.dataset?.sourceName || document.title || "HTML page";
   const endpointBase = "/__tunelito";
+  const accessKey = new URLSearchParams(location.search).get("tunelito_key") || "";
   const state = {
     socket: null,
     connected: false,
@@ -19,7 +20,9 @@
 
   function connect() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${location.host}${endpointBase}/ws`);
+    const socketUrl = new URL(`${protocol}//${location.host}${endpointBase}/ws`);
+    if (accessKey) socketUrl.searchParams.set("tunelito_key", accessKey);
+    const socket = new WebSocket(socketUrl);
     state.socket = socket;
 
     socket.addEventListener("open", () => {
@@ -325,7 +328,9 @@
     const composer = shadow.querySelector(".composer");
     const selection = shadow.querySelector(".selection");
     const name = shadow.querySelector(".name");
+    const markdownLink = shadow.querySelector(".link");
     shadow.querySelector(".title strong").textContent = sourceName;
+    markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
     name.value = state.author;
 
     launcher.addEventListener("click", () => panel.classList.toggle("open"));
@@ -360,6 +365,12 @@
       mini: shadow.querySelector(".mini"),
       name,
     };
+  }
+
+  function withAccessKey(path) {
+    const url = new URL(path, location.href);
+    if (accessKey) url.searchParams.set("tunelito_key", accessKey);
+    return `${url.pathname}${url.search}${url.hash}`;
   }
 
   function bindSelection() {

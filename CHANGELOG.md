@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1-beta.1
+
+- Raises the supported runtime to active LTS Node.js 22+.
+- Adds generated review-key URLs for shared sessions by default.
+- Adds CI across Node.js 22, 24, and 26.
+- Adds trusted-publishing release workflow scaffolding.
+- Adds security and release documentation.
+- Polishes the README for beta testers.
+
 ## 0.1.1-beta.0
 
 - Adds beta package metadata for GitHub/tarball installs.

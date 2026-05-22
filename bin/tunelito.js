@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
-export const VERSION = "0.1.1-beta.0";
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+export const VERSION = pkg.version;
 
 function usage() {
   return `Tunelito ${VERSION}
@@ -19,6 +21,7 @@ Options:
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page>.comments.md)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
+  --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
   -v, --version         Show version
   -h, --help            Show this help
@@ -30,6 +33,7 @@ export function parseArgs(argv) {
     host: "127.0.0.1",
     port: 4317,
     tunnel: true,
+    auth: true,
     open: false,
   };
   const positional = [];
@@ -42,6 +46,8 @@ export function parseArgs(argv) {
       opts.version = true;
     } else if (arg === "--no-tunnel") {
       opts.tunnel = false;
+    } else if (arg === "--no-auth") {
+      opts.auth = false;
     } else if (arg === "--open") {
       opts.open = true;
     } else if (arg === "--port") {
@@ -109,11 +115,13 @@ async function main() {
     process.exit(1);
   }
 
+  const accessKey = opts.auth ? generateAccessKey() : null;
   const instance = await createTunelitoServer({
     filePath: opts.filePath,
     commentsPath: opts.commentsPath,
     host: opts.host,
     port: opts.port,
+    accessKey,
   });
 
   let tunnel = null;
@@ -132,6 +140,7 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(`Comments: ${instance.commentsPath}`);
+  console.log(opts.auth ? "Access:  review key required by the printed URLs" : "Access:  disabled (--no-auth)");
 
   if (opts.open) {
     openBrowser(instance.localUrl);
@@ -140,9 +149,9 @@ async function main() {
   if (opts.tunnel) {
     console.log("Public:  starting Cloudflare Tunnel...");
     tunnel = startCloudflareTunnel({
-      localUrl: instance.localUrl,
+      localUrl: instance.originUrl,
       onUrl(url) {
-        console.log(`Public:  ${url}`);
+        console.log(`Public:  ${withReviewKey(url, accessKey)}`);
       },
       onFallback() {
         console.log("Public:  cloudflared not found; trying npx cloudflared@latest...");
@@ -178,6 +187,16 @@ export function openBrowser(url, { platform = process.platform, spawnFn = spawn,
   });
   child.unref();
   return child;
+}
+
+export function generateAccessKey(randomFn = randomBytes) {
+  return randomFn(18).toString("base64url");
+}
+
+export function withReviewKey(url, accessKey) {
+  const parsed = new URL(url);
+  if (accessKey) parsed.searchParams.set("tunelito_key", accessKey);
+  return parsed.toString();
 }
 
 export function isCliEntry(metaUrl, argvPath = process.argv[1]) {

@@ -87,6 +87,46 @@ test("server returns 400 for malformed URL escapes without exiting", async () =>
   }
 });
 
+test("server can require a review access key", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-auth-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body>Private draft</body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "secret",
+  });
+
+  try {
+    assert.match(instance.localUrl, /tunelito_key=secret/);
+
+    const denied = await fetch(instance.originUrl);
+    assert.equal(denied.status, 401);
+    assert.equal(await denied.text(), "Tunelito review link is missing or invalid.");
+
+    const badCookie = await fetch(instance.originUrl, { headers: { cookie: "tunelito_key=%" } });
+    assert.equal(badCookie.status, 401);
+    await badCookie.text();
+
+    const allowed = await fetch(instance.localUrl);
+    assert.equal(allowed.status, 200);
+    assert.match(await allowed.text(), /Private draft/);
+    assert.match(allowed.headers.get("set-cookie"), /tunelito_key=secret/);
+
+    const clientDenied = await fetch(new URL("/__tunelito/client.js", instance.originUrl));
+    assert.equal(clientDenied.status, 401);
+    await clientDenied.text();
+
+    const clientAllowed = await fetch(new URL("/__tunelito/client.js?tunelito_key=secret", instance.originUrl));
+    assert.equal(clientAllowed.status, 200);
+    assert.match(await clientAllowed.text(), /WebSocket/);
+  } finally {
+    await instance.close();
+  }
+});
+
 function waitFor(target, event) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${event}`)), 1000);

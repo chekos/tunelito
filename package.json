@@ -1,26 +1,31 @@
 {
   "name": "tunelito",
-  "version": "0.1.1-beta.0",
+  "version": "0.1.1-beta.1",
   "description": "Serve any local HTML page as a temporary live review room with injected comments.",
   "type": "module",
+  "packageManager": "npm@11.12.1",
   "bin": {
     "tunelito": "./bin/tunelito.js"
   },
   "files": [
     "bin/",
     "src/",
+    "docs/RELEASING.md",
     "examples/",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "SECURITY.md"
   ],
   "scripts": {
+    "ci": "npm run check && npm test && npm run pack:check",
     "test": "node --test",
     "check": "node --check bin/tunelito.js && node --check src/*.js test/*.test.js",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run",
+    "prepack": "npm run check && npm test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "keywords": [
     "html",

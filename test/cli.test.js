@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isCliEntry, openBrowser, parseArgs, VERSION } from "../bin/tunelito.js";
+import { generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
 
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -20,6 +20,11 @@ test("parseArgs rejects --out without a value", () => {
 test("parseArgs supports version flag without a file", () => {
   assert.equal(parseArgs(["--version"]).version, true);
   assert.equal(parseArgs(["-v"]).version, true);
+});
+
+test("parseArgs enables review-key auth by default and can disable it", () => {
+  assert.equal(parseArgs(["page.html"]).auth, true);
+  assert.equal(parseArgs(["page.html", "--no-auth"]).auth, false);
 });
 
 test("isCliEntry recognizes npm-style symlinked bin paths", () => {
@@ -37,6 +42,22 @@ test("parseArgs accepts an explicit comments path", () => {
   assert.equal(opts.filePath, resolve("page.html"));
   assert.equal(opts.commentsPath, resolve("notes.md"));
   assert.equal(opts.tunnel, false);
+});
+
+test("generateAccessKey creates URL-safe entropy for shared links", () => {
+  const key = generateAccessKey(() => Buffer.from("abcdefghijklmnopqr"));
+  assert.equal(key, "YWJjZGVmZ2hpamtsbW5vcHFy");
+});
+
+test("withReviewKey appends the review key without dropping existing query params", () => {
+  assert.equal(
+    withReviewKey("https://example.test/review?x=1", "secret"),
+    "https://example.test/review?x=1&tunelito_key=secret",
+  );
+});
+
+test("withReviewKey leaves unkeyed URLs alone", () => {
+  assert.equal(withReviewKey("https://example.test/review", null), "https://example.test/review");
 });
 
 test("openBrowser uses a platform opener and logs spawn errors", () => {

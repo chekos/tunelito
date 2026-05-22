@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
+import { timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync, watch } from "node:fs";
 import { dirname, basename, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,8 @@ import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
+export const ACCESS_KEY_PARAM = "tunelito_key";
+const ACCESS_KEY_COOKIE = "tunelito_key";
 
 export async function createTunelitoServer(options) {
   const filePath = resolve(options.filePath);
@@ -18,6 +21,7 @@ export async function createTunelitoServer(options) {
   const comments = createCommentStore({ commentsPath, sourcePath: filePath });
   const events = new EventEmitter();
   const hub = new WebSocketHub();
+  const accessKey = options.accessKey ? String(options.accessKey) : "";
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -27,13 +31,28 @@ export async function createTunelitoServer(options) {
       rootDir,
       sourceName,
       comments,
+      accessKey,
     });
   });
 
   server.on("upgrade", (req, socket) => {
-    const url = new URL(req.url || "/", "http://localhost");
+    let url;
+    try {
+      url = new URL(req.url || "/", "http://localhost");
+    } catch {
+      rejectUpgrade(socket, 400, "Bad Request");
+      return;
+    }
     if (url.pathname !== WS_ROUTE) {
       socket.destroy();
+      return;
+    }
+    if (!isTrustedOrigin(req)) {
+      rejectUpgrade(socket, 403, "Forbidden");
+      return;
+    }
+    if (!authorizeRequest(req, url, accessKey).ok) {
+      rejectUpgrade(socket, 401, "Unauthorized");
       return;
     }
     hub.handleUpgrade(req, socket);
@@ -88,7 +107,8 @@ export async function createTunelitoServer(options) {
   const host = options.host || "127.0.0.1";
   const requestedPort = options.port ?? 4317;
   const { port } = await listenOnFirstAvailable(server, host, requestedPort);
-  const localUrl = `http://${host}:${port}/`;
+  const originUrl = `http://${host}:${port}/`;
+  const localUrl = withAccessKey(originUrl, accessKey);
 
   return {
     server,
@@ -96,17 +116,20 @@ export async function createTunelitoServer(options) {
     hub,
     commentsPath,
     filePath,
+    originUrl,
     localUrl,
     async close() {
       clearTimeout(watchTimer);
       watcher.close();
       hub.close();
-      await new Promise((resolveClose) => server.close(resolveClose));
+      const closing = new Promise((resolveClose) => server.close(resolveClose));
+      server.closeAllConnections?.();
+      await closing;
     },
   };
 }
 
-function handleRequest({ req, res, filePath, rootDir, sourceName, comments }) {
+function handleRequest({ req, res, filePath, rootDir, sourceName, comments, accessKey }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -116,58 +139,151 @@ function handleRequest({ req, res, filePath, rootDir, sourceName, comments }) {
     return;
   }
 
+  const auth = authorizeRequest(req, url, accessKey);
+  if (!auth.ok) {
+    sendText(res, 401, "Tunelito review link is missing or invalid.", "text/plain; charset=utf-8", req.method);
+    return;
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
-    sendText(res, 405, "Method not allowed");
+    sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, auth.headers);
     return;
   }
 
   if (pathname === CLIENT_ROUTE) {
-    sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method);
+    sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method, auth.headers);
     return;
   }
 
   if (pathname === COMMENTS_ROUTE) {
-    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: filePath }), "text/markdown; charset=utf-8");
+    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: filePath }), "text/markdown; charset=utf-8", req.method, auth.headers);
     return;
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
     const html = readFileSync(filePath, "utf8");
-    sendText(res, 200, injectTunelitoClient(html, { sourceName }), "text/html; charset=utf-8");
+    sendText(res, 200, injectTunelitoClient(html, { sourceName }), "text/html; charset=utf-8", req.method, auth.headers);
     return;
   }
 
   const assetPath = resolve(rootDir, `.${pathname}`);
   if (!isInside(rootDir, assetPath) || !existsSync(assetPath) || !statSync(assetPath).isFile()) {
-    sendText(res, 404, "Not found");
+    sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
     return;
   }
 
-  sendFile(res, assetPath, contentTypeFor(assetPath), req.method);
+  sendFile(res, assetPath, contentTypeFor(assetPath), req.method, auth.headers);
 }
 
-function sendText(res, status, body, contentType = "text/plain; charset=utf-8") {
+function sendText(res, status, body, contentType = "text/plain; charset=utf-8", method = "GET", extraHeaders = {}) {
   const buffer = Buffer.from(body);
   res.writeHead(status, {
     "content-type": contentType,
     "content-length": buffer.length,
     "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    ...extraHeaders,
   });
+  if (method === "HEAD") {
+    res.end();
+    return;
+  }
   res.end(buffer);
 }
 
-function sendFile(res, path, contentType, method) {
+function sendFile(res, path, contentType, method, extraHeaders = {}) {
   const stat = statSync(path);
   res.writeHead(200, {
     "content-type": contentType,
     "content-length": stat.size,
     "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    ...extraHeaders,
   });
   if (method === "HEAD") {
     res.end();
     return;
   }
   createReadStream(path).pipe(res);
+}
+
+function authorizeRequest(req, url, accessKey) {
+  if (!accessKey) return { ok: true, headers: {} };
+
+  const queryKey = url.searchParams.get(ACCESS_KEY_PARAM);
+  if (sameSecret(queryKey, accessKey)) {
+    return {
+      ok: true,
+      headers: {
+        "set-cookie": accessCookie(accessKey, req),
+      },
+    };
+  }
+
+  if (sameSecret(readCookie(req.headers.cookie, ACCESS_KEY_COOKIE), accessKey)) {
+    return { ok: true, headers: {} };
+  }
+
+  return { ok: false, headers: {} };
+}
+
+function accessCookie(accessKey, req) {
+  const parts = [
+    `${ACCESS_KEY_COOKIE}=${encodeURIComponent(accessKey)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Max-Age=86400",
+  ];
+  if (String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https") {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+}
+
+function readCookie(cookieHeader, name) {
+  if (!cookieHeader) return "";
+  for (const cookie of cookieHeader.split(";")) {
+    const [rawName, ...rawValue] = cookie.trim().split("=");
+    if (rawName === name) {
+      try {
+        return decodeURIComponent(rawValue.join("="));
+      } catch {
+        return "";
+      }
+    }
+  }
+  return "";
+}
+
+function sameSecret(input, expected) {
+  if (typeof input !== "string" || input.length === 0) return false;
+  const left = Buffer.from(input);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function isTrustedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+function rejectUpgrade(socket, status, message) {
+  socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  socket.destroy();
+}
+
+function withAccessKey(url, accessKey) {
+  const parsed = new URL(url);
+  if (accessKey) parsed.searchParams.set(ACCESS_KEY_PARAM, accessKey);
+  return parsed.toString();
 }
 
 function isInside(root, candidate) {
