@@ -1,0 +1,39 @@
+---
+title: "Comments"
+description: "How Tunelito stores reviewer comments and restores live session state."
+---
+
+Reviewers select text and leave comments from the injected Tunelito panel. Comments sync live to connected browsers and are written to Markdown immediately.
+
+## Default file location
+
+```text
+page.html
+page.comments.md
+```
+
+Use `--out` to choose a different path:
+
+```bash
+tunelito ./page.html --out ./review-notes.md
+```
+
+## Markdown format
+
+The comment file is designed to be readable:
+
+```markdown
+# Tunelito comments for `page.html`
+
+## Jane at 2026-05-22 18:00:00 UTC
+
+> selected text
+
+This sentence needs a clearer verb.
+```
+
+Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart.
+
+## Highlight limits
+
+If you edit the exact text someone commented on, the comment remains in Markdown and in the sidebar, but the highlight may not reattach.

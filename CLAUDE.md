@@ -11,6 +11,7 @@ Read `docs/agents/START_HERE.md` before making changes. The repository is intent
 - Public tunnel sessions require keyed URLs by default.
 - Do not edit `*.comments.md`, `.env*`, `.claude/settings.local.json`, `.git/`, `node_modules/`, or `files.zip`.
 - Use Node.js 22+ and no runtime dependencies unless the benefit is obvious and documented.
+- Use Node.js 22 or 24 for Mintlify CLI checks when the CLI rejects newer Node versions.
 - Run `npm run ci` before commit or handoff.
 
 ## Common Commands
@@ -20,6 +21,7 @@ npm install
 npm run check
 npm test
 npm run pack:check
+npm run docs:check
 npm run agent:check
 npm run ci
 node bin/tunelito.js examples/simple-review.html --no-tunnel --port 4317

@@ -1,0 +1,41 @@
+---
+title: "Tunelito"
+description: "Turn any local HTML file into a temporary live review room with comments."
+---
+
+Tunelito turns any local HTML file into a temporary live review room.
+
+Run one command, share the printed link on a call, and reviewers can select text to leave comments live. You keep editing the HTML in your editor. Connected browsers reload when the file changes. Comments are saved as readable Markdown beside the page.
+
+## Why it exists
+
+Sometimes the fastest way to review a draft, prototype, spec, or one-off HTML page is not to deploy an app. It is to point at the file, get a link, and talk through it with someone.
+
+Tunelito gives you that loop:
+
+- local HTML stays the source of truth
+- reviewers can comment but cannot edit the file
+- comments sync live over WebSocket
+- public sharing uses a temporary Cloudflare Tunnel
+- shared links require a generated review key by default
+
+## Install the beta
+
+```bash
+npm install -g github:chekos/tunelito
+tunelito ./page.html
+```
+
+## What you share
+
+Tunelito prints a local URL and, when tunneling is available, a public URL:
+
+```text
+Tunelito is running
+Local:   http://127.0.0.1:4317/?tunelito_key=...
+Comments: /path/to/page.comments.md
+Access:  review key required by the printed URLs
+Public:  https://example.trycloudflare.com/?tunelito_key=...
+```
+
+Share the `Public:` URL with the person on your call.

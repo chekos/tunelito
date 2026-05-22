@@ -1,0 +1,36 @@
+---
+title: "Sharing safely"
+description: "Understand Tunelito's review-key access model and tunnel exposure."
+---
+
+Tunelito is built for temporary collaboration, not permanent hosting.
+
+## Review keys
+
+Shared sessions include a generated `tunelito_key` in printed URLs by default:
+
+```text
+https://example.trycloudflare.com/?tunelito_key=...
+```
+
+The key is bearer access. Anyone with the full URL can view the page and leave comments.
+
+The first valid request sets a short-lived HTTP-only cookie so page assets and WebSocket sync keep working.
+
+## Public tunnels
+
+When tunneling is enabled, Tunelito exposes your local server through Cloudflare Tunnel. Use this only for material you are comfortable sharing with anyone who has the full link.
+
+## Disable public tunnels
+
+```bash
+tunelito ./page.html --no-tunnel
+```
+
+## Disable review-key auth
+
+```bash
+tunelito ./page.html --no-auth
+```
+
+Use `--no-auth` only for trusted local networks or throwaway demos.

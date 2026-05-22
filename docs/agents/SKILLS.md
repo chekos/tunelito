@@ -13,7 +13,7 @@ Tunelito uses project-local Claude Code skills under `.claude/skills/`. Skills a
 | `tunelito-security` | Work on auth, file-serving, tunnel, hook, or publishing risks. |
 | `tunelito-package` | Maintain package metadata, tarball contents, CI, and install paths. |
 | `tunelito-live-smoke` | Run a manual local served-page smoke test. |
-| `tunelito-docs` | Update README, changelog, examples, release docs, or playbooks. |
+| `tunelito-docs` | Update README, Mintlify docs, changelog, examples, release docs, or playbooks. |
 | `tunelito-agent-maintenance` | Maintain `.claude/`, `AGENTS.md`, `CLAUDE.md`, and playbooks. |
 | `tunelito-pr` | Prepare a PR-ready summary. |
 | `tunelito-ship` | Manually prepare a verified commit/push. |

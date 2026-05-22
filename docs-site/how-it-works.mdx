@@ -1,0 +1,43 @@
+---
+title: "How it works"
+description: "Understand the Tunelito local server, injected client, WebSocket sync, and Markdown persistence."
+---
+
+Tunelito is local-first. It does not upload your source HTML to a hosted backend.
+
+## Runtime pieces
+
+The CLI starts a local server for one HTML file. The server reads that file from disk, injects the Tunelito browser client into the served response, and serves sibling assets from the same directory.
+
+The browser client handles:
+
+- text selection
+- comment composition
+- comment sidebar
+- live WebSocket sync
+- highlight rendering when the browser supports it
+- reload notices when the file changes
+
+The server handles:
+
+- review-key access control
+- WebSocket upgrades
+- comment validation
+- Markdown persistence
+- file watching
+- optional Cloudflare Tunnel startup
+
+## The HTML file is not modified
+
+The injection happens only in the HTTP response. Your source HTML file remains untouched.
+
+## Persistence
+
+Comments are written to Markdown beside the page by default:
+
+```text
+page.html
+page.comments.md
+```
+
+The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart.

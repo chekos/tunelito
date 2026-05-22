@@ -1,0 +1,27 @@
+---
+title: "Beta checklist"
+description: "A quick pre-call checklist for sharing Tunelito with another person."
+---
+
+Use this before sharing a live session.
+
+1. Start with an HTML page that does not already include another review system.
+2. Run:
+
+   ```bash
+   tunelito ./page.html
+   ```
+
+3. Wait for the `Public:` URL.
+4. Open the public URL on your phone.
+5. Select text and submit a short comment.
+6. Confirm the terminal logs `Comment from ...`.
+7. Confirm `<page>.comments.md` contains the comment.
+8. Edit and save the HTML file.
+9. Confirm the phone reloads.
+
+## What to avoid in beta
+
+- sensitive documents you would not be comfortable exposing through a bearer-link tunnel
+- pages where the important content is only canvas, video, image text, or cross-origin iframes
+- long-lived sessions where you cannot monitor who has the link

@@ -1,0 +1,46 @@
+---
+title: "CLI reference"
+description: "Tunelito command-line options and examples."
+---
+
+```text
+Tunelito 0.1.1-beta.2
+
+Usage: tunelito <page.html> [options]
+
+Options:
+  --port <number>       Port to listen on (default: first free from 4317)
+  --host <host>         Host to bind locally (default: 127.0.0.1)
+  --out <path>          Markdown comments file (default: <page>.comments.md)
+  --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
+  --no-auth             Disable the generated review-key URL gate
+  --open                Open the local URL in your default browser
+  -v, --version         Show version
+  -h, --help            Show this help
+```
+
+## Common examples
+
+Start a public review session:
+
+```bash
+tunelito ./page.html
+```
+
+Run local-only and open the browser:
+
+```bash
+tunelito ./page.html --no-tunnel --open
+```
+
+Choose a port:
+
+```bash
+tunelito ./page.html --port 4400
+```
+
+Choose the comments file:
+
+```bash
+tunelito ./page.html --out ./notes/review.md
+```

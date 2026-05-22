@@ -1,0 +1,32 @@
+---
+title: "Troubleshooting"
+description: "Fix common Tunelito install, tunnel, comment, and browser issues."
+---
+
+## No public URL appears
+
+Tunelito starts Cloudflare Tunnel with installed `cloudflared` first, then falls back to `npx cloudflared@latest`.
+
+If neither works:
+
+```bash
+tunelito ./page.html --no-tunnel
+```
+
+Then install or allow `cloudflared` before trying again.
+
+## Unkeyed URL returns 401
+
+That is expected. Use the full printed URL with `tunelito_key=...`.
+
+## Comments are saved but highlights disappeared
+
+The selected text probably changed. Comments remain in Markdown and the sidebar, but highlights may not reattach if the exact quote can no longer be found.
+
+## Mobile selection feels finicky
+
+Mobile browsers expose selection events differently. Try selecting a shorter phrase, then tap the Tunelito comment button once it appears.
+
+## Page JavaScript behaves differently
+
+Tunelito removes strict in-page CSP meta tags from the served response so the injected same-origin client can run. It does not write that change back to disk.

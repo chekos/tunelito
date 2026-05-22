@@ -1,0 +1,38 @@
+---
+title: "Maintainers"
+description: "How maintainers package, verify, and release Tunelito."
+---
+
+The repo is designed for agent-driven maintenance.
+
+## Core checks
+
+```bash
+npm run check
+npm run agent:check
+npm test
+npm run ci
+```
+
+## Package smoke
+
+```bash
+rm -rf /tmp/tunelito-pack /tmp/tunelito-prefix
+mkdir -p /tmp/tunelito-pack /tmp/tunelito-prefix
+npm pack --pack-destination /tmp/tunelito-pack
+npm install -g --prefix /tmp/tunelito-prefix /tmp/tunelito-pack/tunelito-*.tgz
+/tmp/tunelito-prefix/bin/tunelito --version
+```
+
+## GitHub install smoke
+
+After pushing a beta commit:
+
+```bash
+npm install -g github:chekos/tunelito
+tunelito --version
+```
+
+## Release docs
+
+See `docs/RELEASING.md` and `docs/agents/RELEASE_PLAYBOOK.md` in the repository.

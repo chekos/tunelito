@@ -39,6 +39,7 @@ npm run ci
 - `docs/agents/RELEASE_PLAYBOOK.md`: beta/release process.
 - `docs/agents/HOOKS.md`: Claude Code hook behavior and maintenance.
 - `docs/agents/SKILLS.md`: project skill catalog and validation policy.
+- `docs-site/`: Mintlify public documentation source.
 
 ## Claude Code
 

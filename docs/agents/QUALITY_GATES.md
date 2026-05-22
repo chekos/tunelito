@@ -84,6 +84,29 @@ Also manually inspect:
 - `CLAUDE.md`
 - `docs/agents/*.md`
 
+## Mintlify Docs Changes
+
+Required:
+
+```bash
+npm run docs:check
+npm run ci
+```
+
+When working on public docs content, preview with:
+
+```bash
+npm run docs:dev
+```
+
+For a stricter Mintlify CLI pass, run:
+
+```bash
+npm run docs:validate
+```
+
+Mintlify CLI validation may require an LTS Node runtime such as Node 22 or 24 even when Tunelito itself supports newer Node releases. If the CLI rejects the local Node version, switch runtimes for this pass and keep `npm run docs:check` as the always-on local and CI gate.
+
 ## Release Changes
 
 Required:

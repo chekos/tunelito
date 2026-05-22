@@ -18,7 +18,7 @@ Read the nearest docs and tests before editing. For CLI behavior, read `README.m
 - CLI/package: arguments, startup output, versioning, package metadata.
 - Server/security: file serving, tunnel URL, auth, WebSocket upgrade, persistence.
 - Client/UI: injected browser behavior, selection, mobile, comments panel.
-- Docs/process: README, release docs, agent playbooks, Claude config.
+- Docs/process: README, Mintlify docs, release docs, agent playbooks, Claude config.
 
 Use the classification to choose quality gates from `docs/agents/QUALITY_GATES.md`.
 
@@ -44,6 +44,7 @@ Run targeted checks first, then the full gate:
 ```bash
 npm run check
 npm run agent:check
+npm run docs:check
 npm test
 npm run ci
 ```

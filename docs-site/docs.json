@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Tunelito",
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0f766e",
+    "light": "#14b8a6",
+    "dark": "#0f766e"
+  },
+  "logo": {
+    "light": "/logo-light.svg",
+    "dark": "/logo-dark.svg"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "icon": "rocket",
+        "pages": [
+          "index",
+          "quickstart",
+          "beta-checklist"
+        ]
+      },
+      {
+        "group": "Core concepts",
+        "icon": "layers",
+        "pages": [
+          "how-it-works",
+          "comments",
+          "sharing-safely"
+        ]
+      },
+      {
+        "group": "Reference",
+        "icon": "square-terminal",
+        "pages": [
+          "cli",
+          "examples",
+          "troubleshooting"
+        ]
+      },
+      {
+        "group": "Maintainers",
+        "icon": "wrench",
+        "pages": [
+          "maintainers",
+          "agent-workflows"
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/chekos/tunelito",
+          "icon": "github"
+        }
+      ]
+    }
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Install beta",
+      "href": "/quickstart"
+    }
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/chekos/tunelito"
+    }
+  }
+}
