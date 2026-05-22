@@ -69,3 +69,14 @@ The final response should include:
 - any known limits or follow-up risks
 
 Do not handwave failed or skipped checks.
+
+## 7. PR Discipline
+
+All changes to `main` go through pull requests. The repository ruleset requires:
+
+- a pull request targeting `main`
+- passing `Node 22`, `Node 24`, and `Node 26` CI checks
+- resolved review conversations
+- squash merge
+
+Do not push directly to `main`. Push a branch, open a PR, wait for CI, and merge through GitHub.

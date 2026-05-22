@@ -1,0 +1,60 @@
+name: Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "npm semver version, for example 0.1.2 or 0.1.2-rc.0"
+        required: true
+      target:
+        description: "Branch or commit to release"
+        required: false
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.target }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run ci
+      - id: release
+        run: node scripts/npm-release-tag.mjs "${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+      - id: package
+        run: |
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const pkg = require("./package.json");
+          console.log(`version=${pkg.version}`);
+          NODE
+      - name: Validate package version
+        run: |
+          if [ "${{ steps.package.outputs.version }}" != "${{ steps.release.outputs.version }}" ]; then
+            echo "Requested release ${{ steps.release.outputs.version }}, but package.json is ${{ steps.package.outputs.version }}." >&2
+            exit 1
+          fi
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
+        run: |
+          tag="v${VERSION}"
+          flags=(--draft --target "${GITHUB_SHA}" --title "${tag}" --generate-notes)
+
+          if [ "${IS_PRERELEASE}" = "true" ]; then
+            flags+=(--prerelease --latest=false)
+          else
+            flags+=(--latest)
+          fi
+
+          gh release create "${tag}" "${flags[@]}"
