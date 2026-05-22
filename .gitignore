@@ -1,5 +1,8 @@
 node_modules/
 *.comments.md
+*.zip
+*-walkthrough-review.html
+examples/legacy-*.html
 npm-debug.log*
 CLAUDE.local.md
 .claude/settings.local.json

@@ -7,7 +7,7 @@ Tunelito is maintained by coding agents. Treat this repository as an agent-nativ
 1. Read `docs/agents/START_HERE.md`.
 2. Check `git status -sb` before editing.
 3. Use `rg` for search and `npm run ci` before shipping.
-4. Preserve user data: do not edit `*.comments.md`, `.env*`, `files.zip`, or generated tunnel/session artifacts unless the user explicitly asks.
+4. Preserve user data: do not edit `*.comments.md`, `.env*`, local archives, walkthrough exports, or generated tunnel/session artifacts unless the user explicitly asks.
 
 ## Project Commands
 

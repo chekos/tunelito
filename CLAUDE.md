@@ -9,7 +9,7 @@ Read `docs/agents/START_HERE.md` before making changes. The repository is intent
 - The source HTML file must remain untouched by the annotation system.
 - Comments persist to markdown beside the source page or to the explicit `--out` path.
 - Public tunnel sessions require keyed URLs by default.
-- Do not edit `*.comments.md`, `.env*`, `.claude/settings.local.json`, `.git/`, `node_modules/`, or `files.zip`.
+- Do not edit `*.comments.md`, `.env*`, `.claude/settings.local.json`, `.git/`, `node_modules/`, local archives, or walkthrough exports.
 - Use Node.js 22+ and no runtime dependencies unless the benefit is obvious and documented.
 - Use Node.js 22 or 24 for Mintlify CLI checks when the CLI rejects newer Node versions.
 - Run `npm run ci` before commit or handoff.
