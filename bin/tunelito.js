@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
+export const VERSION = "0.1.1-beta.0";
+
 function usage() {
-  return `Usage: tunelito <page.html> [options]
+  return `Tunelito ${VERSION}
+
+Usage: tunelito <page.html> [options]
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -16,6 +20,7 @@ Options:
   --out <path>          Markdown comments file (default: <page>.comments.md)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --open                Open the local URL in your default browser
+  -v, --version         Show version
   -h, --help            Show this help
 `;
 }
@@ -33,6 +38,8 @@ export function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
       opts.help = true;
+    } else if (arg === "-v" || arg === "--version") {
+      opts.version = true;
     } else if (arg === "--no-tunnel") {
       opts.tunnel = false;
     } else if (arg === "--open") {
@@ -78,6 +85,11 @@ async function main() {
 
   if (opts.help) {
     console.log(usage());
+    return;
+  }
+
+  if (opts.version) {
+    console.log(VERSION);
     return;
   }
 
@@ -168,7 +180,19 @@ export function openBrowser(url, { platform = process.platform, spawnFn = spawn,
   return child;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isCliEntry(metaUrl, argvPath = process.argv[1]) {
+  if (!argvPath) return false;
+  const directPath = pathToFileURL(argvPath).href;
+  let realPath = directPath;
+  try {
+    realPath = pathToFileURL(realpathSync(argvPath)).href;
+  } catch {
+    // If argvPath cannot be resolved, the direct comparison is still useful.
+  }
+  return metaUrl === directPath || metaUrl === realPath;
+}
+
+if (isCliEntry(import.meta.url)) {
   main().catch((error) => {
     console.error(error.stack || error.message);
     process.exit(1);

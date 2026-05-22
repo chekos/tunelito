@@ -1,12 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { openBrowser, parseArgs } from "../bin/tunelito.js";
+import { pathToFileURL } from "node:url";
+import { isCliEntry, openBrowser, parseArgs, VERSION } from "../bin/tunelito.js";
+
+test("CLI version matches package metadata", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(VERSION, pkg.version);
+});
 
 test("parseArgs rejects --out without a value", () => {
   assert.throws(() => parseArgs(["page.html", "--out"]), /--out requires a value/);
   assert.throws(() => parseArgs(["page.html", "--out", "--no-tunnel"]), /--out requires a value/);
+});
+
+test("parseArgs supports version flag without a file", () => {
+  assert.equal(parseArgs(["--version"]).version, true);
+  assert.equal(parseArgs(["-v"]).version, true);
+});
+
+test("isCliEntry recognizes npm-style symlinked bin paths", () => {
+  const dir = mkdtempSync(`${tmpdir()}/tunelito-bin-`);
+  const target = `${dir}/tunelito.js`;
+  const link = `${dir}/tunelito`;
+  writeFileSync(target, "#!/usr/bin/env node\n");
+  symlinkSync(target, link);
+
+  assert.equal(isCliEntry(pathToFileURL(realpathSync(target)).href, link), true);
 });
 
 test("parseArgs accepts an explicit comments path", () => {

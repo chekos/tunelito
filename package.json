@@ -1,15 +1,23 @@
 {
   "name": "tunelito",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.0",
   "description": "Serve any local HTML page as a temporary live review room with injected comments.",
   "type": "module",
-  "private": true,
   "bin": {
     "tunelito": "./bin/tunelito.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "examples/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check bin/tunelito.js && node --check src/*.js test/*.test.js"
+    "check": "node --check bin/tunelito.js && node --check src/*.js test/*.test.js",
+    "pack:check": "npm pack --dry-run"
   },
   "engines": {
     "node": ">=20"
@@ -21,5 +29,16 @@
     "annotation",
     "cloudflare-tunnel"
   ],
-  "license": "MIT"
+  "homepage": "https://github.com/chekos/tunelito#readme",
+  "bugs": {
+    "url": "https://github.com/chekos/tunelito/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chekos/tunelito.git"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

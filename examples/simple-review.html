@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tunelito Comment Test</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #657083;
+      --paper: #fffdf8;
+      --panel: #ffffff;
+      --line: #ded8cc;
+      --accent: #0f766e;
+      --accent-soft: #dff8f3;
+      --warm: #f6efe3;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(246, 239, 227, .8), rgba(255, 253, 248, 0) 320px),
+        var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    .shell {
+      width: min(920px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 56px 0 80px;
+    }
+
+    header {
+      padding: 34px 0 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 780px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: .98;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 720px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+    }
+
+    main {
+      display: grid;
+      gap: 28px;
+      margin-top: 36px;
+    }
+
+    section {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 40px rgba(23, 32, 51, .07);
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 16px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    .callout {
+      border-color: rgba(15, 118, 110, .24);
+      background: linear-gradient(135deg, var(--accent-soft), #ffffff 62%);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .tile {
+      min-height: 112px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--warm);
+    }
+
+    .tile strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .tile span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    footer {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        padding-top: 28px;
+      }
+
+      section {
+        padding: 22px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <p class="eyebrow">Tunelito live annotation test</p>
+      <h1>A simple page for checking shared comments.</h1>
+      <p class="lede">This version intentionally avoids any custom review JavaScript. Select text anywhere on the page, use the Tunelito comment bubble, and the comment should appear back on the host machine.</p>
+    </header>
+
+    <main>
+      <section class="callout">
+        <h2>What to Try First</h2>
+        <p>Select this sentence and leave a short comment from your other device. If the live sync is working, the host terminal should log the comment and a markdown file should appear beside this HTML file.</p>
+        <p>The page keeps the same public URL because the local server is still serving the same filename. Only the file contents changed.</p>
+      </section>
+
+      <section>
+        <h2>Review Notes</h2>
+        <p>Tunelito is meant for quick calls where one person owns the file and everyone else can leave feedback. The author edits locally, viewers refresh automatically, and the comments remain as a plain markdown artifact.</p>
+        <p>This test page has ordinary headings, paragraphs, and cards so we can verify text selection, anchored comments, sidebar updates, and markdown persistence without another annotation system interfering.</p>
+      </section>
+
+      <section>
+        <h2>Things Worth Commenting On</h2>
+        <div class="grid">
+          <div class="tile">
+            <strong>Copy</strong>
+            <span>Does the explanation make sense to someone joining cold?</span>
+          </div>
+          <div class="tile">
+            <strong>Flow</strong>
+            <span>Can a reviewer tell where to click and what should happen?</span>
+          </div>
+          <div class="tile">
+            <strong>Proof</strong>
+            <span>Does the markdown output contain enough context to act on later?</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Served locally by Tunelito. Comments are injected at runtime and the source HTML stays simple.
+    </footer>
+  </div>
+</body>
+</html>
