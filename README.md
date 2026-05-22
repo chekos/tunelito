@@ -150,6 +150,7 @@ The package includes the CLI, runtime source, examples, docs, changelog, license
 
 - [Security policy](./SECURITY.md)
 - [Release process](./docs/RELEASING.md)
+- [Agent playbooks](./docs/agents/START_HERE.md)
 - [Examples](./examples/README.md)
 
 ## Current Limits

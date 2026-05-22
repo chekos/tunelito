@@ -1,3 +1,7 @@
 node_modules/
 *.comments.md
 npm-debug.log*
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/audit.log
+.agent-work/
