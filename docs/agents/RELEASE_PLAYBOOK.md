@@ -37,6 +37,8 @@ Keep these in sync:
 - `CHANGELOG.md`
 - `docs/RELEASING.md`
 
+Version changes must go through a PR before release. Stable versions publish to npm `latest`; prerelease versions publish to the prerelease channel named by the first semver identifier, such as `rc` for `0.1.2-rc.0`.
+
 ## npm Install Smoke
 
 After publishing:
@@ -50,6 +52,13 @@ If this fails, fix it before telling the user the release is ready.
 ## npm Publishing
 
 Use trusted publishing through GitHub Actions. Do not introduce long-lived npm tokens unless there is a documented reason.
+
+Publishing is triggered by publishing a GitHub Release, not by pushing a tag manually. Draft releases can be created with:
+
+```bash
+gh workflow run "Draft Release" -f version=0.1.2
+gh workflow run "Draft Release" -f version=0.1.2-rc.0
+```
 
 Use npm 11.15 or newer when managing trusted publishers so the required allowed actions are sent:
 

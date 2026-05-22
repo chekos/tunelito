@@ -1,9 +1,8 @@
 name: Publish Package
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -15,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -22,6 +23,8 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run ci
+      - id: release
+        run: node scripts/npm-release-tag.mjs "${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
       - id: package
         run: |
           node <<'NODE' >> "$GITHUB_OUTPUT"
@@ -29,6 +32,17 @@ jobs:
           console.log(`name=${pkg.name}`);
           console.log(`version=${pkg.version}`);
           NODE
+      - name: Validate release metadata
+        run: |
+          if [ "${{ steps.package.outputs.version }}" != "${{ steps.release.outputs.version }}" ]; then
+            echo "Release tag ${{ github.event.release.tag_name }} resolves to ${{ steps.release.outputs.version }}, but package.json is ${{ steps.package.outputs.version }}." >&2
+            exit 1
+          fi
+
+          if [ "${{ github.event.release.prerelease }}" != "${{ steps.release.outputs.is_prerelease }}" ]; then
+            echo "GitHub prerelease flag (${{ github.event.release.prerelease }}) does not match semver prerelease state (${{ steps.release.outputs.is_prerelease }})." >&2
+            exit 1
+          fi
       - id: published
         run: |
           if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
@@ -38,4 +52,4 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - if: steps.published.outputs.exists != 'true'
-        run: npm publish
+        run: npm publish --provenance --tag "${{ steps.release.outputs.npm_tag }}"

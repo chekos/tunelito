@@ -27,7 +27,7 @@ npm run ci
 - Keep Tunelito local-first: the source HTML is never modified by the annotation layer.
 - Maintain the public CLI contract in `README.md`, `CHANGELOG.md`, and tests whenever behavior changes.
 - Treat tunnel sharing as security-sensitive. Default posture is keyed links and clear exposure warnings.
-- Commit only after tests pass. Push to `main` only when the user explicitly asks or the task says to take it all the way.
+- Commit only after tests pass. Changes to `main` must go through pull requests; the repository ruleset rejects direct pushes to `main`.
 
 ## Documentation Map
 
