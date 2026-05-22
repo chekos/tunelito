@@ -20,13 +20,15 @@
     "SECURITY.md"
   ],
   "scripts": {
-    "ci": "npm run check && npm run agent:check && npm run docs:check && npm test && npm run pack:check",
+    "ci": "npm run check && npm run agent:check && npm run docs:check && npm test && npm run smoke:check && npm run pack:check",
     "test": "node --test",
     "check": "node --check bin/tunelito.js && node --check src/*.js scripts/*.mjs test/*.test.js",
     "agent:check": "node --check .claude/hooks/*.mjs .claude/scripts/*.mjs && node .claude/scripts/validate-agent-config.mjs",
     "docs:check": "node .claude/scripts/validate-mintlify-docs.mjs",
     "docs:dev": "cd docs-site && npx mint dev --no-open",
     "docs:validate": "cd docs-site && npx mint validate --disable-openapi",
+    "release:check": "node scripts/release-check.mjs",
+    "smoke:check": "node scripts/smoke-check.mjs",
     "pack:check": "npm pack --dry-run"
   },
   "engines": {

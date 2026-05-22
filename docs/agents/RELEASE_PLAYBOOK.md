@@ -7,6 +7,7 @@ Use this for package verification and npm releases. See `docs/RELEASING.md` for 
 Before declaring a release shareable:
 
 ```bash
+npm run release:check -- 0.1.2
 npm run ci
 rm -rf /tmp/tunelito-pack /tmp/tunelito-prefix
 mkdir -p /tmp/tunelito-pack /tmp/tunelito-prefix
@@ -27,6 +28,14 @@ Verify:
 - keyed `/` returns the example page
 - keyed `/__tunelito/client.js` contains WebSocket setup
 
+The lightweight automated local smoke is:
+
+```bash
+npm run smoke:check
+```
+
+It starts the CLI against `examples/simple-review.html`, loads the keyed page, verifies the injected client route and root mount marker are present, and checks the comments markdown endpoint. Full browser text-selection automation remains a later Playwright-sized follow-up.
+
 ## Version Changes
 
 Keep these in sync:
@@ -38,6 +47,8 @@ Keep these in sync:
 - `docs/RELEASING.md`
 
 Version changes must go through a PR before release. Stable versions publish to npm `latest`; prerelease versions publish to the prerelease channel named by the first semver identifier, such as `rc` for `0.1.2-rc.0`.
+
+Run `npm run release:check -- <version-or-tag>` after version files are updated. The check verifies `package.json`, `package-lock.json`, `CHANGELOG.md`, the derived npm dist-tag, and whether that exact version is already published. Pass `--allow-published` only when intentionally auditing an already-published version.
 
 ## npm Install Smoke
 

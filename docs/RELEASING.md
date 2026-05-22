@@ -26,6 +26,7 @@ All code and version changes must land through a pull request before a release i
 
    ```bash
    npm ci
+   npm run release:check -- 0.1.2
    npm run ci
    npm pack
    npm install -g ./tunelito-*.tgz
@@ -42,6 +43,7 @@ All code and version changes must land through a pull request before a release i
    For release candidates, use the npm semver prerelease form:
 
    ```bash
+   npm run release:check -- 0.1.2-rc.0
    gh workflow run "Draft Release" -f version=0.1.2-rc.0
    ```
 
@@ -66,6 +68,8 @@ The publish workflow derives the npm dist-tag from the GitHub Release tag:
 | `v0.1.2-beta.0` | `0.1.2-beta.0` | `beta` |
 
 Do not use compact prerelease spellings like `0.1.2rc0`; npm package versions use semver prerelease syntax such as `0.1.2-rc.0`.
+
+`npm run release:check -- <version-or-tag>` verifies the package metadata, lockfile, changelog heading, npm dist-tag, and npm publication status before a GitHub Release is drafted. It fails when the exact version already exists on npm; use `--allow-published` only for a deliberate re-check of an already-published version.
 
 ## Provenance
 
