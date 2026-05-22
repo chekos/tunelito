@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
 import { timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync, watch } from "node:fs";
+import { createReadStream, readFileSync, realpathSync, statSync, watch } from "node:fs";
 import { dirname, basename, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCommentsPath, createCommentStore, renderCommentsMarkdown } from "./comments.js";
@@ -16,6 +16,7 @@ const ACCESS_KEY_COOKIE = "tunelito_key";
 export async function createTunelitoServer(options) {
   const filePath = resolve(options.filePath);
   const rootDir = dirname(filePath);
+  const rootRealDir = realpathSync.native(rootDir);
   const sourceName = basename(filePath);
   const commentsPath = resolve(options.commentsPath || defaultCommentsPath(filePath));
   const comments = createCommentStore({ commentsPath, sourcePath: filePath });
@@ -29,6 +30,7 @@ export async function createTunelitoServer(options) {
       res,
       filePath,
       rootDir,
+      rootRealDir,
       sourceName,
       comments,
       accessKey,
@@ -129,7 +131,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, rootDir, sourceName, comments, accessKey }) {
+function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, comments, accessKey }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -166,13 +168,27 @@ function handleRequest({ req, res, filePath, rootDir, sourceName, comments, acce
     return;
   }
 
-  const assetPath = resolve(rootDir, `.${pathname}`);
-  if (!isInside(rootDir, assetPath) || !existsSync(assetPath) || !statSync(assetPath).isFile()) {
+  const asset = resolveServedAsset(rootDir, rootRealDir, pathname);
+  if (!asset) {
     sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
     return;
   }
 
-  sendFile(res, assetPath, contentTypeFor(assetPath), req.method, auth.headers);
+  sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, auth.headers);
+}
+
+function resolveServedAsset(rootDir, rootRealDir, pathname) {
+  const assetPath = resolve(rootDir, `.${pathname}`);
+  try {
+    const assetRealPath = realpathSync.native(assetPath);
+    if (!isInside(rootRealDir, assetRealPath) || !statSync(assetRealPath).isFile()) {
+      return null;
+    }
+
+    return { path: assetPath, realPath: assetRealPath };
+  } catch {
+    return null;
+  }
 }
 
 function sendText(res, status, body, contentType = "text/plain; charset=utf-8", method = "GET", extraHeaders = {}) {

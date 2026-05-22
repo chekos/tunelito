@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { request } from "node:http";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer } from "../src/server.js";
@@ -87,6 +87,88 @@ test("server returns 400 for malformed URL escapes without exiting", async () =>
   }
 });
 
+test("server serves normal sibling assets", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-asset-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body><img src='/image.txt'></body></html>");
+  writeFileSync(join(dir, "image.txt"), "sibling asset");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const response = await fetch(new URL("/image.txt", instance.localUrl));
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "sibling asset");
+  } finally {
+    await instance.close();
+  }
+});
+
+test("server denies path traversal requests for assets", async () => {
+  const parentDir = mkdtempSync(join(tmpdir(), "tunelito-traversal-"));
+  const pageDir = join(parentDir, "page");
+  mkdirSync(pageDir);
+  const htmlPath = join(pageDir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body>Traversal check</body></html>");
+  writeFileSync(join(parentDir, "secret.txt"), "outside root");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const plainTraversal = await rawGet(instance.localUrl, "/../secret.txt");
+    assert.equal(plainTraversal.statusCode, 404);
+    assert.equal(plainTraversal.body, "Not found");
+
+    const encodedTraversal = await rawGet(instance.localUrl, "/%2e%2e%2fsecret.txt");
+    assert.equal(encodedTraversal.statusCode, 404);
+    assert.equal(encodedTraversal.body, "Not found");
+  } finally {
+    await instance.close();
+  }
+});
+
+test("server denies symlinked assets that resolve outside the page directory", async (t) => {
+  const parentDir = mkdtempSync(join(tmpdir(), "tunelito-symlink-"));
+  const pageDir = join(parentDir, "page");
+  mkdirSync(pageDir);
+  const htmlPath = join(pageDir, "page.html");
+  const outsidePath = join(parentDir, "outside.txt");
+  const linkPath = join(pageDir, "outside-link.txt");
+  writeFileSync(htmlPath, "<!doctype html><html><body>Symlink check</body></html>");
+  writeFileSync(outsidePath, "outside root");
+  try {
+    symlinkSync(outsidePath, linkPath, "file");
+  } catch (error) {
+    if (error.code === "EPERM" || error.code === "EACCES") {
+      t.skip("filesystem does not allow symlink creation");
+      return;
+    }
+    throw error;
+  }
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const response = await fetch(new URL("/outside-link.txt", instance.localUrl));
+    assert.equal(response.status, 404);
+    assert.equal(await response.text(), "Not found");
+  } finally {
+    await instance.close();
+  }
+});
+
 test("server can require a review access key", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-auth-"));
   const htmlPath = join(dir, "page.html");
@@ -122,6 +204,28 @@ test("server can require a review access key", async () => {
     const clientAllowed = await fetch(new URL("/__tunelito/client.js?tunelito_key=secret", instance.originUrl));
     assert.equal(clientAllowed.status, 200);
     assert.match(await clientAllowed.text(), /WebSocket/);
+  } finally {
+    await instance.close();
+  }
+});
+
+test("server returns 405 for unsupported methods and preserves auth headers", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-method-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body>Method check</body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "secret",
+  });
+
+  try {
+    const response = await fetch(instance.localUrl, { method: "POST" });
+    assert.equal(response.status, 405);
+    assert.equal(await response.text(), "Method not allowed");
+    assert.match(response.headers.get("set-cookie"), /tunelito_key=secret/);
   } finally {
     await instance.close();
   }
