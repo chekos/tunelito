@@ -1,0 +1,25 @@
+{
+  "name": "tunelito",
+  "version": "0.1.0",
+  "description": "Serve any local HTML page as a temporary live review room with injected comments.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "tunelito": "./bin/tunelito.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check bin/tunelito.js && node --check src/*.js test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "html",
+    "review",
+    "comments",
+    "annotation",
+    "cloudflare-tunnel"
+  ],
+  "license": "MIT"
+}
