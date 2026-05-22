@@ -9,6 +9,7 @@
     comments: [],
     pendingSelection: null,
     highlights: [],
+    selectionTimer: null,
   };
 
   addDocumentHighlightStyle();
@@ -239,6 +240,55 @@
         }
         button.secondary { background: #fff; color: #334155; }
         button.primary { border-color: #0f766e; background: #0f766e; color: #fff; }
+        @media (max-width: 640px) {
+          .launcher {
+            right: max(12px, env(safe-area-inset-right));
+            bottom: max(12px, env(safe-area-inset-bottom));
+            min-height: 44px;
+            padding: 12px 14px;
+          }
+          .panel {
+            top: auto;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            max-height: min(78vh, calc(100vh - 18px));
+            border-right: 0;
+            border-bottom: 0;
+            border-left: 0;
+            border-radius: 14px 14px 0 0;
+          }
+          .selection {
+            right: auto;
+            bottom: calc(70px + env(safe-area-inset-bottom));
+            left: 50%;
+            min-height: 44px;
+            min-width: 156px;
+            padding: 13px 18px;
+            text-align: center;
+            transform: translateX(-50%);
+          }
+          .composer {
+            right: 8px;
+            bottom: 8px;
+            left: 8px;
+            width: auto;
+            max-height: calc(100vh - 16px);
+            border-radius: 12px;
+          }
+          .composer textarea {
+            min-height: 118px;
+            font-size: 16px;
+          }
+          input {
+            font-size: 16px;
+          }
+          button.secondary, button.primary {
+            min-height: 42px;
+            padding: 10px 12px;
+          }
+        }
       </style>
       <button class="launcher" title="Open Tunelito comments">Comments <span class="count">0</span></button>
       <button class="selection">Comment</button>
@@ -284,7 +334,10 @@
       state.author = name.value.trim();
       localStorage.setItem("tunelito:author", state.author);
     });
-    selection.addEventListener("mousedown", (event) => {
+    selection.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+    });
+    selection.addEventListener("click", (event) => {
       event.preventDefault();
       openComposer();
     });
@@ -310,29 +363,10 @@
   }
 
   function bindSelection() {
-    document.addEventListener("mouseup", () => {
-      setTimeout(() => {
-        const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-          hideSelectionButton();
-          return;
-        }
-        if (isSelectionInsideTunelito(selection)) {
-          hideSelectionButton();
-          return;
-        }
-        const range = selection.getRangeAt(0).cloneRange();
-        state.pendingSelection = captureSelection(range);
-        const rect = range.getBoundingClientRect();
-        if (!rect || (rect.width === 0 && rect.height === 0)) {
-          hideSelectionButton();
-          return;
-        }
-        ui.selection.style.left = `${Math.max(8, Math.min(window.innerWidth - 110, rect.left))}px`;
-        ui.selection.style.top = `${Math.max(8, rect.top - 42)}px`;
-        ui.selection.classList.add("visible");
-      }, 0);
-    });
+    document.addEventListener("mouseup", scheduleSelectionCapture);
+    document.addEventListener("keyup", scheduleSelectionCapture);
+    document.addEventListener("selectionchange", scheduleSelectionCapture);
+    document.addEventListener("touchend", scheduleSelectionCapture, { passive: true });
 
     document.addEventListener("mousedown", (event) => {
       if (event.composedPath().includes(ui.selection) || event.composedPath().includes(ui.composer)) return;
@@ -341,6 +375,40 @@
         if (!selection || selection.isCollapsed) hideSelectionButton();
       }, 0);
     });
+    document.addEventListener("touchstart", (event) => {
+      if (event.composedPath().includes(ui.selection) || event.composedPath().includes(ui.composer)) return;
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) hideSelectionButton();
+      }, 0);
+    }, { passive: true });
+  }
+
+  function scheduleSelectionCapture() {
+    clearTimeout(state.selectionTimer);
+    state.selectionTimer = setTimeout(captureCurrentSelection, isMobileViewport() ? 220 : 0);
+  }
+
+  function captureCurrentSelection() {
+    if (ui.composer.classList.contains("open")) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+      hideSelectionButton();
+      return;
+    }
+    if (isSelectionInsideTunelito(selection)) {
+      hideSelectionButton();
+      return;
+    }
+    const range = selection.getRangeAt(0).cloneRange();
+    state.pendingSelection = captureSelection(range);
+    const rect = range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      hideSelectionButton();
+      return;
+    }
+    positionSelectionButton(rect);
+    ui.selection.classList.add("visible");
   }
 
   function captureSelection(range) {
@@ -366,17 +434,23 @@
       textStart: Number.isFinite(offsets.start) ? offsets.start : null,
       textEnd: Number.isFinite(offsets.end) ? offsets.end : null,
       path: cssPath(closestElement(range.startContainer)),
+      rect: rectSnapshot(range.getBoundingClientRect()),
     };
   }
 
   function openComposer() {
     if (!state.pendingSelection) return;
     hideSelectionButton();
-    const rect = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0).getBoundingClientRect() : null;
+    const rect = state.pendingSelection.rect || (window.getSelection()?.rangeCount ? rectSnapshot(window.getSelection().getRangeAt(0).getBoundingClientRect()) : null);
     ui.composer.querySelector(".quote").textContent = state.pendingSelection.quote.slice(0, 260);
     ui.composer.querySelector("textarea").value = "";
-    ui.composer.style.left = `${Math.max(8, Math.min(window.innerWidth - 370, rect?.left || 16))}px`;
-    ui.composer.style.top = `${Math.min(window.innerHeight - 180, Math.max(8, (rect?.bottom || 80) + 8))}px`;
+    if (isMobileViewport()) {
+      ui.composer.style.left = "";
+      ui.composer.style.top = "";
+    } else {
+      ui.composer.style.left = `${Math.max(8, Math.min(window.innerWidth - 370, rect?.left || 16))}px`;
+      ui.composer.style.top = `${Math.min(window.innerHeight - 180, Math.max(8, (rect?.bottom || 80) + 8))}px`;
+    }
     ui.composer.classList.add("open");
     ui.composer.querySelector("textarea").focus();
   }
@@ -444,6 +518,16 @@
 
   function hideSelectionButton() {
     ui.selection.classList.remove("visible");
+  }
+
+  function positionSelectionButton(rect) {
+    if (isMobileViewport()) {
+      ui.selection.style.left = "";
+      ui.selection.style.top = "";
+      return;
+    }
+    ui.selection.style.left = `${Math.max(8, Math.min(window.innerWidth - 110, rect.left))}px`;
+    ui.selection.style.top = `${Math.max(8, rect.top - 42)}px`;
   }
 
   function updateHighlights() {
@@ -590,6 +674,22 @@
       current = current.parentElement;
     }
     return ["body", ...parts].join(" > ");
+  }
+
+  function rectSnapshot(rect) {
+    if (!rect) return null;
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+
+  function isMobileViewport() {
+    return window.matchMedia("(max-width: 640px)").matches;
   }
 
   function compact(value, length) {
