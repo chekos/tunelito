@@ -86,6 +86,8 @@ The server also:
 - starts `cloudflared tunnel --url <local-url>` when available
 - falls back to `npx cloudflared@latest` when `cloudflared` is not installed
 
+Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback package used by `npx` while keeping the default behavior on `cloudflared@latest`.
+
 ## Access Model
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.

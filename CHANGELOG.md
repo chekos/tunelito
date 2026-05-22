@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added a local release doctor, lightweight CLI smoke check, and a configurable Cloudflare Tunnel fallback package for deterministic hardening.
+
 ## 0.1.1
 
 - Publishes Tunelito to npm so reviewers can start with `npx --yes tunelito ./page.html`.

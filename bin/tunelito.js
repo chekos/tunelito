@@ -153,8 +153,8 @@ async function main() {
       onUrl(url) {
         console.log(`Public:  ${withReviewKey(url, accessKey)}`);
       },
-      onFallback() {
-        console.log("Public:  cloudflared not found; trying npx cloudflared@latest...");
+      onFallback(fallbackPackage) {
+        console.log(`Public:  cloudflared not found; trying npx ${fallbackPackage}...`);
       },
       onError(error) {
         console.log(`Public:  unavailable (${error.message})`);

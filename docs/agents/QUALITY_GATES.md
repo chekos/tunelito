@@ -8,6 +8,7 @@ Use the smallest relevant gate while developing, then run `npm run ci` before co
 npm run check
 npm run agent:check
 npm test
+npm run smoke:check
 ```
 
 ## CLI Changes
@@ -54,6 +55,7 @@ For mobile or visual changes, use a real browser/device when available.
 Required:
 
 ```bash
+npm run release:check -- <version-or-tag>
 npm run ci
 npm pack
 npm install -g --prefix /tmp/tunelito-prefix ./tunelito-*.tgz
@@ -113,4 +115,5 @@ Required:
 - `CHANGELOG.md`
 - `docs/RELEASING.md`
 - package version consistency across `package.json`, `package-lock.json`, README examples, and release docs
+- `npm run release:check -- <version-or-tag>`
 - GitHub Actions green after push
