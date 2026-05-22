@@ -1,6 +1,6 @@
 ---
 name: tunelito-release
-description: Prepare a Tunelito beta or npm release using the release playbook and package verification.
+description: Prepare a Tunelito package or npm release using the release playbook and package verification.
 disable-model-invocation: true
 allowed-tools: Read, Grep, Glob, Bash
 ---
@@ -24,6 +24,6 @@ npm run ci
 npm pack
 ```
 
-Also perform a clean tarball install smoke and, after push, a GitHub install smoke if the beta is meant to be installed from GitHub.
+Also perform a clean tarball install smoke and, after publishing, an npm `npx` smoke.
 
 Keep `package.json`, `package-lock.json`, README examples, changelog, and release docs in sync.

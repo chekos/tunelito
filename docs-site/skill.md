@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires Node.js 22 or newer. Public sharing uses Cloudflare Tunnel when available.
 metadata:
   package: tunelito
-  install: npm install -g github:chekos/tunelito
+  install: npx --yes tunelito ./page.html
 ---
 
 # Tunelito
@@ -25,7 +25,7 @@ Tunelito turns a local HTML file into a temporary live review room. The user can
 ## Start a review
 
 ```bash
-tunelito ./page.html
+npx --yes tunelito ./page.html
 ```
 
 Share the printed `Public:` URL.

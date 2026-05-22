@@ -17,7 +17,7 @@ Tunelito uses project-local Claude Code skills under `.claude/skills/`. Skills a
 | `tunelito-agent-maintenance` | Maintain `.claude/`, `AGENTS.md`, `CLAUDE.md`, and playbooks. |
 | `tunelito-pr` | Prepare a PR-ready summary. |
 | `tunelito-ship` | Manually prepare a verified commit/push. |
-| `tunelito-release` | Manually prepare a beta or npm release. |
+| `tunelito-release` | Manually prepare a package or npm release. |
 
 ## Invocation Policy
 

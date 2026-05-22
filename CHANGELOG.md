@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Publishes Tunelito to npm so reviewers can start with `npx --yes tunelito ./page.html`.
+- Promotes the package docs from GitHub installation to npm-first usage.
+- Configures npm trusted publishing for GitHub Actions and skips already-published versions in the release workflow.
+- Rolls up the 0.1.1 prerelease work: review-key URLs, Node.js 22+ support, CI/trusted-publishing scaffolding, security/release docs, mobile text selection, package metadata, and the bundled smoke-test example.
+
 ## 0.1.1-beta.2
 
 - Keeps GitHub installs clean by relying on explicit CI/release checks instead of a `prepack` hook.

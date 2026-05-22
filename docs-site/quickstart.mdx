@@ -9,17 +9,10 @@ description: "Install Tunelito and start your first live HTML review session."
 - An HTML file on your machine
 - Internet access if you want a public tunnel URL
 
-## Install
-
-```bash
-npm install -g github:chekos/tunelito
-tunelito --version
-```
-
 ## Start a review
 
 ```bash
-tunelito ./page.html
+npx --yes tunelito ./page.html
 ```
 
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.

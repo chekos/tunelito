@@ -1,10 +1,10 @@
 # Release Playbook
 
-Use this for beta packaging and future npm releases. See `docs/RELEASING.md` for the public release process.
+Use this for package verification and npm releases. See `docs/RELEASING.md` for the public release process.
 
-## Beta Readiness
+## Release Readiness
 
-Before declaring a beta shareable:
+Before declaring a release shareable:
 
 ```bash
 npm run ci
@@ -37,19 +37,22 @@ Keep these in sync:
 - `CHANGELOG.md`
 - `docs/RELEASING.md`
 
-## GitHub Install Smoke
+## npm Install Smoke
 
-After pushing a beta commit to `main`:
+After publishing:
 
 ```bash
-rm -rf /tmp/tunelito-github-prefix
-mkdir -p /tmp/tunelito-github-prefix
-npm install -g --prefix /tmp/tunelito-github-prefix github:chekos/tunelito
-/tmp/tunelito-github-prefix/bin/tunelito --version
+npx --yes tunelito --version
 ```
 
-If this fails, fix it before telling the user the beta is ready.
+If this fails, fix it before telling the user the release is ready.
 
 ## npm Publishing
 
 Use trusted publishing through GitHub Actions. Do not introduce long-lived npm tokens unless there is a documented reason.
+
+Use npm 11.15 or newer when managing trusted publishers so the required allowed actions are sent:
+
+```bash
+npx --yes npm@11.15.0 trust list tunelito
+```

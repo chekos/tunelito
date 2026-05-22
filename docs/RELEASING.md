@@ -1,19 +1,19 @@
 # Releasing Tunelito
 
-Tunelito is currently distributed as a GitHub-installable beta. When the npm package name is ready, use trusted publishing from GitHub Actions so releases do not depend on long-lived npm tokens.
+Tunelito is published to npm as a public package. Prefer trusted publishing from GitHub Actions so releases do not depend on long-lived npm tokens.
 
 ## One-Time npm Setup
 
 1. Claim or create the `tunelito` package on npm.
-2. In npm package settings, add a trusted publisher:
-   - Provider: GitHub Actions
-   - Organization/user: `chekos`
-   - Repository: `tunelito`
-   - Workflow filename: `publish.yml`
-   - Allowed action: `npm publish`
+2. In npm package settings, add a trusted publisher with npm 11.15 or newer:
+
+   ```bash
+   npx --yes npm@11.15.0 trust github tunelito --file publish.yml --repo chekos/tunelito --allow-publish -y
+   ```
+
 3. Require two-factor authentication and disallow legacy automation tokens after trusted publishing succeeds.
 
-## Beta Release
+## npm Release
 
 1. Update `package.json` and `CHANGELOG.md`.
 2. Run:
@@ -30,7 +30,7 @@ Tunelito is currently distributed as a GitHub-installable beta. When the npm pac
 4. Tag the release:
 
    ```bash
-   git tag v0.1.1-beta.2
+   git tag v0.1.1
    git push origin main --tags
    ```
 
@@ -38,8 +38,8 @@ Tunelito is currently distributed as a GitHub-installable beta. When the npm pac
 6. Install from npm in a clean shell and run a smoke test:
 
    ```bash
-   npm install -g tunelito@beta
-   tunelito ./examples/simple-review.html --no-tunnel
+   npx --yes tunelito --version
+   npx --yes tunelito ./examples/simple-review.html --no-tunnel
    ```
 
 ## Provenance

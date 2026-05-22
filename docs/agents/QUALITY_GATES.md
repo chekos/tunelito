@@ -60,11 +60,10 @@ npm install -g --prefix /tmp/tunelito-prefix ./tunelito-*.tgz
 /tmp/tunelito-prefix/bin/tunelito --version
 ```
 
-If GitHub installation is part of the expected beta path, verify after pushing:
+After publishing to npm, verify the public install path:
 
 ```bash
-npm install -g github:chekos/tunelito
-tunelito --version
+npx --yes tunelito --version
 ```
 
 ## Agent Process Changes

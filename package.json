@@ -1,11 +1,11 @@
 {
   "name": "tunelito",
-  "version": "0.1.1-beta.2",
+  "version": "0.1.1",
   "description": "Serve any local HTML page as a temporary live review room with injected comments.",
   "type": "module",
   "packageManager": "npm@11.12.1",
   "bin": {
-    "tunelito": "./bin/tunelito.js"
+    "tunelito": "bin/tunelito.js"
   },
   "files": [
     "bin/",

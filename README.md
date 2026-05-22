@@ -8,15 +8,12 @@ Run one command, share the printed URL on a call, and reviewers can select text 
 
 Tunelito is local-first: your file stays on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
-## Install
+## Quickstart
 
 Tunelito requires Node.js 22 or newer.
 
-For the current GitHub beta:
-
 ```bash
-npm install -g github:chekos/tunelito
-tunelito --version
+npx --yes tunelito ./page.html
 ```
 
 From a clone:
@@ -25,12 +22,6 @@ From a clone:
 npm install
 npm link
 tunelito ./examples/simple-review.html
-```
-
-## Start a Review
-
-```bash
-tunelito ./page.html
 ```
 
 Tunelito prints:
@@ -68,7 +59,7 @@ tunelito ./page.html --no-tunnel --open
 ## CLI
 
 ```text
-Tunelito 0.1.1-beta.2
+Tunelito 0.1.1
 
 Usage: tunelito <page.html> [options]
 
@@ -124,11 +115,11 @@ This sentence needs a clearer verb.
 
 Tunelito also stores hidden metadata comments so the live session can be restored after a restart.
 
-## Beta Checklist
+## Pre-call Checklist
 
 Before sharing a live session:
 
-1. Run `tunelito ./page.html`.
+1. Run `npx --yes tunelito ./page.html`.
 2. Wait for the `Public:` URL.
 3. Open that URL on your phone.
 4. Select text and submit a short comment.
@@ -136,12 +127,12 @@ Before sharing a live session:
 6. Confirm `<page>.comments.md` contains the comment.
 7. Edit and save the HTML file; the phone should reload.
 
-## Packaging a Beta Tarball
+## Packaging a Release Tarball
 
 ```bash
 npm run ci
 npm pack
-npm install -g ./tunelito-0.1.1-beta.2.tgz
+npm install -g ./tunelito-0.1.1.tgz
 ```
 
 The package includes the CLI, runtime source, examples, docs, changelog, license, and security policy.

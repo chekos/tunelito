@@ -1,6 +1,6 @@
 ---
 name: tunelito-package
-description: Maintain Tunelito npm/GitHub package quality. Use for package.json, package-lock, npm pack, GitHub install, CI workflows, release docs, or beta distribution changes.
+description: Maintain Tunelito npm package quality. Use for package.json, package-lock, npm pack, npm install smoke tests, CI workflows, release docs, or distribution changes.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -18,6 +18,6 @@ Check:
 4. `npm run ci` passes.
 5. `npm pack --dry-run` contains expected files.
 6. Clean tarball install works.
-7. If already pushed, GitHub install works.
+7. If already published, npm `npx` install works.
 
 Do not use a `prepack` hook for mandatory checks; it can break git dependency installs. Keep checks explicit in CI and release playbooks.

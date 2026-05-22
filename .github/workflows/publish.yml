@@ -22,4 +22,20 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run ci
-      - run: npm publish
+      - id: package
+        run: |
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const pkg = require("./package.json");
+          console.log(`name=${pkg.name}`);
+          console.log(`version=${pkg.version}`);
+          NODE
+      - id: published
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} is already published; skipping npm publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.exists != 'true'
+        run: npm publish
