@@ -37,7 +37,15 @@ node bin/tunelito.js examples/simple-review.html --no-tunnel --port 4317
 ## Helpful Project Skills
 
 - `/tunelito-implement`: implement a normal feature or fix.
+- `/tunelito-start`: orient or resume safely.
+- `/tunelito-debug`: reproduce and fix broken behavior.
 - `/tunelito-review`: review the current diff.
+- `/tunelito-security`: audit or implement security-sensitive work.
+- `/tunelito-package`: maintain package metadata and install paths.
+- `/tunelito-live-smoke`: run a manual served-page smoke.
+- `/tunelito-docs`: keep docs in sync.
+- `/tunelito-agent-maintenance`: maintain hooks, skills, agents, and playbooks.
+- `/tunelito-pr`: prepare a PR-ready summary.
 - `/tunelito-ship`: prepare a beta-ready commit.
 - `/tunelito-release`: perform release preparation.
 

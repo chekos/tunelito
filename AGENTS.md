@@ -38,6 +38,7 @@ npm run ci
 - `docs/agents/SECURITY_REVIEW.md`: tunnel, file-serving, and hook security checklist.
 - `docs/agents/RELEASE_PLAYBOOK.md`: beta/release process.
 - `docs/agents/HOOKS.md`: Claude Code hook behavior and maintenance.
+- `docs/agents/SKILLS.md`: project skill catalog and validation policy.
 
 ## Claude Code
 

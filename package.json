@@ -22,7 +22,7 @@
     "ci": "npm run check && npm run agent:check && npm test && npm run pack:check",
     "test": "node --test",
     "check": "node --check bin/tunelito.js && node --check src/*.js test/*.test.js",
-    "agent:check": "node --check .claude/hooks/*.mjs && node -e \"JSON.parse(require('node:fs').readFileSync('.claude/settings.json', 'utf8'))\"",
+    "agent:check": "node --check .claude/hooks/*.mjs .claude/scripts/*.mjs && node .claude/scripts/validate-agent-config.mjs",
     "pack:check": "npm pack --dry-run"
   },
   "engines": {

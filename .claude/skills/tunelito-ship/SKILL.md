@@ -1,6 +1,8 @@
 ---
 name: tunelito-ship
 description: Prepare Tunelito changes for a beta-quality commit and push, including verification and handoff summary.
+disable-model-invocation: true
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 ## Current State

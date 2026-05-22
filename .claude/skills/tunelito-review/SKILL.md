@@ -1,6 +1,7 @@
 ---
 name: tunelito-review
 description: Review the current Tunelito diff for bugs, regressions, security issues, missing tests, and docs drift.
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 ## Current Diff

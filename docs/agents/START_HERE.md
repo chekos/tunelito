@@ -31,6 +31,7 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 - `src/tunnel.js`: Cloudflare Tunnel process management.
 - `test/`: Node test runner coverage.
 - `.claude/`: Claude Code hooks, project skills, and subagents.
+- `docs/agents/SKILLS.md`: catalog of project skills and validation policy.
 
 ## Default Change Loop
 

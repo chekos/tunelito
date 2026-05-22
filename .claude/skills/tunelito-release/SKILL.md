@@ -1,6 +1,8 @@
 ---
 name: tunelito-release
 description: Prepare a Tunelito beta or npm release using the release playbook and package verification.
+disable-model-invocation: true
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 ## Current Package

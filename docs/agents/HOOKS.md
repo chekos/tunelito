@@ -23,6 +23,8 @@ Run:
 npm run agent:check
 ```
 
+That command syntax-checks hook scripts, parses `.claude/settings.json`, and runs `.claude/scripts/validate-agent-config.mjs`.
+
 ## Maintenance Rules
 
 - Keep hooks deterministic and fast.

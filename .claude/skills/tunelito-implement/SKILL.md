@@ -1,6 +1,7 @@
 ---
 name: tunelito-implement
 description: Implement a Tunelito feature or bug fix following repo playbooks, tests, docs, and release-safe habits.
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 ## Current Context
