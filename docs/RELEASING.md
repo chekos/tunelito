@@ -30,7 +30,7 @@ Tunelito is currently distributed as a GitHub-installable beta. When the npm pac
 4. Tag the release:
 
    ```bash
-   git tag v0.1.1-beta.1
+   git tag v0.1.1-beta.2
    git push origin main --tags
    ```
 

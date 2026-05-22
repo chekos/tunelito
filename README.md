@@ -68,7 +68,7 @@ tunelito ./page.html --no-tunnel --open
 ## CLI
 
 ```text
-Tunelito 0.1.1-beta.1
+Tunelito 0.1.1-beta.2
 
 Usage: tunelito <page.html> [options]
 
@@ -141,7 +141,7 @@ Before sharing a live session:
 ```bash
 npm run ci
 npm pack
-npm install -g ./tunelito-0.1.1-beta.1.tgz
+npm install -g ./tunelito-0.1.1-beta.2.tgz
 ```
 
 The package includes the CLI, runtime source, examples, docs, changelog, license, and security policy.

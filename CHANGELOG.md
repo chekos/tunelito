@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1-beta.2
+
+- Keeps GitHub installs clean by relying on explicit CI/release checks instead of a `prepack` hook.
+
 ## 0.1.1-beta.1
 
 - Raises the supported runtime to active LTS Node.js 22+.
