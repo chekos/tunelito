@@ -1,6 +1,6 @@
 ---
 title: "How it works"
-description: "Understand the Tunelito local server, injected client, WebSocket sync, and Markdown persistence."
+description: "Understand the Tunelito local server, injected client, live sync, and persistence modes."
 ---
 
 Tunelito is local-first. It does not upload your source HTML to a hosted backend.
@@ -14,7 +14,7 @@ The browser client handles:
 - text selection
 - comment composition
 - comment sidebar
-- live WebSocket sync
+- live sync over WebSocket, plus WebRTC data channels in `--live`
 - highlight rendering when the browser supports it
 - reload notices when the file changes
 
@@ -22,8 +22,9 @@ The server handles:
 
 - review-key access control
 - WebSocket upgrades
+- WebRTC signaling and fallback relay events in `--live`
 - comment validation
-- Markdown persistence
+- Markdown persistence, unless `--live` is enabled
 - file watching
 - optional Cloudflare Tunnel startup
 
@@ -41,3 +42,7 @@ page.comments.md
 ```
 
 The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart.
+
+## Live mode
+
+`--live` stores comments in memory only. The browser client shares comments, cursors, and selection highlights over WebRTC data channels when possible. The WebSocket connection remains the authenticated control channel for room membership, WebRTC signaling, reload notices, and fallback relay when peer-to-peer connectivity is unavailable.

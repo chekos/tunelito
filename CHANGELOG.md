@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.0
+
+- Adds `--live` for ephemeral in-meeting collaboration without writing comments to disk.
+- Adds WebRTC peer signaling and browser data channels for live cursors, selection highlights, and instant comment fanout, with the existing WebSocket room as the authenticated fallback relay.
+- Keeps persistent Markdown comment sessions as the default workflow.
 - Added a local release doctor, lightweight CLI smoke check, and a configurable Cloudflare Tunnel fallback package for deterministic hardening.
 
 ## 0.1.1

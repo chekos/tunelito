@@ -11,6 +11,7 @@ Expected behavior:
 - Unkeyed HTTP requests return `401`.
 - The first keyed request sets an HTTP-only cookie.
 - WebSocket upgrades require the key or cookie.
+- Live-mode signaling and fallback relay messages stay behind the same WebSocket auth gate.
 - `--no-auth` is explicit and documented.
 
 Tests should cover both allowed and denied paths.

@@ -1,6 +1,6 @@
 {
   "name": "tunelito",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Serve any local HTML page as a temporary live review room with injected comments.",
   "type": "module",
   "packageManager": "npm@11.12.1",

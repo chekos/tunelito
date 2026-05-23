@@ -26,7 +26,7 @@ Verify:
 
 - unkeyed `/` returns `401`
 - keyed `/` returns the example page
-- keyed `/__tunelito/client.js` contains WebSocket setup
+- keyed `/__tunelito/client.js` contains WebSocket setup and WebRTC live-mode support
 
 The lightweight automated local smoke is:
 

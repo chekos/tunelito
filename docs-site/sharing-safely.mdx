@@ -21,6 +21,12 @@ The first valid request sets a short-lived HTTP-only cookie so page assets and W
 
 When tunneling is enabled, Tunelito exposes your local server through Cloudflare Tunnel. Use this only for material you are comfortable sharing with anyone who has the full link.
 
+## Ephemeral live sessions
+
+`--live` keeps comments in memory only and does not write a comments file. The same bearer-link access model still applies: anyone with the full URL can view the page and participate while the local server is running.
+
+WebRTC data channels are encrypted by the browser when peer-to-peer connectivity is available. The WebSocket connection remains active for signaling, reloads, and fallback relay. Tunelito does not configure third-party STUN or TURN servers.
+
 ## Disable public tunnels
 
 ```bash

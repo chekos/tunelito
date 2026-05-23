@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { request } from "node:http";
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer } from "../src/server.js";
@@ -60,6 +60,93 @@ test("server serves injected HTML, sibling assets, and live WebSocket comments",
 
     socket.close();
   } finally {
+    await instance.close();
+  }
+});
+
+test("live mode keeps comments in memory and relays peer signaling", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-live-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Review me live</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    liveMode: true,
+  });
+
+  const sockets = [];
+  try {
+    assert.equal(instance.liveMode, true);
+    assert.equal(instance.commentsPath, null);
+
+    const html = await fetch(instance.localUrl).then((res) => res.text());
+    assert.match(html, /data-live-mode="true"/);
+
+    const commentsResponse = await fetch(new URL("/__tunelito/comments.md", instance.localUrl));
+    assert.equal(commentsResponse.status, 404);
+    assert.match(await commentsResponse.text(), /ephemeral/);
+
+    const first = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(first.socket);
+    await waitFor(first.socket, "open");
+    await waitUntil(() => first.messages.some((message) => message.type === "hello"));
+    const firstHello = first.messages.find((message) => message.type === "hello");
+    assert.equal(firstHello.liveMode, true);
+    assert.equal(firstHello.commentsUrl, null);
+    assert.match(firstHello.peerId, /^p_/);
+
+    first.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        id: "c_live_1",
+        author: "Ada",
+        quote: "Review me live",
+        body: "This should stay in memory.",
+        textStart: 0,
+        textEnd: 14,
+        created: "2026-05-23T12:00:00.000Z",
+      },
+    }));
+
+    await waitUntil(() => first.messages.some((message) => message.type === "comment"));
+    assert.equal(existsSync(commentsPath), false);
+
+    const second = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(second.socket);
+    await waitFor(second.socket, "open");
+    await waitUntil(() => second.messages.some((message) => message.type === "hello"));
+    const secondHello = second.messages.find((message) => message.type === "hello");
+    assert.equal(secondHello.comments.length, 1);
+    assert.equal(secondHello.comments[0].id, "c_live_1");
+    assert.deepEqual(secondHello.peers.map((peer) => peer.id), [firstHello.peerId]);
+
+    await waitUntil(() => first.messages.some((message) => message.type === "peer-joined"));
+    assert.equal(first.messages.find((message) => message.type === "peer-joined").peer.id, secondHello.peerId);
+
+    second.socket.send(JSON.stringify({
+      type: "signal",
+      to: firstHello.peerId,
+      signal: { description: { type: "offer", sdp: "v=0\r\n" } },
+    }));
+    await waitUntil(() => first.messages.some((message) => message.type === "signal"));
+    const signal = first.messages.find((message) => message.type === "signal");
+    assert.equal(signal.from, secondHello.peerId);
+    assert.equal(signal.signal.description.type, "offer");
+
+    first.socket.send(JSON.stringify({
+      type: "live-event",
+      event: { type: "cursor", x: 12, y: 34, author: "Ada" },
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "live-event"));
+    const liveEvent = second.messages.find((message) => message.type === "live-event");
+    assert.equal(liveEvent.from, firstHello.peerId);
+    assert.equal(liveEvent.event.type, "cursor");
+  } finally {
+    for (const socket of sockets) socket.close();
     await instance.close();
   }
 });
@@ -230,6 +317,14 @@ test("server returns 405 for unsupported methods and preserves auth headers", as
     await instance.close();
   }
 });
+
+function openJsonSocket(url) {
+  url.protocol = "ws:";
+  const socket = new WebSocket(url);
+  const messages = [];
+  socket.addEventListener("message", (event) => messages.push(JSON.parse(event.data)));
+  return { socket, messages };
+}
 
 function waitFor(target, event) {
   return new Promise((resolve, reject) => {

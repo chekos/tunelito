@@ -63,6 +63,29 @@ export function createCommentStore({ commentsPath, sourcePath }) {
   };
 }
 
+export function createMemoryCommentStore() {
+  const comments = [];
+
+  function all() {
+    return comments.slice();
+  }
+
+  function add(input) {
+    const comment = normalizeComment(input);
+    comments.push(comment);
+    return comment;
+  }
+
+  return {
+    get commentsPath() {
+      return null;
+    },
+    all,
+    add,
+    write() {},
+  };
+}
+
 export function renderCommentsMarkdown({ comments, sourcePath }) {
   const sourceName = sourcePath ? basename(sourcePath) : "HTML page";
   const lines = [
