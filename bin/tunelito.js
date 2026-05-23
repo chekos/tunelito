@@ -20,6 +20,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page>.comments.md)
+  --live                Use ephemeral live collaboration mode; do not write comments to disk
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -46,6 +47,8 @@ export function parseArgs(argv) {
       opts.version = true;
     } else if (arg === "--no-tunnel") {
       opts.tunnel = false;
+    } else if (arg === "--live") {
+      opts.live = true;
     } else if (arg === "--no-auth") {
       opts.auth = false;
     } else if (arg === "--open") {
@@ -122,6 +125,7 @@ async function main() {
     host: opts.host,
     port: opts.port,
     accessKey,
+    liveMode: opts.live,
   });
 
   let tunnel = null;
@@ -139,7 +143,10 @@ async function main() {
 
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
-  console.log(`Comments: ${instance.commentsPath}`);
+  console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
+  if (opts.live) {
+    console.log("Live:    WebRTC peer-to-peer when available; WebSocket relay fallback enabled");
+  }
   console.log(opts.auth ? "Access:  review key required by the printed URLs" : "Access:  disabled (--no-auth)");
 
   if (opts.open) {

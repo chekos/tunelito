@@ -16,8 +16,8 @@ Tunelito turns a local HTML file into a temporary live review room. The user can
 
 - Serve one local HTML file.
 - Inject a live comment UI into the served response without modifying the source file.
-- Sync comments over WebSocket.
-- Persist comments to Markdown.
+- Sync comments over WebSocket, with WebRTC peer-to-peer collaboration in `--live`.
+- Persist comments to Markdown by default, or keep them ephemeral with `--live`.
 - Reload connected browsers when the source HTML changes.
 - Expose the local server through a temporary Cloudflare Tunnel.
 - Require keyed review URLs by default.

@@ -23,6 +23,12 @@ That is expected. Use the full printed URL with `tunelito_key=...`.
 
 The selected text probably changed. Comments remain in Markdown and the sidebar, but highlights may not reattach if the exact quote can no longer be found.
 
+## Live mode says relay instead of P2P
+
+That is expected on some networks. `--live` tries WebRTC data channels for cursors, selections, and instant comments, but keeps the authenticated WebSocket connection as a fallback relay when peer-to-peer connectivity is unavailable.
+
+Tunelito does not configure third-party STUN or TURN servers.
+
 ## Mobile selection feels finicky
 
 Mobile browsers expose selection events differently. Try selecting a shorter phrase, then tap the Tunelito comment button once it appears.

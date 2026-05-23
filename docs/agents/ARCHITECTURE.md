@@ -1,6 +1,6 @@
 # Architecture
 
-Tunelito is intentionally small: a Node.js CLI, a local HTTP/WebSocket server, an injected browser client, and markdown persistence.
+Tunelito is intentionally small: a Node.js CLI, a local HTTP/WebSocket server, an injected browser client, optional WebRTC peer links, and markdown or in-memory comment storage.
 
 ## Boundaries
 
@@ -8,6 +8,7 @@ The CLI owns process orchestration:
 
 - parse arguments
 - choose host/port/comments path
+- choose persistent or ephemeral live mode
 - generate the review key
 - start the local server
 - optionally start Cloudflare Tunnel
@@ -20,15 +21,17 @@ The server owns local IO and transport:
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
 - accept WebSocket comment events
-- write/read markdown comments
+- write/read markdown comments or keep live-mode comments in memory
+- relay WebRTC signaling and fallback live events
 - broadcast reload events when the HTML changes
 
 The browser client owns reviewer interaction:
 
 - capture text selections
 - render comment controls
-- submit comments over WebSocket
+- submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
+- render peer cursors and live selection highlights in `--live`
 - reconnect/reload when the server says to
 
 ## Invariants
@@ -38,6 +41,7 @@ The browser client owns reviewer interaction:
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
+- Keep `--live` comments ephemeral; do not write them to markdown.
 - Keep package installs dependency-light and cross-platform.
 
 ## Extension Points

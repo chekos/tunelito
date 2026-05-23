@@ -2,8 +2,9 @@ export const CLIENT_ROUTE = "/__tunelito/client.js";
 export const COMMENTS_ROUTE = "/__tunelito/comments.md";
 export const WS_ROUTE = "/__tunelito/ws";
 
-export function injectTunelitoClient(html, { sourceName }) {
-  const script = `<script src="${CLIENT_ROUTE}" data-source-name="${escapeAttribute(sourceName || "HTML page")}"></script>`;
+export function injectTunelitoClient(html, { sourceName, liveMode = false } = {}) {
+  const liveAttribute = liveMode ? ` data-live-mode="true"` : "";
+  const script = `<script src="${CLIENT_ROUTE}" data-source-name="${escapeAttribute(sourceName || "HTML page")}"${liveAttribute}></script>`;
   let output = stripMetaCsp(String(html));
 
   if (output.includes(CLIENT_ROUTE)) return output;

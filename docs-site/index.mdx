@@ -5,7 +5,7 @@ description: "Turn any local HTML file into a temporary live review room with co
 
 Tunelito turns any local HTML file into a temporary live review room.
 
-Run one command, share the printed link on a call, and reviewers can select text to leave comments live. You keep editing the HTML in your editor. Connected browsers reload when the file changes. Comments are saved as readable Markdown beside the page.
+Run one command, share the printed link on a call, and reviewers can select text to leave comments live. You keep editing the HTML in your editor. Connected browsers reload when the file changes. Comments are saved as readable Markdown beside the page by default, or kept ephemeral with `--live`.
 
 ## Why it exists
 
@@ -15,7 +15,7 @@ Tunelito gives you that loop:
 
 - local HTML stays the source of truth
 - reviewers can comment but cannot edit the file
-- comments sync live over WebSocket
+- comments sync live, with WebRTC peer-to-peer support in `--live`
 - public sharing uses a temporary Cloudflare Tunnel
 - shared links require a generated review key by default
 
@@ -38,3 +38,9 @@ Public:  https://example.trycloudflare.com/?tunelito_key=...
 ```
 
 Share the `Public:` URL with the person on your call.
+
+For ephemeral in-meeting collaboration:
+
+```bash
+tunelito ./page.html --live
+```

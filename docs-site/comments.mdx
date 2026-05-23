@@ -5,6 +5,8 @@ description: "How Tunelito stores reviewer comments and restores live session st
 
 Reviewers select text and leave comments from the injected Tunelito panel. Comments sync live to connected browsers and are written to Markdown immediately.
 
+Use `--live` when comments should be ephemeral and disappear with the local server instead of being written to disk.
+
 ## Default file location
 
 ```text
@@ -33,6 +35,14 @@ This sentence needs a clearer verb.
 ```
 
 Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart.
+
+## Ephemeral live mode
+
+```bash
+tunelito ./page.html --live
+```
+
+In live mode, comments are held in memory only. The sidebar updates during the session, but no comments file is written and nothing is restored after restart.
 
 ## Highlight limits
 

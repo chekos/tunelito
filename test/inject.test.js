@@ -11,6 +11,13 @@ test("injectTunelitoClient injects before the closing body", () => {
   assert.match(injected, /data-source-name="demo\.html"/);
 });
 
+test("injectTunelitoClient marks live-mode responses", () => {
+  const html = "<!doctype html><html><body><main>Hello</main></body></html>";
+  const injected = injectTunelitoClient(html, { sourceName: "demo.html", liveMode: true });
+
+  assert.match(injected, /data-live-mode="true"/);
+});
+
 test("injectTunelitoClient strips CSP meta tags and avoids duplicate injection", () => {
   const html = `
     <html>

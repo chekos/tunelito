@@ -1,16 +1,29 @@
 (function () {
   const script = document.currentScript;
   const sourceName = script?.dataset?.sourceName || document.title || "HTML page";
+  const configuredLiveMode = script?.dataset?.liveMode === "true";
   const endpointBase = "/__tunelito";
   const accessKey = new URLSearchParams(location.search).get("tunelito_key") || "";
   const state = {
     socket: null,
     connected: false,
+    liveMode: configuredLiveMode,
+    peerId: "",
+    peers: new Map(),
+    peerConnections: new Map(),
+    dataChannels: new Map(),
+    pendingIceCandidates: new Map(),
+    peerCursors: new Map(),
+    peerSelections: new Map(),
+    viewerCount: null,
     author: localStorage.getItem("tunelito:author") || "",
     comments: [],
     pendingSelection: null,
     highlights: [],
     selectionTimer: null,
+    cursorTimer: null,
+    pendingCursor: null,
+    sharedSelectionActive: false,
   };
 
   addDocumentHighlightStyle();
@@ -37,17 +50,31 @@
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.type === "hello") {
+        resetPeerConnections();
+        state.liveMode = Boolean(message.liveMode);
+        state.peerId = message.peerId || "";
+        state.viewerCount = message.viewerCount;
         state.comments = message.comments || [];
+        state.peers = new Map((message.peers || []).map((peer) => [peer.id, peer]));
+        updateCommentsLink(message.commentsUrl);
         renderComments();
         renderStatus(null, message.viewerCount);
+        if (state.liveMode) connectToExistingPeers(message.peers || []);
       } else if (message.type === "comment") {
-        state.comments.push(message.comment);
-        renderComments();
+        addComment(message.comment);
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
         renderStatus("Page changed; reloading...");
         setTimeout(() => location.reload(), 500);
+      } else if (message.type === "peer-joined") {
+        handlePeerJoined(message.peer);
+      } else if (message.type === "peer-left") {
+        handlePeerLeft(message.peerId);
+      } else if (message.type === "signal") {
+        handleSignal(message.from, message.signal);
+      } else if (message.type === "live-event") {
+        if (message.from !== state.peerId) handleLiveEvent(message.from, message.event);
       } else if (message.type === "error") {
         renderStatus(message.message);
       }
@@ -202,6 +229,38 @@
           font-weight: 600;
           font-size: 12px;
         }
+        .link[hidden] { display: none; }
+        .peer-cursor {
+          position: fixed;
+          left: 0;
+          top: 0;
+          z-index: 2147483644;
+          pointer-events: none;
+          transform: translate3d(-999px, -999px, 0);
+          transition: transform .08s linear, opacity .18s ease;
+        }
+        .peer-cursor .dot {
+          width: 10px;
+          height: 10px;
+          border: 2px solid #fff;
+          border-radius: 999px;
+          background: #f59e0b;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, .28);
+        }
+        .peer-cursor .label {
+          display: inline-block;
+          margin: 5px 0 0 8px;
+          max-width: 140px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          border-radius: 999px;
+          background: #111827;
+          color: #fff;
+          font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 5px 7px;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, .2);
+        }
         .selection {
           position: fixed;
           z-index: 2147483647;
@@ -331,6 +390,7 @@
     const markdownLink = shadow.querySelector(".link");
     shadow.querySelector(".title strong").textContent = sourceName;
     markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
+    markdownLink.hidden = configuredLiveMode;
     name.value = state.author;
 
     launcher.addEventListener("click", () => panel.classList.toggle("open"));
@@ -363,6 +423,7 @@
       comments: shadow.querySelector(".comments"),
       status: shadow.querySelector(".status"),
       mini: shadow.querySelector(".mini"),
+      markdownLink,
       name,
     };
   }
@@ -374,6 +435,7 @@
   }
 
   function bindSelection() {
+    document.addEventListener("pointermove", sharePointerPosition, { passive: true });
     document.addEventListener("mouseup", scheduleSelectionCapture);
     document.addEventListener("keyup", scheduleSelectionCapture);
     document.addEventListener("selectionchange", scheduleSelectionCapture);
@@ -413,6 +475,7 @@
     }
     const range = selection.getRangeAt(0).cloneRange();
     state.pendingSelection = captureSelection(range);
+    shareSelection(state.pendingSelection);
     const rect = range.getBoundingClientRect();
     if (!rect || (rect.width === 0 && rect.height === 0)) {
       hideSelectionButton();
@@ -481,17 +544,30 @@
     const author = state.author || ui.name.value.trim() || "Anonymous";
     state.author = author;
     localStorage.setItem("tunelito:author", author);
+    const comment = {
+      ...(state.liveMode ? { id: createEventId("c"), created: new Date().toISOString() } : {}),
+      ...state.pendingSelection,
+      body,
+      author,
+      pagePath: location.pathname,
+    };
+    if (state.liveMode) {
+      addComment(comment);
+      broadcastLiveEvent({ type: "comment", id: comment.id, comment });
+    }
     state.socket?.send(JSON.stringify({
       type: "create-comment",
-      comment: {
-        ...state.pendingSelection,
-        body,
-        author,
-        pagePath: location.pathname,
-      },
+      comment,
     }));
     closeComposer();
     window.getSelection()?.removeAllRanges();
+  }
+
+  function addComment(comment) {
+    if (!comment) return;
+    if (comment.id && state.comments.some((existing) => existing.id === comment.id)) return;
+    state.comments.push(comment);
+    renderComments();
   }
 
   function renderComments() {
@@ -521,14 +597,262 @@
   }
 
   function renderStatus(message, viewerCount) {
+    if (Number.isFinite(viewerCount)) state.viewerCount = viewerCount;
     const connection = state.connected ? "Connected" : "Offline";
-    const viewers = Number.isFinite(viewerCount) ? ` · ${viewerCount} viewer${viewerCount === 1 ? "" : "s"}` : "";
+    const count = Number.isFinite(state.viewerCount) ? state.viewerCount : null;
+    const viewers = Number.isFinite(count) ? ` · ${count} viewer${count === 1 ? "" : "s"}` : "";
+    const transport = state.liveMode && state.connected ? ` · ${openDataChannelCount() > 0 ? "P2P" : "relay"}` : "";
     ui.status.textContent = message || `${connection}${viewers}`;
-    ui.mini.textContent = state.connected ? "Live" : "Offline";
+    ui.status.textContent += message ? "" : transport;
+    ui.mini.textContent = state.connected ? (state.liveMode ? (openDataChannelCount() > 0 ? "Live P2P" : "Live relay") : "Live") : "Offline";
+  }
+
+  function updateCommentsLink(commentsUrl) {
+    const url = commentsUrl ? withAccessKey(commentsUrl) : "";
+    ui.markdownLink.href = url || "#";
+    ui.markdownLink.hidden = !url;
+  }
+
+  function connectToExistingPeers(peers) {
+    if (!webRtcAvailable()) return;
+    for (const peer of peers) {
+      if (peer?.id) connectToPeer(peer.id, true);
+    }
+  }
+
+  function handlePeerJoined(peer) {
+    if (!state.liveMode || !peer?.id || peer.id === state.peerId) return;
+    state.peers.set(peer.id, peer);
+    if (webRtcAvailable()) connectToPeer(peer.id, false);
+  }
+
+  function handlePeerLeft(peerId) {
+    if (!peerId) return;
+    state.peers.delete(peerId);
+    closePeerConnection(peerId);
+    state.peerSelections.delete(peerId);
+    removePeerCursor(peerId);
+    updatePeerHighlights();
+  }
+
+  async function connectToPeer(peerId, initiator) {
+    if (!state.liveMode || !peerId || peerId === state.peerId || !webRtcAvailable()) return null;
+    const existing = state.peerConnections.get(peerId);
+    if (existing) return existing;
+
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    state.peerConnections.set(peerId, pc);
+
+    pc.addEventListener("icecandidate", (event) => {
+      if (event.candidate) sendSignal(peerId, { candidate: event.candidate });
+    });
+    pc.addEventListener("connectionstatechange", () => {
+      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        closePeerConnection(peerId);
+      }
+      renderStatus();
+    });
+    pc.addEventListener("datachannel", (event) => {
+      setupDataChannel(peerId, event.channel);
+    });
+
+    if (initiator) {
+      setupDataChannel(peerId, pc.createDataChannel("tunelito-live"));
+      try {
+        await pc.setLocalDescription(await pc.createOffer());
+        sendSignal(peerId, { description: pc.localDescription });
+      } catch {
+        closePeerConnection(peerId);
+      }
+    }
+
+    return pc;
+  }
+
+  function setupDataChannel(peerId, channel) {
+    state.dataChannels.set(peerId, channel);
+    channel.addEventListener("open", () => renderStatus());
+    channel.addEventListener("close", () => {
+      if (state.dataChannels.get(peerId) === channel) state.dataChannels.delete(peerId);
+      renderStatus();
+    });
+    channel.addEventListener("message", (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message?.type === "live-event") handleLiveEvent(peerId, message.event);
+      } catch {
+        // Ignore malformed peer messages; the WebSocket relay remains the fallback.
+      }
+    });
+  }
+
+  async function handleSignal(peerId, signal) {
+    if (!state.liveMode || !peerId || !signal || !webRtcAvailable()) return;
+    const pc = await connectToPeer(peerId, false);
+    if (!pc) return;
+    try {
+      if (signal.description) {
+        await pc.setRemoteDescription(signal.description);
+        await flushPendingIceCandidates(peerId, pc);
+        if (signal.description.type === "offer") {
+          await pc.setLocalDescription(await pc.createAnswer());
+          sendSignal(peerId, { description: pc.localDescription });
+        }
+      }
+      if (signal.candidate) {
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(signal.candidate);
+        } else {
+          const pending = state.pendingIceCandidates.get(peerId) || [];
+          pending.push(signal.candidate);
+          state.pendingIceCandidates.set(peerId, pending);
+        }
+      }
+    } catch {
+      closePeerConnection(peerId);
+    }
+  }
+
+  async function flushPendingIceCandidates(peerId, pc) {
+    const pending = state.pendingIceCandidates.get(peerId) || [];
+    state.pendingIceCandidates.delete(peerId);
+    for (const candidate of pending) {
+      await pc.addIceCandidate(candidate);
+    }
+  }
+
+  function sendSignal(peerId, signal) {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+    state.socket.send(JSON.stringify({ type: "signal", to: peerId, signal }));
+  }
+
+  function broadcastLiveEvent(event) {
+    if (!state.liveMode || !event) return;
+    const payload = JSON.stringify({ type: "live-event", event });
+    for (const channel of state.dataChannels.values()) {
+      if (channel.readyState === "open") channel.send(payload);
+    }
+    if (event.type !== "comment" && state.socket?.readyState === WebSocket.OPEN) {
+      state.socket.send(payload);
+    }
+  }
+
+  function handleLiveEvent(peerId, event) {
+    if (!state.liveMode || !peerId || peerId === state.peerId || !event) return;
+    if (event.type === "comment") {
+      addComment(event.comment);
+    } else if (event.type === "cursor") {
+      renderPeerCursor(peerId, event);
+    } else if (event.type === "selection") {
+      state.peerSelections.set(peerId, event.selection);
+      updatePeerHighlights();
+    } else if (event.type === "selection-clear") {
+      state.peerSelections.delete(peerId);
+      updatePeerHighlights();
+    }
+  }
+
+  function sharePointerPosition(event) {
+    if (!state.liveMode || !state.connected) return;
+    state.pendingCursor = {
+      x: event.pageX,
+      y: event.pageY,
+      author: state.author || ui.name.value.trim() || "Guest",
+    };
+    if (state.cursorTimer) return;
+    state.cursorTimer = setTimeout(() => {
+      state.cursorTimer = null;
+      if (state.pendingCursor) broadcastLiveEvent({ type: "cursor", ...state.pendingCursor });
+      state.pendingCursor = null;
+    }, 50);
+  }
+
+  function shareSelection(selection) {
+    if (!state.liveMode || !selection?.quote) return;
+    state.sharedSelectionActive = true;
+    broadcastLiveEvent({
+      type: "selection",
+      selection: {
+        quote: selection.quote,
+        prefix: selection.prefix,
+        suffix: selection.suffix,
+        textStart: selection.textStart,
+        textEnd: selection.textEnd,
+        path: selection.path,
+        author: state.author || ui.name.value.trim() || "Guest",
+      },
+    });
+  }
+
+  function clearSharedSelection() {
+    if (!state.liveMode || !state.sharedSelectionActive) return;
+    state.sharedSelectionActive = false;
+    broadcastLiveEvent({ type: "selection-clear" });
+  }
+
+  function renderPeerCursor(peerId, event) {
+    let entry = state.peerCursors.get(peerId);
+    if (!entry) {
+      const element = document.createElement("div");
+      element.className = "peer-cursor";
+      element.innerHTML = `<div class="dot"></div><div class="label"></div>`;
+      ui.shadow.appendChild(element);
+      entry = { element, timer: null };
+      state.peerCursors.set(peerId, entry);
+    }
+
+    entry.element.querySelector(".label").textContent = event.author || "Guest";
+    entry.element.style.opacity = "1";
+    entry.element.style.transform = `translate3d(${Math.round(event.x - window.scrollX)}px, ${Math.round(event.y - window.scrollY)}px, 0)`;
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      entry.element.style.opacity = "0";
+    }, 2400);
+  }
+
+  function removePeerCursor(peerId) {
+    const entry = state.peerCursors.get(peerId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.element.remove();
+    state.peerCursors.delete(peerId);
+  }
+
+  function resetPeerConnections() {
+    for (const peerId of Array.from(state.peerConnections.keys())) closePeerConnection(peerId);
+    state.peerConnections.clear();
+    state.dataChannels.clear();
+    state.pendingIceCandidates.clear();
+    state.peerSelections.clear();
+    for (const peerId of Array.from(state.peerCursors.keys())) removePeerCursor(peerId);
+    updatePeerHighlights();
+  }
+
+  function closePeerConnection(peerId) {
+    const channel = state.dataChannels.get(peerId);
+    if (channel) channel.close();
+    state.dataChannels.delete(peerId);
+    const pc = state.peerConnections.get(peerId);
+    if (pc) pc.close();
+    state.peerConnections.delete(peerId);
+    state.pendingIceCandidates.delete(peerId);
+  }
+
+  function openDataChannelCount() {
+    let count = 0;
+    for (const channel of state.dataChannels.values()) {
+      if (channel.readyState === "open") count += 1;
+    }
+    return count;
+  }
+
+  function webRtcAvailable() {
+    return typeof RTCPeerConnection !== "undefined";
   }
 
   function hideSelectionButton() {
     ui.selection.classList.remove("visible");
+    clearSharedSelection();
   }
 
   function positionSelectionButton(rect) {
@@ -549,6 +873,21 @@
       if (range) state.highlights.push(range);
     }
     CSS.highlights.set("tunelito-comments", new Highlight(...state.highlights));
+    updatePeerHighlights();
+  }
+
+  function updatePeerHighlights() {
+    if (!("CSS" in window) || !CSS.highlights || typeof Highlight === "undefined") return;
+    const ranges = [];
+    for (const selection of state.peerSelections.values()) {
+      const range = findRangeForComment(selection);
+      if (range) ranges.push(range);
+    }
+    if (ranges.length) {
+      CSS.highlights.set("tunelito-peer-selections", new Highlight(...ranges));
+    } else {
+      CSS.highlights.delete("tunelito-peer-selections");
+    }
   }
 
   function scrollToComment(comment) {
@@ -608,7 +947,10 @@
   function addDocumentHighlightStyle() {
     const style = document.createElement("style");
     style.id = "tunelito-document-highlight-style";
-    style.textContent = `::highlight(tunelito-comments) { background: rgba(45, 212, 191, .28); }`;
+    style.textContent = `
+      ::highlight(tunelito-comments) { background: rgba(45, 212, 191, .28); }
+      ::highlight(tunelito-peer-selections) { background: rgba(245, 158, 11, .26); }
+    `;
     document.head.appendChild(style);
   }
 
@@ -706,6 +1048,11 @@
   function compact(value, length) {
     const text = String(value || "").replace(/\s+/g, " ").trim();
     return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+  }
+
+  function createEventId(prefix) {
+    const random = Math.random().toString(36).slice(2, 10);
+    return `${prefix}_${Date.now().toString(36)}_${random}`;
   }
 
   function formatTime(value) {

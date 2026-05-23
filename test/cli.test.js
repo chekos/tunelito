@@ -27,6 +27,12 @@ test("parseArgs enables review-key auth by default and can disable it", () => {
   assert.equal(parseArgs(["page.html", "--no-auth"]).auth, false);
 });
 
+test("parseArgs supports ephemeral live mode", () => {
+  const opts = parseArgs(["page.html", "--live"]);
+  assert.equal(opts.live, true);
+  assert.equal(opts.filePath, resolve("page.html"));
+});
+
 test("isCliEntry recognizes npm-style symlinked bin paths", () => {
   const dir = mkdtempSync(`${tmpdir()}/tunelito-bin-`);
   const target = `${dir}/tunelito.js`;

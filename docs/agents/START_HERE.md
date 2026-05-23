@@ -4,7 +4,7 @@ Tunelito is a small package with a deliberately high bar for agent handoffs. You
 
 ## What Tunelito Does
 
-Tunelito serves one local HTML file, injects a same-origin review client at response time, syncs live comments over WebSocket, writes comments to markdown, reloads clients when the source file changes, and can expose the local server through a temporary Cloudflare Tunnel.
+Tunelito serves one local HTML file, injects a same-origin review client at response time, syncs live comments over WebSocket, optionally uses WebRTC data channels for ephemeral `--live` collaboration, writes persistent comments to markdown, reloads clients when the source file changes, and can expose the local server through a temporary Cloudflare Tunnel.
 
 The source HTML is the user's document. Do not mutate it as part of the annotation layer.
 
@@ -23,7 +23,7 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 ## Source Map
 
 - `bin/tunelito.js`: CLI argument parsing, startup output, tunnel orchestration.
-- `src/server.js`: HTTP server, file serving, review-key auth, WebSocket upgrade.
+- `src/server.js`: HTTP server, file serving, review-key auth, WebSocket upgrade, WebRTC signaling.
 - `src/client.js`: injected browser UI and live annotation behavior.
 - `src/comments.js`: markdown persistence and comment restoration.
 - `src/inject.js`: HTML injection and CSP meta handling.

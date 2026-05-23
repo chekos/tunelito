@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, readFileSync, realpathSync, statSync, watch } from "node:fs";
 import { dirname, basename, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultCommentsPath, createCommentStore, renderCommentsMarkdown } from "./comments.js";
+import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, renderCommentsMarkdown } from "./comments.js";
 import { CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
@@ -18,10 +18,12 @@ export async function createTunelitoServer(options) {
   const rootDir = dirname(filePath);
   const rootRealDir = realpathSync.native(rootDir);
   const sourceName = basename(filePath);
-  const commentsPath = resolve(options.commentsPath || defaultCommentsPath(filePath));
-  const comments = createCommentStore({ commentsPath, sourcePath: filePath });
+  const liveMode = Boolean(options.liveMode || options.live);
+  const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(filePath));
+  const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: filePath });
   const events = new EventEmitter();
   const hub = new WebSocketHub();
+  const peers = new Map();
   const accessKey = options.accessKey ? String(options.accessKey) : "";
 
   const server = createServer((req, res) => {
@@ -33,6 +35,7 @@ export async function createTunelitoServer(options) {
       rootRealDir,
       sourceName,
       comments,
+      liveMode,
       accessKey,
     });
   });
@@ -66,18 +69,38 @@ export async function createTunelitoServer(options) {
   }
 
   hub.on("connection", (client) => {
+    const peer = {
+      id: createPeerId(),
+      connectedAt: new Date().toISOString(),
+    };
+    peers.set(client, peer);
     client.send({
       type: "hello",
+      mode: liveMode ? "live" : "persistent",
+      liveMode,
+      peerId: peer.id,
+      peers: Array.from(peers.values()).filter((candidate) => candidate.id !== peer.id),
       sourceName,
       comments: comments.all(),
-      commentsUrl: COMMENTS_ROUTE,
+      commentsUrl: liveMode ? null : COMMENTS_ROUTE,
       viewerCount: hub.size,
     });
+    if (liveMode) {
+      hub.broadcast({ type: "peer-joined", peer }, { except: client });
+    }
     publishViewerCount();
   });
 
-  hub.on("close", publishViewerCount);
+  hub.on("close", (client) => {
+    const peer = peers.get(client);
+    peers.delete(client);
+    if (liveMode && peer) {
+      hub.broadcast({ type: "peer-left", peerId: peer.id });
+    }
+    publishViewerCount();
+  });
   hub.on("message", (client, message) => {
+    const peer = peers.get(client);
     let event;
     try {
       event = JSON.parse(message);
@@ -93,6 +116,15 @@ export async function createTunelitoServer(options) {
         hub.broadcast({ type: "comment", comment });
       } catch (error) {
         client.send({ type: "error", message: error.message });
+      }
+    } else if (liveMode && event.type === "signal") {
+      const target = findPeerClient(peers, event.to);
+      if (target && peer) {
+        target.send({ type: "signal", from: peer.id, signal: event.signal || {} });
+      }
+    } else if (liveMode && event.type === "live-event") {
+      if (peer && event.event && typeof event.event === "object") {
+        hub.broadcast({ type: "live-event", from: peer.id, event: event.event }, { except: client });
       }
     }
   });
@@ -118,6 +150,7 @@ export async function createTunelitoServer(options) {
     hub,
     commentsPath,
     filePath,
+    liveMode,
     originUrl,
     localUrl,
     async close() {
@@ -131,7 +164,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, comments, accessKey }) {
+function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, comments, liveMode, accessKey }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -158,13 +191,17 @@ function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, c
   }
 
   if (pathname === COMMENTS_ROUTE) {
+    if (liveMode) {
+      sendText(res, 404, "Tunelito live mode comments are ephemeral and are not written to markdown.", "text/plain; charset=utf-8", req.method, auth.headers);
+      return;
+    }
     sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: filePath }), "text/markdown; charset=utf-8", req.method, auth.headers);
     return;
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
     const html = readFileSync(filePath, "utf8");
-    sendText(res, 200, injectTunelitoClient(html, { sourceName }), "text/html; charset=utf-8", req.method, auth.headers);
+    sendText(res, 200, injectTunelitoClient(html, { sourceName, liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
     return;
   }
 
@@ -294,6 +331,17 @@ function isTrustedOrigin(req) {
 function rejectUpgrade(socket, status, message) {
   socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   socket.destroy();
+}
+
+function createPeerId() {
+  return `p_${randomBytes(9).toString("base64url")}`;
+}
+
+function findPeerClient(peers, peerId) {
+  for (const [client, peer] of peers) {
+    if (peer.id === peerId) return client;
+  }
+  return null;
 }
 
 function withAccessKey(url, accessKey) {

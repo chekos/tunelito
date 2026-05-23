@@ -36,8 +36,9 @@ export class WebSocketHub extends EventEmitter {
     this.emit("connection", client);
   }
 
-  broadcast(data) {
+  broadcast(data, { except = null } = {}) {
     for (const client of this.clients) {
+      if (client === except) continue;
       client.send(data);
     }
   }
