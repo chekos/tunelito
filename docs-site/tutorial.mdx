@@ -1,0 +1,105 @@
+---
+title: "Tutorial: folder review with agent follow-up"
+description: "Serve a folder of HTML files, collect page-specific comments, and have a local coding agent act on the Markdown inbox."
+---
+
+This walkthrough uses Tunelito as a local review server for a folder-backed mini-site. Reviewers leave comments in the browser. Tunelito writes one Markdown inbox, and a local coding agent can poll that file and edit the matching HTML files.
+
+## 1. Create a small HTML folder
+
+Use an existing folder, or create a quick test site:
+
+```bash
+mkdir -p review-site
+
+cat > review-site/index.html <<'HTML'
+<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>Launch draft</h1>
+      <p>This paragraph is ready for review.</p>
+      <a href="/about.html">About</a>
+    </main>
+  </body>
+</html>
+HTML
+
+cat > review-site/about.html <<'HTML'
+<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>About this project</h1>
+      <p>Explain the project here.</p>
+    </main>
+  </body>
+</html>
+HTML
+```
+
+## 2. Start Tunelito
+
+For local-only review:
+
+```bash
+npx --yes tunelito ./review-site --no-tunnel --open
+```
+
+For a shareable public tunnel:
+
+```bash
+npx --yes tunelito ./review-site
+```
+
+Tunelito prints a local URL, a comments file, and, when tunneling works, a public URL:
+
+```text
+Tunelito is running
+Local:   http://127.0.0.1:4317/?tunelito_key=...
+Comments: /path/to/review-site.comments.md
+Access:  review key required by the printed URLs
+Public:  https://example.trycloudflare.com/?tunelito_key=...
+```
+
+Share the `Public:` URL with reviewers. Keep the terminal process running while the review is active.
+
+## 3. Leave a comment
+
+Open the served page, select text, and click `Comment`. On another page, such as `/about.html`, comments are still written to the same Markdown file but include the page path.
+
+The comments file will look like this:
+
+```markdown
+# Tunelito comments for `review-site`
+
+## Jane at 2026-05-26 21:00:00 UTC
+
+> Explain the project here.
+
+Make this sentence more specific.
+
+_Context: page: `/about.html` - path: `body > main > p` - text offset: 18 - id: `c_...`_
+```
+
+## 4. Ask a coding agent to monitor the inbox
+
+Tunelito does not run an AI worker itself. The simple workflow is to leave Tunelito running and ask Claude Code, Codex, or another local agent to poll the Markdown file:
+
+```text
+Monitor review-site.comments.md every 2 minutes. For each new actionable comment, use the visible page path to edit the matching HTML file. After each change, report the comment id and what changed.
+```
+
+For one manual pass instead of polling:
+
+```text
+Read review-site.comments.md, address every actionable unresolved comment in the matching HTML files, then summarize comment ids and edits.
+```
+
+When the agent saves HTML changes, Tunelito asks connected browsers to reload.
+
+## 5. Stop the review
+
+Press `Ctrl+C` in the Tunelito terminal. Persistent comments remain in `review-site.comments.md`.
+
+Use `--live` only for ephemeral in-meeting collaboration. In live mode, comments are not written to Markdown, so there is no file for an agent to monitor.
