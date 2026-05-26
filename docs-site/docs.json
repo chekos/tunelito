@@ -20,6 +20,7 @@
         "pages": [
           "index",
           "quickstart",
+          "tutorial",
           "pre-call-checklist"
         ]
       },

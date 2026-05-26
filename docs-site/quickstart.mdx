@@ -17,11 +17,28 @@ npx --yes tunelito ./page.html
 
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.
 
+Tunelito also prints the comments file path:
+
+```text
+Comments: /path/to/page.comments.md
+```
+
+Reviewers select text in the browser, click `Comment`, and Tunelito writes the note to that Markdown file.
+
 To review a folder-backed mini-site, pass the folder instead:
 
 ```bash
 npx --yes tunelito ./site
 ```
+
+Folder reviews write one comments file beside the folder:
+
+```text
+site/
+site.comments.md
+```
+
+Each folder comment includes the page path, so a person or coding agent can map feedback back to the right HTML file.
 
 ## Local-only preview
 
@@ -44,3 +61,7 @@ tunelito ./examples/simple-review.html
 ## Stop the session
 
 Press `Ctrl+C` in the terminal. Tunelito stops the local server and tunnel process.
+
+## Next step
+
+Follow the [folder review tutorial](/tutorial) to collect comments across multiple HTML pages and have a local coding agent act on the Markdown inbox.

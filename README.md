@@ -22,6 +22,15 @@ For a folder-backed mini-site:
 npx --yes tunelito ./site
 ```
 
+Folder reviews write one Markdown inbox beside the folder:
+
+```text
+site/
+site.comments.md
+```
+
+Each comment includes the page path and a visible comment id, so Claude Code, Codex, or another local agent can poll that file and apply edits to the matching HTML file.
+
 From a clone:
 
 ```bash
@@ -151,6 +160,14 @@ Example:
 ```text
 Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file, then summarize the comment id and change made.
 ```
+
+Quick walkthrough:
+
+1. Run `npx --yes tunelito ./site --no-tunnel --open`.
+2. Select text in the browser and leave a comment.
+3. Ask your coding agent to monitor `site.comments.md`.
+4. Let the agent edit the source HTML file named by the comment's `page: ...` context.
+5. Tunelito reloads connected browsers after the saved HTML change.
 
 ## Live Mode
 
