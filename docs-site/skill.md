@@ -1,6 +1,6 @@
 ---
 name: tunelito
-description: Use Tunelito to serve a local HTML file as a temporary live review room with comments. Use when a user wants to review, annotate, or share an HTML page from their machine.
+description: Use Tunelito to serve local HTML as a temporary live review room with comments. Use when a user wants to review, annotate, or share an HTML page or folder from their machine.
 license: MIT
 compatibility: Requires Node.js 22 or newer. Public sharing uses Cloudflare Tunnel when available.
 metadata:
@@ -10,15 +10,16 @@ metadata:
 
 # Tunelito
 
-Tunelito turns a local HTML file into a temporary live review room. The user can edit the file locally. Reviewers can view the served page and leave comments on selected text.
+Tunelito turns a local HTML file or folder of HTML files into a temporary live review room. The user can edit the files locally. Reviewers can view served pages and leave comments on selected text.
 
 ## Capabilities
 
-- Serve one local HTML file.
+- Serve one local HTML file or a folder of HTML files.
 - Inject a live comment UI into the served response without modifying the source file.
 - Sync comments over WebSocket, with WebRTC peer-to-peer collaboration in `--live`.
 - Persist comments to Markdown by default, or keep them ephemeral with `--live`.
-- Reload connected browsers when the source HTML changes.
+- Include page paths and comment IDs in Markdown for agent inbox workflows.
+- Reload connected browsers when source HTML changes.
 - Expose the local server through a temporary Cloudflare Tunnel.
 - Require keyed review URLs by default.
 
@@ -29,6 +30,12 @@ npx --yes tunelito ./page.html
 ```
 
 Share the printed `Public:` URL.
+
+For a folder-backed mini-site:
+
+```bash
+npx --yes tunelito ./site
+```
 
 ## Local-only review
 

@@ -111,8 +111,10 @@ export function renderCommentsMarkdown({ comments, sourcePath }) {
     lines.push(comment.body.trim());
     lines.push("");
     const context = [];
+    if (comment.pagePath) context.push(`page: \`${comment.pagePath}\``);
     if (comment.path) context.push(`path: \`${comment.path}\``);
     if (Number.isFinite(comment.textStart)) context.push(`text offset: ${comment.textStart}`);
+    if (comment.id) context.push(`id: \`${comment.id}\``);
     if (context.length) {
       lines.push(`_Context: ${context.join(" · ")}_`);
       lines.push("");

@@ -7,7 +7,7 @@ Tunelito is local-first. It does not upload your source HTML to a hosted backend
 
 ## Runtime pieces
 
-The CLI starts a local server for one HTML file. The server reads that file from disk, injects the Tunelito browser client into the served response, and serves sibling assets from the same directory.
+The CLI starts a local server for one HTML file or a folder of HTML files. The server reads HTML from disk, injects the Tunelito browser client into served HTML responses, and serves non-hidden assets from the selected file directory or folder root.
 
 The browser client handles:
 
@@ -26,11 +26,12 @@ The server handles:
 - comment validation
 - Markdown persistence, unless `--live` is enabled
 - file watching
+- page-specific comment streams when serving a folder
 - optional Cloudflare Tunnel startup
 
-## The HTML file is not modified
+## Source HTML is not modified
 
-The injection happens only in the HTTP response. Your source HTML file remains untouched.
+The injection happens only in the HTTP response. Your source HTML files remain untouched.
 
 ## Persistence
 
@@ -41,7 +42,14 @@ page.html
 page.comments.md
 ```
 
-The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart.
+For folder targets, the default inbox is beside the folder:
+
+```text
+site/
+site.comments.md
+```
+
+The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart. Folder comments include visible page paths so a person or coding agent can map feedback back to the right HTML file.
 
 ## Live mode
 

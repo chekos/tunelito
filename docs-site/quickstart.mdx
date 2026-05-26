@@ -6,7 +6,7 @@ description: "Install Tunelito and start your first live HTML review session."
 ## Requirements
 
 - Node.js 22 or newer
-- An HTML file on your machine
+- An HTML file or folder of HTML files on your machine
 - Internet access if you want a public tunnel URL
 
 ## Start a review
@@ -16,6 +16,12 @@ npx --yes tunelito ./page.html
 ```
 
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.
+
+To review a folder-backed mini-site, pass the folder instead:
+
+```bash
+npx --yes tunelito ./site
+```
 
 ## Local-only preview
 

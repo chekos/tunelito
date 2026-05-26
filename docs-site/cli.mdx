@@ -4,14 +4,14 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.2.0
+Tunelito 0.3.0
 
-Usage: tunelito <page.html> [options]
+Usage: tunelito <page.html|folder> [options]
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
-  --out <path>          Markdown comments file (default: <page>.comments.md)
+  --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
@@ -26,6 +26,12 @@ Start a public review session:
 
 ```bash
 tunelito ./page.html
+```
+
+Serve a folder of HTML files:
+
+```bash
+tunelito ./site
 ```
 
 Run local-only and open the browser:

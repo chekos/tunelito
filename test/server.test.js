@@ -64,6 +64,146 @@ test("server serves injected HTML, sibling assets, and live WebSocket comments",
   }
 });
 
+test("directory mode injects HTML pages and keeps comments page-specific", async () => {
+  const parentDir = mkdtempSync(join(tmpdir(), "tunelito-directory-"));
+  const siteDir = join(parentDir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(siteDir, "review.md");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><main>Home page</main><a href='/about.html'>About</a></body></html>");
+  writeFileSync(join(siteDir, "about.html"), "<!doctype html><html><head><link rel='stylesheet' href='/style.css'></head><body><main>About page</main></body></html>");
+  writeFileSync(join(siteDir, "style.css"), "body { color: blue; }");
+  writeFileSync(join(siteDir, ".env"), "SECRET=1");
+  mkdirSync(join(siteDir, ".git"));
+  writeFileSync(join(siteDir, ".git", "config"), "private repo metadata");
+  let linkedEnvPath = null;
+  try {
+    linkedEnvPath = join(siteDir, "linked-env");
+    symlinkSync(join(siteDir, ".env"), linkedEnvPath, "file");
+  } catch (error) {
+    if (error.code !== "EPERM" && error.code !== "EACCES") throw error;
+  }
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    assert.equal(instance.directoryMode, true);
+
+    const indexHtml = await fetch(instance.localUrl).then((res) => res.text());
+    assert.match(indexHtml, /Home page/);
+    assert.match(indexHtml, new RegExp(CLIENT_ROUTE));
+
+    const aboutHtml = await fetch(new URL("/about.html", instance.localUrl)).then((res) => res.text());
+    assert.match(aboutHtml, /About page/);
+    assert.match(aboutHtml, new RegExp(CLIENT_ROUTE));
+
+    const asset = await fetch(new URL("/style.css", instance.localUrl)).then((res) => res.text());
+    assert.equal(asset, "body { color: blue; }");
+
+    const aboutSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    aboutSocketUrl.searchParams.set("tunelito_page", "/about.html");
+    const about = openJsonSocket(aboutSocketUrl);
+    sockets.push(about.socket);
+    await waitFor(about.socket, "open");
+    await waitUntil(() => about.messages.some((message) => message.type === "hello"));
+    const aboutHello = about.messages.find((message) => message.type === "hello");
+    assert.equal(aboutHello.pagePath, "/about.html");
+    assert.deepEqual(aboutHello.comments, []);
+
+    about.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Rae",
+        quote: "About page",
+        body: "Make this more specific.",
+        pagePath: "/wrong.html",
+        textStart: 0,
+        textEnd: 10,
+      },
+    }));
+
+    await waitUntil(() => about.messages.some((message) => message.type === "comment"));
+    const commentEvent = about.messages.find((message) => message.type === "comment");
+    assert.equal(commentEvent.comment.pagePath, "/about.html");
+
+    const root = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(root.socket);
+    await waitFor(root.socket, "open");
+    await waitUntil(() => root.messages.some((message) => message.type === "hello"));
+    const rootHello = root.messages.find((message) => message.type === "hello");
+    assert.equal(rootHello.pagePath, "/");
+    assert.deepEqual(rootHello.comments, []);
+
+    const nextAboutSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    nextAboutSocketUrl.searchParams.set("tunelito_page", "/about.html");
+    const nextAbout = openJsonSocket(nextAboutSocketUrl);
+    sockets.push(nextAbout.socket);
+    await waitFor(nextAbout.socket, "open");
+    await waitUntil(() => nextAbout.messages.some((message) => message.type === "hello"));
+    const nextAboutHello = nextAbout.messages.find((message) => message.type === "hello");
+    assert.equal(nextAboutHello.comments.length, 1);
+    assert.equal(nextAboutHello.comments[0].body, "Make this more specific.");
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /page: `\/about\.html`/);
+    assert.match(markdown, /id: `c_/);
+
+    const staticComments = await fetch(new URL("/review.md", instance.localUrl));
+    assert.equal(staticComments.status, 404);
+
+    const envFile = await fetch(new URL("/.env", instance.localUrl));
+    assert.equal(envFile.status, 404);
+
+    const gitFile = await fetch(new URL("/.git/config", instance.localUrl));
+    assert.equal(gitFile.status, 404);
+
+    if (linkedEnvPath) {
+      const linkedEnvFile = await fetch(new URL("/linked-env", instance.localUrl));
+      assert.equal(linkedEnvFile.status, 404);
+    }
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("directory mode renders a basic HTML index when no index file exists", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-directory-index-"));
+  const commentsPath = join(siteDir, "comments.html");
+  writeFileSync(join(siteDir, "page.html"), "<!doctype html><html><body>Listed page</body></html>");
+  writeFileSync(commentsPath, "private comments");
+  writeFileSync(`${commentsPath}.tmp`, "private comments temp");
+  writeFileSync(join(siteDir, "notes.txt"), "not listed");
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const html = await fetch(instance.localUrl).then((res) => res.text());
+    assert.match(html, /page\.html/);
+    assert.doesNotMatch(html, /notes\.txt/);
+    assert.doesNotMatch(html, /comments\.html/);
+    assert.match(html, new RegExp(CLIENT_ROUTE));
+
+    const staticComments = await fetch(new URL("/comments.html", instance.localUrl));
+    assert.equal(staticComments.status, 404);
+
+    const tempComments = await fetch(new URL("/comments.html.tmp", instance.localUrl));
+    assert.equal(tempComments.status, 404);
+  } finally {
+    await instance.close();
+  }
+});
+
 test("live mode keeps comments in memory and relays peer signaling", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-live-"));
   const htmlPath = join(dir, "page.html");

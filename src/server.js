@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { createReadStream, readFileSync, realpathSync, statSync, watch } from "node:fs";
-import { dirname, basename, resolve, sep } from "node:path";
+import { createReadStream, existsSync, readFileSync, readdirSync, realpathSync, statSync, watch } from "node:fs";
+import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, renderCommentsMarkdown } from "./comments.js";
 import { CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
@@ -11,16 +11,20 @@ import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
 export const ACCESS_KEY_PARAM = "tunelito_key";
+export const PAGE_PARAM = "tunelito_page";
 const ACCESS_KEY_COOKIE = "tunelito_key";
 
 export async function createTunelitoServer(options) {
-  const filePath = resolve(options.filePath);
-  const rootDir = dirname(filePath);
+  const targetPath = resolve(options.filePath);
+  const targetStat = statSync(targetPath);
+  const directoryMode = targetStat.isDirectory();
+  const filePath = directoryMode ? null : targetPath;
+  const rootDir = directoryMode ? targetPath : dirname(targetPath);
   const rootRealDir = realpathSync.native(rootDir);
-  const sourceName = basename(filePath);
+  const sourceName = basename(targetPath);
   const liveMode = Boolean(options.liveMode || options.live);
-  const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(filePath));
-  const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: filePath });
+  const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(targetPath));
+  const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: targetPath });
   const events = new EventEmitter();
   const hub = new WebSocketHub();
   const peers = new Map();
@@ -31,10 +35,13 @@ export async function createTunelitoServer(options) {
       req,
       res,
       filePath,
+      targetPath,
       rootDir,
       rootRealDir,
+      directoryMode,
       sourceName,
       comments,
+      commentsPath,
       liveMode,
       accessKey,
     });
@@ -60,6 +67,7 @@ export async function createTunelitoServer(options) {
       rejectUpgrade(socket, 401, "Unauthorized");
       return;
     }
+    req.tunelitoPagePath = normalizePagePath(url.searchParams.get(PAGE_PARAM));
     hub.handleUpgrade(req, socket);
   });
 
@@ -68,10 +76,36 @@ export async function createTunelitoServer(options) {
     hub.broadcast({ type: "viewer-count", count: hub.size });
   }
 
-  hub.on("connection", (client) => {
+  function commentsForPage(pagePath) {
+    if (!directoryMode) return comments.all();
+    return comments.all().filter((comment) => normalizePagePath(comment.pagePath) === pagePath);
+  }
+
+  function peerListForPage(pagePath, exceptId = "") {
+    return Array.from(peers.values())
+      .filter((candidate) => candidate.id !== exceptId)
+      .filter((candidate) => !directoryMode || candidate.pagePath === pagePath);
+  }
+
+  function broadcastToPage(pagePath, data, { except = null } = {}) {
+    if (!directoryMode) {
+      hub.broadcast(data, { except });
+      return;
+    }
+
+    for (const client of hub.clients) {
+      if (client === except) continue;
+      const peer = peers.get(client);
+      if (peer?.pagePath === pagePath) client.send(data);
+    }
+  }
+
+  hub.on("connection", (client, req) => {
+    const pagePath = normalizePagePath(req?.tunelitoPagePath);
     const peer = {
       id: createPeerId(),
       connectedAt: new Date().toISOString(),
+      pagePath,
     };
     peers.set(client, peer);
     client.send({
@@ -79,14 +113,15 @@ export async function createTunelitoServer(options) {
       mode: liveMode ? "live" : "persistent",
       liveMode,
       peerId: peer.id,
-      peers: Array.from(peers.values()).filter((candidate) => candidate.id !== peer.id),
-      sourceName,
-      comments: comments.all(),
+      pagePath,
+      peers: peerListForPage(pagePath, peer.id),
+      sourceName: directoryMode ? pagePath : sourceName,
+      comments: commentsForPage(pagePath),
       commentsUrl: liveMode ? null : COMMENTS_ROUTE,
       viewerCount: hub.size,
     });
     if (liveMode) {
-      hub.broadcast({ type: "peer-joined", peer }, { except: client });
+      broadcastToPage(pagePath, { type: "peer-joined", peer }, { except: client });
     }
     publishViewerCount();
   });
@@ -95,7 +130,7 @@ export async function createTunelitoServer(options) {
     const peer = peers.get(client);
     peers.delete(client);
     if (liveMode && peer) {
-      hub.broadcast({ type: "peer-left", peerId: peer.id });
+      broadcastToPage(peer.pagePath, { type: "peer-left", peerId: peer.id });
     }
     publishViewerCount();
   });
@@ -111,26 +146,26 @@ export async function createTunelitoServer(options) {
 
     if (event.type === "create-comment") {
       try {
-        const comment = comments.add(event.comment || {});
+        const comment = comments.add({ ...(event.comment || {}), pagePath: peer?.pagePath || normalizePagePath(event.comment?.pagePath) });
         events.emit("comment", comment);
-        hub.broadcast({ type: "comment", comment });
+        broadcastToPage(normalizePagePath(comment.pagePath), { type: "comment", comment });
       } catch (error) {
         client.send({ type: "error", message: error.message });
       }
     } else if (liveMode && event.type === "signal") {
-      const target = findPeerClient(peers, event.to);
+      const target = findPeerClient(peers, event.to, peer?.pagePath);
       if (target && peer) {
         target.send({ type: "signal", from: peer.id, signal: event.signal || {} });
       }
     } else if (liveMode && event.type === "live-event") {
       if (peer && event.event && typeof event.event === "object") {
-        hub.broadcast({ type: "live-event", from: peer.id, event: event.event }, { except: client });
+        broadcastToPage(peer.pagePath, { type: "live-event", from: peer.id, event: event.event }, { except: client });
       }
     }
   });
 
   let watchTimer = null;
-  const watcher = watch(filePath, { persistent: true }, () => {
+  const watcher = createWatcher(directoryMode ? rootDir : filePath, directoryMode, () => {
     clearTimeout(watchTimer);
     watchTimer = setTimeout(() => {
       events.emit("document-changed");
@@ -149,7 +184,8 @@ export async function createTunelitoServer(options) {
     events,
     hub,
     commentsPath,
-    filePath,
+    filePath: targetPath,
+    directoryMode,
     liveMode,
     originUrl,
     localUrl,
@@ -164,7 +200,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, comments, liveMode, accessKey }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, liveMode, accessKey }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -195,7 +231,34 @@ function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, c
       sendText(res, 404, "Tunelito live mode comments are ephemeral and are not written to markdown.", "text/plain; charset=utf-8", req.method, auth.headers);
       return;
     }
-    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: filePath }), "text/markdown; charset=utf-8", req.method, auth.headers);
+    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: targetPath }), "text/markdown; charset=utf-8", req.method, auth.headers);
+    return;
+  }
+
+  if (directoryMode) {
+    const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, { blockedPaths: blockedCommentPaths(commentsPath) });
+    if (!asset) {
+      sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
+      return;
+    }
+
+    if (asset.redirectPath) {
+      sendRedirect(res, asset.redirectPath, auth.headers);
+      return;
+    }
+
+    if (asset.generatedHtml) {
+      sendText(res, 200, injectTunelitoClient(asset.generatedHtml, { sourceName: asset.sourceName, liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
+      return;
+    }
+
+    if (isHtmlPath(asset.path)) {
+      const html = readFileSync(asset.realPath, "utf8");
+      sendText(res, 200, injectTunelitoClient(html, { sourceName: relativeSourceName(rootDir, asset.path), liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
+      return;
+    }
+
+    sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, auth.headers);
     return;
   }
 
@@ -205,7 +268,7 @@ function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, c
     return;
   }
 
-  const asset = resolveServedAsset(rootDir, rootRealDir, pathname);
+  const asset = resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths: blockedCommentPaths(commentsPath) });
   if (!asset) {
     sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
     return;
@@ -214,11 +277,41 @@ function handleRequest({ req, res, filePath, rootDir, rootRealDir, sourceName, c
   sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, auth.headers);
 }
 
-function resolveServedAsset(rootDir, rootRealDir, pathname) {
+function resolveDirectoryRequest(rootDir, rootRealDir, pathname, options = {}) {
+  const assetPathname = pathname.endsWith("/") ? `${pathname}index.html` : pathname;
+  const asset = resolveServedAsset(rootDir, rootRealDir, assetPathname, options);
+  if (asset) return asset;
+
+  const directory = resolveServedDirectory(rootDir, rootRealDir, pathname);
+  if (!directory) return null;
+
+  if (pathname !== "/" && !pathname.endsWith("/")) {
+    return { redirectPath: `${pathname}/` };
+  }
+
+  const directoryPathname = pathname.endsWith("/") ? pathname : `${pathname}/`;
+  const index = resolveServedAsset(rootDir, rootRealDir, `${directoryPathname}index.html`, options);
+  if (index) return index;
+
+  return {
+    generatedHtml: renderDirectoryIndex({ directoryPath: directory.realPath, pagePath: directoryPathname, blockedPaths: options.blockedPaths || [] }),
+    path: directory.path,
+    realPath: directory.realPath,
+    sourceName: `${relativeSourceName(rootDir, directory.path) || basename(rootDir)} index`,
+  };
+}
+
+function resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths = [] } = {}) {
+  if (hasHiddenPathSegment(pathname)) return null;
   const assetPath = resolve(rootDir, `.${pathname}`);
   try {
     const assetRealPath = realpathSync.native(assetPath);
-    if (!isInside(rootRealDir, assetRealPath) || !statSync(assetRealPath).isFile()) {
+    if (
+      !isInside(rootRealDir, assetRealPath) ||
+      hasHiddenRealPathSegment(rootRealDir, assetRealPath) ||
+      isBlockedPath(assetRealPath, blockedPaths) ||
+      !statSync(assetRealPath).isFile()
+    ) {
       return null;
     }
 
@@ -226,6 +319,49 @@ function resolveServedAsset(rootDir, rootRealDir, pathname) {
   } catch {
     return null;
   }
+}
+
+function resolveServedDirectory(rootDir, rootRealDir, pathname) {
+  if (hasHiddenPathSegment(pathname)) return null;
+  const directoryPath = resolve(rootDir, `.${pathname}`);
+  try {
+    const directoryRealPath = realpathSync.native(directoryPath);
+    if (!isInside(rootRealDir, directoryRealPath) || hasHiddenRealPathSegment(rootRealDir, directoryRealPath) || !statSync(directoryRealPath).isDirectory()) {
+      return null;
+    }
+
+    return { path: directoryPath, realPath: directoryRealPath };
+  } catch {
+    return null;
+  }
+}
+
+function renderDirectoryIndex({ directoryPath, pagePath, blockedPaths = [] }) {
+  const entries = readdirSync(directoryPath, { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith("."))
+    .filter((entry) => entry.isDirectory() || isHtmlPath(entry.name))
+    .filter((entry) => !isBlockedDirectoryEntry(directoryPath, entry.name, blockedPaths))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const basePath = pagePath.endsWith("/") ? pagePath : `${pagePath}/`;
+  const links = entries.map((entry) => {
+    const href = `${basePath}${encodePathSegment(entry.name)}${entry.isDirectory() ? "/" : ""}`.replace(/\/{2,}/g, "/");
+    const label = `${entry.name}${entry.isDirectory() ? "/" : ""}`;
+    return `<li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`;
+  });
+
+  return [
+    "<!doctype html>",
+    "<html>",
+    "<head>",
+    '  <meta charset="utf-8">',
+    `  <title>Tunelito folder: ${escapeHtml(pagePath)}</title>`,
+    "</head>",
+    "<body>",
+    `  <h1>${escapeHtml(pagePath)}</h1>`,
+    links.length ? `  <ul>\n    ${links.join("\n    ")}\n  </ul>` : "  <p>No HTML files found in this folder.</p>",
+    "</body>",
+    "</html>",
+  ].join("\n");
 }
 
 function sendText(res, status, body, contentType = "text/plain; charset=utf-8", method = "GET", extraHeaders = {}) {
@@ -243,6 +379,18 @@ function sendText(res, status, body, contentType = "text/plain; charset=utf-8", 
     return;
   }
   res.end(buffer);
+}
+
+function sendRedirect(res, location, extraHeaders = {}) {
+  res.writeHead(302, {
+    location,
+    "content-length": 0,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    ...extraHeaders,
+  });
+  res.end();
 }
 
 function sendFile(res, path, contentType, method, extraHeaders = {}) {
@@ -337,11 +485,87 @@ function createPeerId() {
   return `p_${randomBytes(9).toString("base64url")}`;
 }
 
-function findPeerClient(peers, peerId) {
+function findPeerClient(peers, peerId, pagePath = "") {
   for (const [client, peer] of peers) {
-    if (peer.id === peerId) return client;
+    if (peer.id === peerId && (!pagePath || peer.pagePath === pagePath)) return client;
   }
   return null;
+}
+
+function createWatcher(path, recursive, onChange) {
+  try {
+    return watch(path, { persistent: true, recursive }, onChange);
+  } catch (error) {
+    if (!recursive) throw error;
+    return watch(path, { persistent: true }, onChange);
+  }
+}
+
+function isHtmlPath(pathname) {
+  return [".html", ".htm"].includes(extname(pathname).toLowerCase());
+}
+
+function relativeSourceName(rootDir, filePath) {
+  const relativePath = relative(rootDir, filePath).split(sep).join("/");
+  return relativePath === "" ? basename(filePath) : relativePath;
+}
+
+function encodePathSegment(segment) {
+  return segment.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function normalizePagePath(value) {
+  const raw = String(value || "/").slice(0, 1000);
+  const withoutQuery = raw.split(/[?#]/, 1)[0] || "/";
+  const prefixed = withoutQuery.startsWith("/") ? withoutQuery : `/${withoutQuery}`;
+  return prefixed.replace(/\/{2,}/g, "/");
+}
+
+function hasHiddenPathSegment(pathname) {
+  return String(pathname)
+    .split("/")
+    .some((segment) => segment.startsWith("."));
+}
+
+function hasHiddenRealPathSegment(rootRealDir, realPath) {
+  return relative(rootRealDir, realPath)
+    .split(sep)
+    .some((segment) => segment.startsWith("."));
+}
+
+function isBlockedDirectoryEntry(directoryPath, entryName, blockedPaths) {
+  const entryPath = resolve(directoryPath, entryName);
+  try {
+    return isBlockedPath(realpathSync.native(entryPath), blockedPaths);
+  } catch {
+    return isBlockedPath(entryPath, blockedPaths);
+  }
+}
+
+function blockedCommentPaths(commentsPath) {
+  return commentsPath ? [commentsPath, `${commentsPath}.tmp`] : [];
+}
+
+function isBlockedPath(realPath, blockedPaths) {
+  for (const blockedPath of blockedPaths) {
+    if (!blockedPath) continue;
+    let blockedRealPath;
+    try {
+      blockedRealPath = existsSync(blockedPath) ? realpathSync.native(blockedPath) : resolve(blockedPath);
+    } catch {
+      blockedRealPath = resolve(blockedPath);
+    }
+    if (resolve(realPath) === resolve(blockedRealPath)) return true;
+  }
+  return false;
 }
 
 function withAccessKey(url, accessKey) {

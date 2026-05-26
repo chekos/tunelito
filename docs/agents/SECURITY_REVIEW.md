@@ -20,11 +20,11 @@ Tests should cover both allowed and denied paths.
 
 Expected behavior:
 
-- Serve the selected HTML file at `/`.
-- Serve sibling assets only within the HTML file directory.
+- Serve the selected HTML file at `/`, or serve a selected folder root.
+- Serve assets only within the selected HTML file directory or selected folder root.
 - Reject malformed URL escapes with `400`.
-- Reject traversal and non-file paths with `404`.
-- Do not follow a request into `.git/`, parent directories, or unrelated workspace files.
+- Reject traversal and non-file paths with `404`, except generated directory indexes in folder mode.
+- Do not follow a request into dotfiles, `.git/`, parent directories, or unrelated workspace files.
 
 ## HTML Injection
 

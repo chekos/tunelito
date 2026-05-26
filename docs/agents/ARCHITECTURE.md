@@ -8,6 +8,7 @@ The CLI owns process orchestration:
 
 - parse arguments
 - choose host/port/comments path
+- accept either a single HTML file or a folder target
 - choose persistent or ephemeral live mode
 - generate the review key
 - start the local server
@@ -16,14 +17,15 @@ The CLI owns process orchestration:
 
 The server owns local IO and transport:
 
-- serve the selected HTML file at `/`
-- serve sibling assets from the HTML file directory
+- serve the selected HTML file at `/`, or serve a folder root with injected HTML pages
+- serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
 - accept WebSocket comment events
 - write/read markdown comments or keep live-mode comments in memory
+- keep folder-mode comment streams page-specific while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
-- broadcast reload events when the HTML changes
+- broadcast reload events when source HTML changes
 
 The browser client owns reviewer interaction:
 
@@ -36,8 +38,8 @@ The browser client owns reviewer interaction:
 
 ## Invariants
 
-- Never modify the source HTML file to install Tunelito.
-- Never serve files outside the selected HTML file's directory.
+- Never modify source HTML files to install Tunelito.
+- Never serve files outside the selected HTML file directory or selected folder root.
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
