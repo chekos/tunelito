@@ -14,6 +14,13 @@ page.html
 page.comments.md
 ```
 
+For a folder target, the default comments file is beside the folder:
+
+```text
+site/
+site.comments.md
+```
+
 Use `--out` to choose a different path:
 
 ```bash
@@ -32,9 +39,21 @@ The comment file is designed to be readable:
 > selected text
 
 This sentence needs a clearer verb.
+
+_Context: page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
 ```
 
 Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart.
+
+## Agent inbox workflow
+
+The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to periodically inspect the comments file, edit the matching source HTML, and report which visible comment IDs were addressed.
+
+Example prompt:
+
+```text
+Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file and summarize the comment id plus the change made.
+```
 
 ## Ephemeral live mode
 

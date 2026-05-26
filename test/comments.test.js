@@ -17,6 +17,7 @@ test("comment store writes readable markdown and restores hidden metadata", () =
     body: "This should be clearer.",
     prefix: "before ",
     suffix: " after",
+    pagePath: "/about.html",
     path: "body > main > p",
     textStart: 20,
     textEnd: 41,
@@ -27,6 +28,8 @@ test("comment store writes readable markdown and restores hidden metadata", () =
   assert.match(markdown, /## Jane at /);
   assert.match(markdown, /> the selected sentence/);
   assert.match(markdown, /This should be clearer\./);
+  assert.match(markdown, /page: `\/about\.html`/);
+  assert.match(markdown, /id: `c_/);
   assert.match(markdown, /<!-- tunelito-comment:/);
 
   const restored = loadCommentsFromMarkdown(commentsPath);

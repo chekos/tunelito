@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.0
+
+- Adds folder targets so `tunelito ./site` serves a folder of HTML files, injects review UI into served HTML pages, and keeps one page-aware comments inbox.
+- Shows visible page paths and comment IDs in comment markdown for coding-agent inbox workflows.
+
 ## 0.2.0
 
 - Adds `--live` for ephemeral in-meeting collaboration without writing comments to disk.

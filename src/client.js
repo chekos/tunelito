@@ -4,8 +4,10 @@
   const configuredLiveMode = script?.dataset?.liveMode === "true";
   const endpointBase = "/__tunelito";
   const accessKey = new URLSearchParams(location.search).get("tunelito_key") || "";
+  const pagePath = script?.dataset?.pagePath || location.pathname || "/";
   const state = {
     socket: null,
+    pagePath,
     connected: false,
     liveMode: configuredLiveMode,
     peerId: "",
@@ -35,6 +37,7 @@
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const socketUrl = new URL(`${protocol}//${location.host}${endpointBase}/ws`);
     if (accessKey) socketUrl.searchParams.set("tunelito_key", accessKey);
+    socketUrl.searchParams.set("tunelito_page", state.pagePath);
     const socket = new WebSocket(socketUrl);
     state.socket = socket;
 
@@ -52,6 +55,7 @@
       if (message.type === "hello") {
         resetPeerConnections();
         state.liveMode = Boolean(message.liveMode);
+        state.pagePath = message.pagePath || state.pagePath;
         state.peerId = message.peerId || "";
         state.viewerCount = message.viewerCount;
         state.comments = message.comments || [];
@@ -549,7 +553,7 @@
       ...state.pendingSelection,
       body,
       author,
-      pagePath: location.pathname,
+      pagePath: state.pagePath,
     };
     if (state.liveMode) {
       addComment(comment);

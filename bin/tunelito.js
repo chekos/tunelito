@@ -14,12 +14,12 @@ export const VERSION = pkg.version;
 function usage() {
   return `Tunelito ${VERSION}
 
-Usage: tunelito <page.html> [options]
+Usage: tunelito <page.html|folder> [options]
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
-  --out <path>          Markdown comments file (default: <page>.comments.md)
+  --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
@@ -75,7 +75,7 @@ export function parseArgs(argv) {
   }
 
   if (positional.length > 1) {
-    throw new Error(`Expected one HTML file, got ${positional.length}`);
+    throw new Error(`Expected one HTML file or folder, got ${positional.length}`);
   }
   if (positional[0]) opts.filePath = resolve(positional[0]);
   return opts;
@@ -103,7 +103,7 @@ async function main() {
   }
 
   if (!opts.filePath) {
-    console.error("Missing HTML file.");
+    console.error("Missing HTML file or folder.");
     console.error("");
     console.error(usage());
     process.exit(1);
@@ -113,8 +113,9 @@ async function main() {
     console.error(`File not found: ${opts.filePath}`);
     process.exit(1);
   }
-  if (!statSync(opts.filePath).isFile()) {
-    console.error(`Not a file: ${opts.filePath}`);
+  const targetStat = statSync(opts.filePath);
+  if (!targetStat.isFile() && !targetStat.isDirectory()) {
+    console.error(`Not a file or folder: ${opts.filePath}`);
     process.exit(1);
   }
 

@@ -33,7 +33,7 @@ export class WebSocketHub extends EventEmitter {
       this.clients.delete(client);
       this.emit("close", client);
     });
-    this.emit("connection", client);
+    this.emit("connection", client, req);
   }
 
   broadcast(data, { except = null } = {}) {
