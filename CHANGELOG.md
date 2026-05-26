@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.1
+
+- Adds a dedicated folder review tutorial and links it from the quickstart, comments docs, docs landing page, and README.
+
 ## 0.3.0
 
 - Adds folder targets so `tunelito ./site` serves a folder of HTML files, injects review UI into served HTML pages, and keeps one page-aware comments inbox.

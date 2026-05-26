@@ -82,7 +82,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.3.0
+Tunelito 0.3.1
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -194,7 +194,7 @@ For an ephemeral call, run with `--live` and skip the markdown-file check.
 ```bash
 npm run ci
 npm pack
-npm install -g ./tunelito-0.3.0.tgz
+npm install -g ./tunelito-0.3.1.tgz
 ```
 
 The package includes the CLI, runtime source, examples, docs, changelog, license, and security policy.
