@@ -33,6 +33,49 @@ test("parseArgs supports ephemeral live mode", () => {
   assert.equal(opts.filePath, resolve("page.html"));
 });
 
+test("parseArgs supports local agent worker options", () => {
+  const opts = parseArgs([
+    "site",
+    "--agent",
+    "codex",
+    "--agent-interval",
+    "30",
+    "--agent-trigger",
+    "all",
+    "--agent-max-attempts",
+    "3",
+    "--agent-state",
+    "agent-state.json",
+  ]);
+
+  assert.equal(opts.agent, "codex");
+  assert.equal(opts.agentIntervalSeconds, 30);
+  assert.equal(opts.agentTrigger, "all");
+  assert.equal(opts.agentMaxAttempts, 3);
+  assert.equal(opts.agentStatePath, resolve("agent-state.json"));
+});
+
+test("parseArgs supports custom agent commands", () => {
+  const opts = parseArgs(["site", "--agent-command", "openclaw run --stdin"]);
+  assert.equal(opts.agent, "custom");
+  assert.equal(opts.agentCommand, "openclaw run --stdin");
+});
+
+test("parseArgs rejects agent mode with live comments", () => {
+  assert.throws(() => parseArgs(["site", "--live", "--agent", "codex"]), /--agent requires persistent comments/);
+});
+
+test("parseArgs rejects custom commands for preset providers", () => {
+  assert.throws(
+    () => parseArgs(["site", "--agent-command", "openclaw run --stdin", "--agent", "codex"]),
+    /--agent-command can only be used with --agent custom/,
+  );
+});
+
+test("parseArgs rejects unsupported agent providers", () => {
+  assert.throws(() => parseArgs(["site", "--agent", "openclaw"]), /Unsupported --agent provider/);
+});
+
 test("isCliEntry recognizes npm-style symlinked bin paths", () => {
   const dir = mkdtempSync(`${tmpdir()}/tunelito-bin-`);
   const target = `${dir}/tunelito.js`;

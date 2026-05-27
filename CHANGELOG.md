@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- Adds an opt-in local agent worker that can poll persistent comments and invoke Codex, Claude Code, or a custom local CLI to edit the matching HTML files.
+- Adds a durable `.tunelito/agent/state.json` resolution ledger so handled comments are not retried after source edits make their highlights stale.
+- Documents the on-the-go folder review workflow, provider options, status states, and local agent guardrails.
+
 ## 0.3.1
 
 - Adds a dedicated folder review tutorial and links it from the quickstart, comments docs, docs landing page, and README.

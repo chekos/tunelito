@@ -75,6 +75,10 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
   writeFileSync(join(siteDir, ".env"), "SECRET=1");
   mkdirSync(join(siteDir, ".git"));
   writeFileSync(join(siteDir, ".git", "config"), "private repo metadata");
+  mkdirSync(join(siteDir, ".tunelito", "agent"), { recursive: true });
+  writeFileSync(join(siteDir, ".tunelito", "agent", "state.json"), "{}");
+  const visibleAgentStatePath = join(siteDir, "agent-state.json");
+  writeFileSync(visibleAgentStatePath, "{}");
   let linkedEnvPath = null;
   try {
     linkedEnvPath = join(siteDir, "linked-env");
@@ -88,6 +92,7 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     commentsPath,
     host: "127.0.0.1",
     port: 0,
+    blockedPaths: [visibleAgentStatePath],
   });
 
   const sockets = [];
@@ -161,6 +166,12 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
 
     const gitFile = await fetch(new URL("/.git/config", instance.localUrl));
     assert.equal(gitFile.status, 404);
+
+    const agentState = await fetch(new URL("/.tunelito/agent/state.json", instance.localUrl));
+    assert.equal(agentState.status, 404);
+
+    const visibleAgentState = await fetch(new URL("/agent-state.json", instance.localUrl));
+    assert.equal(visibleAgentState.status, 404);
 
     if (linkedEnvPath) {
       const linkedEnvFile = await fetch(new URL("/linked-env", instance.localUrl));

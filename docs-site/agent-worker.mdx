@@ -1,0 +1,116 @@
+---
+title: "Local agent worker"
+description: "Use Codex, Claude Code, or another local CLI to act on Tunelito comments without repeating handled work."
+---
+
+Tunelito can run an opt-in local worker that turns persistent comments into coding-agent tasks.
+
+The worker does not use model API keys directly. It starts your installed local CLI, such as Codex or Claude Code, so those tools keep using their own local authentication and subscription state.
+
+## Start with Codex
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-trigger all
+```
+
+Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant page path, quote, comment body, and comment ID.
+
+## Start with Claude Code
+
+```bash
+npx --yes tunelito ./site --agent claude --agent-trigger all
+```
+
+Claude Code is invoked in non-interactive print mode with edit permissions for the served folder.
+
+## Use another local CLI
+
+Use `--agent-command` for another command that accepts a prompt on stdin and returns JSON on stdout:
+
+```bash
+npx --yes tunelito ./site --agent-command "openclaw run --stdin" --agent-trigger all
+```
+
+The custom command runs from the served HTML root. Tunelito also sets:
+
+- `TUNELITO_AGENT_ROOT`
+- `TUNELITO_AGENT_COMMENTS`
+- `TUNELITO_AGENT_STATE`
+
+## Trigger mode
+
+The safer default only handles comments containing `@agent`:
+
+```bash
+npx --yes tunelito ./site --agent codex
+```
+
+Use `--agent-trigger all` when every comment should be actionable:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-trigger all
+```
+
+You can also use another marker:
+
+```bash
+npx --yes tunelito ./site --agent claude --agent-trigger "@fix"
+```
+
+## Resolution state
+
+Comments are an append-only inbox. The agent worker stores task status separately:
+
+```text
+site/
+.tunelito/
+  agent/
+    state.json
+    log.md
+```
+
+The state file records each comment ID, fingerprint, attempts, status, summary, and changed files. Resolved comments are skipped on future polling cycles, even if the original highlighted text becomes stale after an edit.
+
+Statuses include:
+
+- `resolved`: the agent made the requested change
+- `no-op`: the requested change was already satisfied
+- `blocked`: the agent could not safely complete the request
+- `stale`: the quoted text or page no longer matched
+- `partial`: some work was done but follow-up may be needed
+- `changed_needs_review`: a previously terminal comment changed in the markdown metadata
+
+## Retry behavior
+
+Use `--agent-max-attempts` to bound retries:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-max-attempts 1
+```
+
+If the agent output is not structured JSON, Tunelito marks the comment `blocked` instead of rerunning the same instruction blindly.
+
+## Required agent output
+
+The final agent response must be JSON:
+
+```json
+{
+  "comments": [
+    {
+      "id": "c_...",
+      "status": "resolved",
+      "summary": "Updated about.html copy.",
+      "filesChanged": ["about.html"]
+    }
+  ]
+}
+```
+
+Codex and Claude Code are prompted to return this shape. Custom commands should do the same.
+
+## Guardrails
+
+The worker only runs when you pass `--agent` or `--agent-command`. It is not available in `--live` mode because live comments are ephemeral and no markdown inbox exists.
+
+Treat `--agent-trigger all` as local code execution prompted by reviewer comments. Use it only for trusted review sessions or source folders you are comfortable letting your local agent edit.

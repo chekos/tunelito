@@ -30,6 +30,7 @@
         "pages": [
           "how-it-works",
           "comments",
+          "agent-worker",
           "sharing-safely"
         ]
       },
