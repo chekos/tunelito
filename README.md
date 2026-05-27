@@ -34,7 +34,7 @@ Each comment includes the page path and a visible comment id, so Claude Code, Co
 To let a local agent handle comments while Tunelito runs:
 
 ```bash
-npx --yes tunelito ./site --agent codex --agent-trigger all
+npx --yes tunelito ./site --agent codex
 ```
 
 Use `--agent claude` for Claude Code, or `--agent-command "<your command>"` for another local CLI. Tunelito sends prompts to that command on stdin and tracks handled comment IDs in `.tunelito/agent/state.json`.
@@ -90,7 +90,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.4.0
+Tunelito 0.4.1
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -103,7 +103,14 @@ Options:
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent polling interval in seconds (default: 120)
-  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: @agent)
+  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: all)
+  --agent-instructions <txt>
+                        Append host instructions to the built-in agent prompt
+  --agent-instructions-file <path>
+                        Append host instructions from a file
+  --agent-prompt <txt>  Replace the built-in agent behavior prompt
+  --agent-prompt-file <path>
+                        Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: 2)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
@@ -177,7 +184,7 @@ Tunelito can run the local agent worker for you:
 Example:
 
 ```bash
-tunelito ./site --agent codex --agent-trigger all
+tunelito ./site --agent codex
 ```
 
 The built-in provider presets reuse your local CLI auth:
@@ -186,11 +193,19 @@ The built-in provider presets reuse your local CLI auth:
 - `--agent claude` runs `claude -p` with edit permissions.
 - `--agent-command "<cmd>"` runs a custom shell command with the prompt on stdin.
 
-By default, the worker only handles comments that contain `@agent`. Use `--agent-trigger all` when every comment should be treated as actionable.
+By default, the worker evaluates every comment and decides whether to edit, return `no-op`, or mark the comment `ignored`. Use `--agent-trigger "@agent"` or another marker when you want stricter sessions.
 
-Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `no-op`, `blocked`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
+Add host-specific guidance without changing code:
 
-Treat `--agent-trigger all` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
+```bash
+tunelito ./site --agent codex --agent-instructions "Keep copy concise and preserve the existing layout."
+```
+
+Use `--agent-instructions-file instructions.md` for longer guidance. Use `--agent-prompt` or `--agent-prompt-file` to replace the built-in behavior prompt; Tunelito still appends the workspace context, required JSON shape, and pending comments.
+
+Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `no-op`, `ignored`, `blocked`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
+
+Treat `--agent` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
 
 Manual agent prompt:
 
@@ -200,7 +215,7 @@ Monitor site.comments.md every 2 minutes. For each new actionable comment, edit 
 
 Quick walkthrough:
 
-1. Run `npx --yes tunelito ./site --agent codex --agent-trigger all --no-tunnel --open`.
+1. Run `npx --yes tunelito ./site --agent codex --no-tunnel --open`.
 2. Select text in the browser and leave a comment.
 3. The local worker invokes Codex for new unresolved comments.
 4. Codex edits the source HTML file named by the comment's `page: ...` context.
@@ -231,7 +246,7 @@ For an ephemeral call, run with `--live` and skip the markdown-file check.
 ```bash
 npm run ci
 npm pack
-npm install -g ./tunelito-0.4.0.tgz
+npm install -g ./tunelito-0.4.1.tgz
 ```
 
 The package includes the CLI, runtime source, examples, docs, changelog, license, and security policy.

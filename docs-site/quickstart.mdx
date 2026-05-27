@@ -45,13 +45,13 @@ Each folder comment includes the page path, so a person or coding agent can map 
 If Codex is installed and logged in locally:
 
 ```bash
-npx --yes tunelito ./site --agent codex --agent-trigger all
+npx --yes tunelito ./site --agent codex
 ```
 
 If Claude Code is installed and logged in locally:
 
 ```bash
-npx --yes tunelito ./site --agent claude --agent-trigger all
+npx --yes tunelito ./site --agent claude
 ```
 
 The worker uses the local CLI's existing authentication. Tunelito records handled comment IDs in `.tunelito/agent/state.json` so the same comment is not applied repeatedly.

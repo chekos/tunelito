@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.1
+
+- Makes the local agent worker evaluate all persistent comments by default, with `--agent-trigger` still available for marker-gated sessions.
+- Adds `--agent-instructions`, `--agent-instructions-file`, `--agent-prompt`, and `--agent-prompt-file` for appending host guidance or replacing the built-in worker behavior prompt.
+- Updates the worker prompt so agents can mark non-actionable comments `ignored` instead of requiring every comment to become an edit.
+
 ## 0.4.0
 
 - Adds an opt-in local agent worker that can poll persistent comments and invoke Codex, Claude Code, or a custom local CLI to edit the matching HTML files.

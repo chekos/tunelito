@@ -50,7 +50,8 @@ Product-level local agent worker behavior:
 
 - `--agent` is explicit opt-in and rejected with `--live`.
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
-- `--agent-trigger all` treats reviewer comments as local code-editing instructions and must be documented as trusted-session behavior.
+- Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
+- `--agent-trigger "<marker>"` is the stricter opt-in marker mode for less trusted sessions.
 - Resolution state belongs in `.tunelito/agent/state.json`, not the comments markdown that the server rewrites.
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.

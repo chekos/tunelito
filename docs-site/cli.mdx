@@ -4,7 +4,7 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.4.0
+Tunelito 0.4.1
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -17,7 +17,14 @@ Options:
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent polling interval in seconds (default: 120)
-  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: @agent)
+  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: all)
+  --agent-instructions <txt>
+                        Append host instructions to the built-in agent prompt
+  --agent-instructions-file <path>
+                        Append host instructions from a file
+  --agent-prompt <txt>  Replace the built-in agent behavior prompt
+  --agent-prompt-file <path>
+                        Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: 2)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
@@ -66,13 +73,13 @@ Run an ephemeral in-meeting session:
 tunelito ./page.html --live
 ```
 
-Run Codex against actionable comments:
+Run Codex against review comments:
 
 ```bash
-tunelito ./site --agent codex --agent-trigger all
+tunelito ./site --agent codex
 ```
 
-Run Claude Code against comments containing `@agent`:
+Run Claude Code against review comments:
 
 ```bash
 tunelito ./site --agent claude
@@ -81,5 +88,17 @@ tunelito ./site --agent claude
 Use another local CLI:
 
 ```bash
-tunelito ./site --agent-command "openclaw run --stdin" --agent-trigger all
+tunelito ./site --agent-command "openclaw run --stdin"
+```
+
+Append host instructions to the worker prompt:
+
+```bash
+tunelito ./site --agent codex --agent-instructions "Use terse, production-ready copy."
+```
+
+Require an explicit marker for stricter sessions:
+
+```bash
+tunelito ./site --agent codex --agent-trigger "@agent"
 ```

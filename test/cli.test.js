@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
 
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -41,7 +41,9 @@ test("parseArgs supports local agent worker options", () => {
     "--agent-interval",
     "30",
     "--agent-trigger",
-    "all",
+    "@agent",
+    "--agent-instructions",
+    "Use short copy.",
     "--agent-max-attempts",
     "3",
     "--agent-state",
@@ -50,9 +52,35 @@ test("parseArgs supports local agent worker options", () => {
 
   assert.equal(opts.agent, "codex");
   assert.equal(opts.agentIntervalSeconds, 30);
-  assert.equal(opts.agentTrigger, "all");
+  assert.equal(opts.agentTrigger, "@agent");
+  assert.equal(opts.agentInstructions, "Use short copy.");
   assert.equal(opts.agentMaxAttempts, 3);
   assert.equal(opts.agentStatePath, resolve("agent-state.json"));
+});
+
+test("parseArgs and loadAgentPromptOptions support prompt files", () => {
+  const dir = mkdtempSync(`${tmpdir()}/tunelito-agent-prompt-`);
+  const instructionsPath = resolve(dir, "instructions.md");
+  const promptPath = resolve(dir, "prompt.md");
+  writeFileSync(instructionsPath, "Prefer one-sentence edits.");
+  writeFileSync(promptPath, "You are a launch-page editor.");
+
+  const opts = parseArgs([
+    "site",
+    "--agent",
+    "codex",
+    "--agent-instructions-file",
+    instructionsPath,
+    "--agent-prompt-file",
+    promptPath,
+  ]);
+
+  assert.equal(opts.agentInstructionsPath, instructionsPath);
+  assert.equal(opts.agentPromptPath, promptPath);
+  assert.deepEqual(loadAgentPromptOptions(opts), {
+    append: "Prefer one-sentence edits.",
+    override: "You are a launch-page editor.",
+  });
 });
 
 test("parseArgs supports custom agent commands", () => {
@@ -72,6 +100,24 @@ test("agentBlockedPaths includes the derived local agent log", () => {
 
 test("parseArgs rejects agent mode with live comments", () => {
   assert.throws(() => parseArgs(["site", "--live", "--agent", "codex"]), /--agent requires persistent comments/);
+});
+
+test("parseArgs rejects prompt options without an agent", () => {
+  assert.throws(
+    () => parseArgs(["site", "--agent-instructions", "Use short copy."]),
+    /--agent prompt options require --agent/,
+  );
+});
+
+test("parseArgs rejects conflicting prompt option sources", () => {
+  assert.throws(
+    () => parseArgs(["site", "--agent", "codex", "--agent-instructions", "A", "--agent-instructions-file", "instructions.md"]),
+    /Use either --agent-instructions or --agent-instructions-file/,
+  );
+  assert.throws(
+    () => parseArgs(["site", "--agent", "codex", "--agent-prompt", "A", "--agent-prompt-file", "prompt.md"]),
+    /Use either --agent-prompt or --agent-prompt-file/,
+  );
 });
 
 test("parseArgs rejects custom commands for preset providers", () => {

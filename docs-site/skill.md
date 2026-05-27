@@ -42,13 +42,13 @@ npx --yes tunelito ./site
 For unattended local agent follow-up with Codex:
 
 ```bash
-npx --yes tunelito ./site --agent codex --agent-trigger all
+npx --yes tunelito ./site --agent codex
 ```
 
 For Claude Code:
 
 ```bash
-npx --yes tunelito ./site --agent claude --agent-trigger all
+npx --yes tunelito ./site --agent claude
 ```
 
 ## Local-only review
@@ -61,7 +61,7 @@ tunelito ./page.html --no-tunnel --open
 
 - Do not use Tunelito as permanent hosting.
 - Do not share sensitive material unless the user accepts bearer-link exposure.
-- Do not enable `--agent-trigger all` for untrusted reviewers; comments become local agent instructions.
+- Do not enable `--agent` for untrusted reviewers; comments become local agent input. Use `--agent-trigger "@agent"` when stricter gating is needed.
 - Do not use `--agent` with `--live`; live comments are ephemeral and cannot be polled.
 - Canvas, video, images, and cross-origin iframes are not yet annotatable.
 - Comments remain readable in Markdown even if highlights cannot reattach after text edits.

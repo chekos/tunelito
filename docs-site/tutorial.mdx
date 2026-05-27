@@ -43,13 +43,13 @@ HTML
 For local-only review:
 
 ```bash
-npx --yes tunelito ./review-site --agent codex --agent-trigger all --no-tunnel --open
+npx --yes tunelito ./review-site --agent codex --no-tunnel --open
 ```
 
 For a shareable public tunnel:
 
 ```bash
-npx --yes tunelito ./review-site --agent codex --agent-trigger all
+npx --yes tunelito ./review-site --agent codex
 ```
 
 Use `--agent claude` for Claude Code. Use `--agent-command "<your command>"` for another local CLI that accepts a prompt on stdin and returns JSON.
@@ -80,12 +80,12 @@ The comments file will look like this:
 
 > Explain the project here.
 
-@agent Make this sentence more specific.
+Make this sentence more specific.
 
 _Context: page: `/about.html` - path: `body > main > p` - text offset: 18 - id: `c_...`_
 ```
 
-The `@agent` marker is only required when you use the default trigger. This tutorial uses `--agent-trigger all`, so every comment is actionable.
+No marker is required by default. If you start Tunelito with `--agent-trigger "@agent"`, include `@agent` in comments that should be handled.
 
 ## 4. Let the worker handle comments
 

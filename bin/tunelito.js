@@ -34,6 +34,13 @@ Options:
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent polling interval in seconds (default: ${DEFAULT_AGENT_INTERVAL_SECONDS})
   --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
+  --agent-instructions <txt>
+                        Append host instructions to the built-in agent prompt
+  --agent-instructions-file <path>
+                        Append host instructions from a file
+  --agent-prompt <txt>  Replace the built-in agent behavior prompt
+  --agent-prompt-file <path>
+                        Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: ${DEFAULT_AGENT_MAX_ATTEMPTS})
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
@@ -88,6 +95,22 @@ export function parseArgs(argv) {
       const value = argv[++i];
       if (!value || value.startsWith("--")) throw new Error("--agent-trigger requires a value");
       opts.agentTrigger = value;
+    } else if (arg === "--agent-instructions") {
+      const value = argv[++i];
+      if (!value || value.startsWith("--")) throw new Error("--agent-instructions requires a value");
+      opts.agentInstructions = value;
+    } else if (arg === "--agent-instructions-file") {
+      const value = argv[++i];
+      if (!value || value.startsWith("--")) throw new Error("--agent-instructions-file requires a value");
+      opts.agentInstructionsPath = resolve(value);
+    } else if (arg === "--agent-prompt") {
+      const value = argv[++i];
+      if (!value || value.startsWith("--")) throw new Error("--agent-prompt requires a value");
+      opts.agentPrompt = value;
+    } else if (arg === "--agent-prompt-file") {
+      const value = argv[++i];
+      if (!value || value.startsWith("--")) throw new Error("--agent-prompt-file requires a value");
+      opts.agentPromptPath = resolve(value);
     } else if (arg === "--agent-max-attempts") {
       const value = argv[++i];
       const attempts = Number.parseInt(value, 10);
@@ -136,6 +159,15 @@ export function parseArgs(argv) {
   if (opts.agentCommand && opts.agent !== "custom") {
     throw new Error("--agent-command can only be used with --agent custom");
   }
+  if ((opts.agentInstructions || opts.agentInstructionsPath || opts.agentPrompt || opts.agentPromptPath) && !opts.agent) {
+    throw new Error("--agent prompt options require --agent or --agent-command");
+  }
+  if (opts.agentInstructions && opts.agentInstructionsPath) {
+    throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");
+  }
+  if (opts.agentPrompt && opts.agentPromptPath) {
+    throw new Error("Use either --agent-prompt or --agent-prompt-file, not both");
+  }
   if (opts.live && opts.agent) {
     throw new Error("--agent requires persistent comments; remove --live");
   }
@@ -183,6 +215,7 @@ async function main() {
 
   const accessKey = opts.auth ? generateAccessKey() : null;
   const agentStatePath = opts.agent ? (opts.agentStatePath || defaultAgentStatePath(opts.filePath)) : null;
+  const agentPromptOptions = opts.agent ? loadAgentPromptOptions(opts) : {};
   const instance = await createTunelitoServer({
     filePath: opts.filePath,
     commentsPath: opts.commentsPath,
@@ -202,6 +235,8 @@ async function main() {
       intervalSeconds: opts.agentIntervalSeconds,
       trigger: opts.agentTrigger,
       maxAttempts: opts.agentMaxAttempts,
+      promptAppend: agentPromptOptions.append,
+      promptOverride: agentPromptOptions.override,
     })
     : null;
 
@@ -304,6 +339,13 @@ export function isCliEntry(metaUrl, argvPath = process.argv[1]) {
 export function agentBlockedPaths(statePath) {
   const logPath = defaultAgentLogPath(statePath);
   return [statePath, `${statePath}.tmp`, logPath];
+}
+
+export function loadAgentPromptOptions(opts) {
+  return {
+    append: opts.agentInstructionsPath ? readFileSync(opts.agentInstructionsPath, "utf8") : opts.agentInstructions || "",
+    override: opts.agentPromptPath ? readFileSync(opts.agentPromptPath, "utf8") : opts.agentPrompt || "",
+  };
 }
 
 if (isCliEntry(import.meta.url)) {
