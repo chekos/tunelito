@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
 
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -59,6 +59,15 @@ test("parseArgs supports custom agent commands", () => {
   const opts = parseArgs(["site", "--agent-command", "openclaw run --stdin"]);
   assert.equal(opts.agent, "custom");
   assert.equal(opts.agentCommand, "openclaw run --stdin");
+});
+
+test("agentBlockedPaths includes the derived local agent log", () => {
+  const statePath = resolve("agent-state.json");
+  assert.deepEqual(agentBlockedPaths(statePath), [
+    statePath,
+    `${statePath}.tmp`,
+    resolve("log.md"),
+  ]);
 });
 
 test("parseArgs rejects agent mode with live comments", () => {

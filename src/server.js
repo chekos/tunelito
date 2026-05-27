@@ -498,12 +498,21 @@ function findPeerClient(peers, peerId, pagePath = "") {
 }
 
 function createWatcher(path, recursive, onChange) {
+  const handleChange = (_eventType, filename) => {
+    if (isIgnoredWatchFilename(filename)) return;
+    onChange();
+  };
   try {
-    return watch(path, { persistent: true, recursive }, onChange);
+    return watch(path, { persistent: true, recursive }, handleChange);
   } catch (error) {
     if (!recursive) throw error;
-    return watch(path, { persistent: true }, onChange);
+    return watch(path, { persistent: true }, handleChange);
   }
+}
+
+export function isIgnoredWatchFilename(filename) {
+  if (!filename) return false;
+  return String(filename).split(/[\\/]+/).includes(".tunelito");
 }
 
 function isHtmlPath(pathname) {

@@ -69,7 +69,7 @@ site/
     log.md
 ```
 
-The state file records each comment ID, fingerprint, attempts, status, summary, and changed files. Resolved comments are skipped on future polling cycles, even if the original highlighted text becomes stale after an edit.
+The state file records each comment ID, fingerprint, attempts, status, summary, and changed files. Resolved comments are skipped on future polling cycles, even if the original highlighted text becomes stale after an edit. Tunelito blocks the state file and derived log file from static serving, and `.tunelito` ledger writes do not trigger browser reloads.
 
 Statuses include:
 

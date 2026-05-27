@@ -9,6 +9,7 @@ import {
   DEFAULT_AGENT_INTERVAL_SECONDS,
   DEFAULT_AGENT_MAX_ATTEMPTS,
   DEFAULT_AGENT_TRIGGER,
+  defaultAgentLogPath,
   createAgentWorker,
   defaultAgentStatePath,
 } from "../src/agent-worker.js";
@@ -189,7 +190,7 @@ async function main() {
     port: opts.port,
     accessKey,
     liveMode: opts.live,
-    blockedPaths: agentStatePath ? [agentStatePath, `${agentStatePath}.tmp`] : [],
+    blockedPaths: agentStatePath ? agentBlockedPaths(agentStatePath) : [],
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -298,6 +299,11 @@ export function isCliEntry(metaUrl, argvPath = process.argv[1]) {
     // If argvPath cannot be resolved, the direct comparison is still useful.
   }
   return metaUrl === directPath || metaUrl === realPath;
+}
+
+export function agentBlockedPaths(statePath) {
+  const logPath = defaultAgentLogPath(statePath);
+  return [statePath, `${statePath}.tmp`, logPath];
 }
 
 if (isCliEntry(import.meta.url)) {

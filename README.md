@@ -188,7 +188,7 @@ The built-in provider presets reuse your local CLI auth:
 
 By default, the worker only handles comments that contain `@agent`. Use `--agent-trigger all` when every comment should be treated as actionable.
 
-Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `no-op`, `blocked`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale. A readable run log is written to `.tunelito/agent/log.md`.
+Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `no-op`, `blocked`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
 
 Treat `--agent-trigger all` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
 

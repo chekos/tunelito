@@ -456,8 +456,6 @@ export async function runAgentCommand({ provider, command, workspaceRoot, commen
         "--skip-git-repo-check",
         "-s",
         "workspace-write",
-        "-a",
-        "never",
         "-o",
         outputFile,
         "-",

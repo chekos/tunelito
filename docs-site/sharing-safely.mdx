@@ -29,7 +29,7 @@ WebRTC data channels are encrypted by the browser when peer-to-peer connectivity
 
 ## Local agent worker
 
-The agent worker is explicit opt-in. When `--agent-trigger all` is enabled, reviewer comments become instructions for a local CLI that can edit files in the served folder. Use that mode only with trusted reviewers, or keep the default `@agent` trigger so only marked comments are actionable.
+The agent worker is explicit opt-in. When `--agent-trigger all` is enabled, reviewer comments become instructions for a local CLI that can edit files in the served folder. Use that mode only with trusted reviewers, or keep the default `@agent` trigger so only marked comments are actionable. Tunelito blocks the agent state file, temp file, and derived log file from static serving even if a custom `--agent-state` path is inside the served folder.
 
 ## Disable public tunnels
 

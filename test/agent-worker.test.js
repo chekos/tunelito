@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,6 +12,7 @@ import {
   loadAgentState,
   parseAgentResult,
   prepareAgentQueue,
+  runAgentCommand,
   runAgentPass,
 } from "../src/agent-worker.js";
 
@@ -217,6 +219,35 @@ test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buc
   });
 });
 
+test("codex provider command uses supported non-interactive exec flags", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-codex-"));
+  const calls = [];
+
+  const result = await runAgentCommand({
+    provider: "codex",
+    workspaceRoot: dir,
+    commentsPath: join(dir, "comments.md"),
+    statePath: join(dir, ".tunelito", "agent", "state.json"),
+    prompt: "test prompt",
+    spawnFn(command, args, options) {
+      calls.push({ command, args, options });
+      const child = fakeChild();
+      const outputPath = args[args.indexOf("-o") + 1];
+      setImmediate(() => {
+        writeFileSync(outputPath, JSON.stringify({ comments: [{ id: "c_1", status: "resolved" }] }));
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls[0].command, "codex");
+  assert.deepEqual(calls[0].args.slice(0, 6), ["exec", "-C", dir, "--skip-git-repo-check", "-s", "workspace-write"]);
+  assert.equal(calls[0].args.includes("-a"), false);
+  assert.equal(calls[0].args.at(-1), "-");
+});
+
 function comment(overrides = {}) {
   return {
     id: "c_test",
@@ -232,4 +263,15 @@ function comment(overrides = {}) {
     created: "2026-05-27T12:00:00.000Z",
     ...overrides,
   };
+}
+
+function fakeChild() {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdout.setEncoding = () => {};
+  child.stderr.setEncoding = () => {};
+  child.stdin = new EventEmitter();
+  child.stdin.end = () => {};
+  return child;
 }

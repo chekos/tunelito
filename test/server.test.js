@@ -4,7 +4,7 @@ import { request } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTunelitoServer } from "../src/server.js";
+import { createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
 import { CLIENT_ROUTE } from "../src/inject.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
@@ -78,7 +78,9 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
   mkdirSync(join(siteDir, ".tunelito", "agent"), { recursive: true });
   writeFileSync(join(siteDir, ".tunelito", "agent", "state.json"), "{}");
   const visibleAgentStatePath = join(siteDir, "agent-state.json");
+  const visibleAgentLogPath = join(siteDir, "log.md");
   writeFileSync(visibleAgentStatePath, "{}");
+  writeFileSync(visibleAgentLogPath, "agent log");
   let linkedEnvPath = null;
   try {
     linkedEnvPath = join(siteDir, "linked-env");
@@ -92,7 +94,7 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     commentsPath,
     host: "127.0.0.1",
     port: 0,
-    blockedPaths: [visibleAgentStatePath],
+    blockedPaths: [visibleAgentStatePath, visibleAgentLogPath],
   });
 
   const sockets = [];
@@ -173,6 +175,9 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     const visibleAgentState = await fetch(new URL("/agent-state.json", instance.localUrl));
     assert.equal(visibleAgentState.status, 404);
 
+    const visibleAgentLog = await fetch(new URL("/log.md", instance.localUrl));
+    assert.equal(visibleAgentLog.status, 404);
+
     if (linkedEnvPath) {
       const linkedEnvFile = await fetch(new URL("/linked-env", instance.localUrl));
       assert.equal(linkedEnvFile.status, 404);
@@ -181,6 +186,12 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     for (const socket of sockets) socket.close();
     await instance.close();
   }
+});
+
+test("watcher ignores local agent ledger paths", () => {
+  assert.equal(isIgnoredWatchFilename(".tunelito/agent/state.json"), true);
+  assert.equal(isIgnoredWatchFilename("nested/.tunelito/agent/log.md"), true);
+  assert.equal(isIgnoredWatchFilename("index.html"), false);
 });
 
 test("directory mode renders a basic HTML index when no index file exists", async () => {
