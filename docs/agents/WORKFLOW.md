@@ -52,11 +52,7 @@ npm run ci
 For package changes, also run a clean install smoke:
 
 ```bash
-rm -rf /tmp/tunelito-pack /tmp/tunelito-prefix
-mkdir -p /tmp/tunelito-pack /tmp/tunelito-prefix
-npm pack --pack-destination /tmp/tunelito-pack
-npm install -g --prefix /tmp/tunelito-prefix /tmp/tunelito-pack/tunelito-*.tgz
-/tmp/tunelito-prefix/bin/tunelito --version
+npm run pack:check
 ```
 
 ## 6. Handoff

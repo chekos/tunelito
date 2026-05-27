@@ -9,11 +9,7 @@ Before declaring a release shareable:
 ```bash
 npm run release:check -- 0.1.2
 npm run ci
-rm -rf /tmp/tunelito-pack /tmp/tunelito-prefix
-mkdir -p /tmp/tunelito-pack /tmp/tunelito-prefix
-npm pack --pack-destination /tmp/tunelito-pack
-npm install -g --prefix /tmp/tunelito-prefix /tmp/tunelito-pack/tunelito-*.tgz
-/tmp/tunelito-prefix/bin/tunelito --version
+npm run pack:check
 ```
 
 Then smoke a page:
