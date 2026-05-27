@@ -7,7 +7,9 @@ import { tmpdir } from "node:os";
 import { renderCommentsMarkdown } from "../src/comments.js";
 import {
   DEFAULT_AGENT_TRIGGER,
+  buildAgentPrompt,
   commentMatchesTrigger,
+  defaultAgentBehaviorPrompt,
   fingerprintComment,
   loadAgentState,
   parseAgentResult,
@@ -29,7 +31,7 @@ test("agent worker runs a custom command once and records resolved comments", as
   writeFileSync(join(siteDir, "about.html"), "<!doctype html><html><body><p>Explain the project here.</p></body></html>");
   writeFileSync(commentsPath, renderCommentsMarkdown({
     sourcePath: siteDir,
-    comments: [comment({ id: "c_1", body: "@agent Make this sentence concrete.", pagePath: "/about.html" })],
+    comments: [comment({ id: "c_1", body: "Make this sentence concrete.", pagePath: "/about.html" })],
   }));
   writeFileSync(scriptPath, `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -113,7 +115,7 @@ test("agent worker blocks comments when the agent output is not structured JSON"
   writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
   writeFileSync(commentsPath, renderCommentsMarkdown({
     sourcePath: siteDir,
-    comments: [comment({ id: "c_bad", body: "@agent Tighten this.", pagePath: "/" })],
+    comments: [comment({ id: "c_bad", body: "Tighten this.", pagePath: "/" })],
   }));
   writeFileSync(scriptPath, `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -162,7 +164,7 @@ console.log("done");
 });
 
 test("agent queue skips resolved comments and marks changed resolved comments for review", () => {
-  const item = comment({ id: "c_done", body: "@agent Edit this." });
+  const item = comment({ id: "c_done", body: "Edit this." });
   const state = {
     comments: {
       c_done: {
@@ -174,20 +176,60 @@ test("agent queue skips resolved comments and marks changed resolved comments fo
 
   assert.equal(prepareAgentQueue([item], state, { trigger: DEFAULT_AGENT_TRIGGER }).pending.length, 0);
 
-  const changed = comment({ id: "c_done", body: "@agent Edit this differently." });
+  const changed = comment({ id: "c_done", body: "Edit this differently." });
   const result = prepareAgentQueue([changed], state, { trigger: DEFAULT_AGENT_TRIGGER });
   assert.equal(result.changed, true);
   assert.equal(result.pending.length, 0);
   assert.equal(state.comments.c_done.status, "changed_needs_review");
 });
 
-test("agent trigger defaults to @agent and supports all comments", () => {
+test("agent trigger defaults to all comments and supports explicit mention filters", () => {
   const unmentioned = comment({ id: "c_2", body: "Make this shorter." });
   const mentioned = comment({ id: "c_3", body: "@Agent Make this shorter." });
 
-  assert.equal(commentMatchesTrigger(unmentioned, DEFAULT_AGENT_TRIGGER), false);
+  assert.equal(DEFAULT_AGENT_TRIGGER, "all");
+  assert.equal(commentMatchesTrigger(unmentioned, DEFAULT_AGENT_TRIGGER), true);
   assert.equal(commentMatchesTrigger(mentioned, DEFAULT_AGENT_TRIGGER), true);
-  assert.equal(commentMatchesTrigger(unmentioned, "all"), true);
+  assert.equal(commentMatchesTrigger(unmentioned, "@agent"), false);
+  assert.equal(commentMatchesTrigger(mentioned, "@agent"), true);
+  assert.equal(commentMatchesTrigger(unmentioned, "ALL"), true);
+});
+
+test("buildAgentPrompt appends host instructions while preserving runtime context", () => {
+  const prompt = buildAgentPrompt({
+    comments: [comment({ id: "c_prompt", body: "Make this warmer." })],
+    commentsPath: "/tmp/site.comments.md",
+    workspaceRoot: "/tmp/site",
+    statePath: "/tmp/site/.tunelito/agent/state.json",
+    trigger: DEFAULT_AGENT_TRIGGER,
+    maxAttempts: 2,
+    promptAppend: "Prefer concise wording and preserve the existing layout.",
+  });
+
+  assert.match(prompt, /Core Behavior/);
+  assert.match(prompt, /Host Instructions/);
+  assert.match(prompt, /Prefer concise wording/);
+  assert.match(prompt, /Comments To Address/);
+  assert.match(prompt, /c_prompt/);
+});
+
+test("buildAgentPrompt can replace the built-in behavior prompt", () => {
+  const prompt = buildAgentPrompt({
+    comments: [comment({ id: "c_override", body: "Use a headline." })],
+    commentsPath: "/tmp/site.comments.md",
+    workspaceRoot: "/tmp/site",
+    statePath: "/tmp/site/.tunelito/agent/state.json",
+    trigger: DEFAULT_AGENT_TRIGGER,
+    maxAttempts: 2,
+    promptOverride: "You are an editorial HTML fixer. Make tasteful direct edits.",
+  });
+
+  assert.match(prompt, /editorial HTML fixer/);
+  assert.doesNotMatch(prompt, /Treat each listed comment as reviewer feedback/);
+  assert.match(prompt, /Output Contract/);
+  assert.match(prompt, /Return only JSON/);
+  assert.match(prompt, /c_override/);
+  assert.match(defaultAgentBehaviorPrompt(), /Return only JSON/);
 });
 
 test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buckets", () => {

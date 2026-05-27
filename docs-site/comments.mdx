@@ -49,18 +49,18 @@ Tunelito also stores hidden metadata comments. Do not delete that metadata if yo
 
 The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to periodically inspect the comments file, edit the matching source HTML, and report which visible comment IDs were addressed.
 
-Tunelito can also run that polling loop for you:
+Tunelito can also run that polling loop for you. By default, every persistent comment is sent to the worker and the local agent decides whether to edit, return `no-op`, or mark it `ignored`:
 
 ```bash
-tunelito ./site --agent codex --agent-trigger all
+tunelito ./site --agent codex
 ```
 
 The worker writes status to `.tunelito/agent/state.json` instead of editing the comments file. That state prevents already handled comment IDs from being retried after source edits make the original highlight stale.
 
-For safer sessions, omit `--agent-trigger all` and ask reviewers to include `@agent` in comments they want the worker to handle:
+For stricter sessions, ask reviewers to include `@agent` in comments they want the worker to handle:
 
 ```bash
-tunelito ./site --agent claude
+tunelito ./site --agent claude --agent-trigger "@agent"
 ```
 
 Manual prompt:

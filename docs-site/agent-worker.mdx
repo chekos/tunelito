@@ -10,15 +10,15 @@ The worker does not use model API keys directly. It starts your installed local 
 ## Start with Codex
 
 ```bash
-npx --yes tunelito ./site --agent codex --agent-trigger all
+npx --yes tunelito ./site --agent codex
 ```
 
-Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant page path, quote, comment body, and comment ID.
+Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant page path, quote, comment body, and comment ID. Codex decides whether to edit, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
 
 ## Start with Claude Code
 
 ```bash
-npx --yes tunelito ./site --agent claude --agent-trigger all
+npx --yes tunelito ./site --agent claude
 ```
 
 Claude Code is invoked in non-interactive print mode with edit permissions for the served folder.
@@ -28,7 +28,7 @@ Claude Code is invoked in non-interactive print mode with edit permissions for t
 Use `--agent-command` for another command that accepts a prompt on stdin and returns JSON on stdout:
 
 ```bash
-npx --yes tunelito ./site --agent-command "openclaw run --stdin" --agent-trigger all
+npx --yes tunelito ./site --agent-command "openclaw run --stdin"
 ```
 
 The custom command runs from the served HTML root. Tunelito also sets:
@@ -39,16 +39,16 @@ The custom command runs from the served HTML root. Tunelito also sets:
 
 ## Trigger mode
 
-The safer default only handles comments containing `@agent`:
+By default, every persistent comment is visible to the worker. This is intended for trusted local review sessions where you shared the URL with people in the meeting.
 
 ```bash
 npx --yes tunelito ./site --agent codex
 ```
 
-Use `--agent-trigger all` when every comment should be actionable:
+Use a marker when you want stricter sessions:
 
 ```bash
-npx --yes tunelito ./site --agent codex --agent-trigger all
+npx --yes tunelito ./site --agent codex --agent-trigger "@agent"
 ```
 
 You can also use another marker:
@@ -56,6 +56,28 @@ You can also use another marker:
 ```bash
 npx --yes tunelito ./site --agent claude --agent-trigger "@fix"
 ```
+
+## Prompt controls
+
+Append host guidance to the built-in worker prompt:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-instructions "Keep copy concise and preserve the existing layout."
+```
+
+For longer guidance:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-instructions-file review-style.md
+```
+
+Replace the built-in behavior prompt when you want full control:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-prompt-file agent-system-prompt.md
+```
+
+Prompt replacement changes the behavior instructions, but Tunelito still appends the workspace context, required JSON output shape, and pending comments.
 
 ## Resolution state
 
@@ -75,6 +97,7 @@ Statuses include:
 
 - `resolved`: the agent made the requested change
 - `no-op`: the requested change was already satisfied
+- `ignored`: the comment did not ask for a file change
 - `blocked`: the agent could not safely complete the request
 - `stale`: the quoted text or page no longer matched
 - `partial`: some work was done but follow-up may be needed
@@ -113,4 +136,4 @@ Codex and Claude Code are prompted to return this shape. Custom commands should 
 
 The worker only runs when you pass `--agent` or `--agent-command`. It is not available in `--live` mode because live comments are ephemeral and no markdown inbox exists.
 
-Treat `--agent-trigger all` as local code execution prompted by reviewer comments. Use it only for trusted review sessions or source folders you are comfortable letting your local agent edit.
+Treat `--agent` as local code execution prompted by reviewer comments. Use it only for trusted review sessions or source folders you are comfortable letting your local agent edit.

@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { loadCommentsFromMarkdown } from "./comments.js";
 
 export const DEFAULT_AGENT_INTERVAL_SECONDS = 120;
-export const DEFAULT_AGENT_TRIGGER = "@agent";
+export const DEFAULT_AGENT_TRIGGER = "all";
 export const DEFAULT_AGENT_MAX_ATTEMPTS = 2;
 
 const STATE_VERSION = 1;
@@ -33,11 +33,13 @@ export function createAgentWorker({
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  promptAppend = "",
+  promptOverride = "",
   spawnFn = spawn,
   now = () => new Date(),
   log = console.log,
 } = {}) {
-  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts });
+  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, promptAppend, promptOverride });
   let timer = null;
   let running = false;
   let stopped = false;
@@ -117,6 +119,8 @@ export async function runAgentPass({
   logPath,
   trigger,
   maxAttempts,
+  promptAppend,
+  promptOverride,
   reason = "manual",
   spawnFn = spawn,
   now = () => new Date(),
@@ -168,6 +172,8 @@ export async function runAgentPass({
     statePath,
     trigger,
     maxAttempts,
+    promptAppend,
+    promptOverride,
   });
 
   let commandResult;
@@ -273,6 +279,8 @@ export function normalizeAgentConfig({
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  promptAppend = "",
+  promptOverride = "",
 } = {}) {
   const normalizedProvider = command && !provider ? "custom" : String(provider || "").trim().toLowerCase();
   if (!normalizedProvider) throw new Error("--agent requires a provider such as codex or claude");
@@ -299,6 +307,8 @@ export function normalizeAgentConfig({
     intervalSeconds,
     trigger: trigger || DEFAULT_AGENT_TRIGGER,
     maxAttempts,
+    promptAppend: normalizePromptText(promptAppend),
+    promptOverride: normalizePromptText(promptOverride),
   };
 }
 
@@ -386,37 +396,27 @@ export function fingerprintComment(comment) {
 }
 
 export function commentMatchesTrigger(comment, trigger = DEFAULT_AGENT_TRIGGER) {
-  if (!trigger || trigger === "all") return true;
+  if (!trigger || String(trigger).toLowerCase() === "all") return true;
   const text = `${comment.body || ""}\n${comment.quote || ""}`;
   return text.toLowerCase().includes(String(trigger).toLowerCase());
 }
 
-export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts }) {
-  return `# Tunelito Local Agent Worker
-
-You are being invoked by Tunelito to address reviewer comments on local HTML files.
-
-## Workspace
+export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, promptAppend = "", promptOverride = "" }) {
+  const behavior = normalizePromptText(promptOverride) || defaultAgentBehaviorPrompt();
+  const hostInstructions = normalizePromptText(promptAppend);
+  const sections = [
+    behavior,
+    hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
+    `## Workspace
 
 - HTML root: ${workspaceRoot}
 - Comments inbox: ${commentsPath}
 - Resolution ledger: ${statePath}
 - Trigger: ${trigger}
-- Max attempts per comment: ${maxAttempts}
+- Max attempts per comment: ${maxAttempts}`,
+    `## Output Contract
 
-## Rules
-
-- Address only the comment IDs listed below.
-- Use each comment's pagePath to find the matching HTML file. For pagePath "/", inspect index.html if it exists.
-- Do not edit the comments inbox.
-- Do not edit the resolution ledger.
-- Before changing files, check whether the requested change is already satisfied.
-- If already satisfied, return status "no-op".
-- If the quoted text or target page cannot be found, return status "stale" or "blocked" instead of guessing.
-- Keep changes focused on the requested HTML/CSS/asset edits.
-- Return only JSON as your final response. Do not wrap it in Markdown.
-
-## Required Final JSON Shape
+Return only JSON as your final response. Do not wrap it in Markdown. Use this shape:
 
 {
   "comments": [
@@ -427,12 +427,13 @@ You are being invoked by Tunelito to address reviewer comments on local HTML fil
       "filesChanged": ["relative/path.html"]
     }
   ]
-}
+}`,
+    `## Comments To Address
 
-## Comments To Address
+${JSON.stringify(comments.map(formatCommentForPrompt), null, 2)}`,
+  ].filter(Boolean);
 
-${JSON.stringify(comments.map(formatCommentForPrompt), null, 2)}
-`;
+  return `${sections.join("\n\n")}\n`;
 }
 
 export async function runAgentCommand({ provider, command, workspaceRoot, commentsPath, statePath, prompt, spawnFn = spawn }) {
@@ -538,7 +539,29 @@ export function normalizeResultPayload(payload) {
 export function describeAgentConfig(config) {
   const trigger = config.trigger === "all" ? "all comments" : `comments containing "${config.trigger}"`;
   const provider = config.provider === "custom" ? `custom command (${config.command})` : config.provider;
-  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s; state ${config.statePath}`;
+  const prompt = config.promptOverride ? "; custom prompt" : config.promptAppend ? "; extra instructions" : "";
+  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s${prompt}; state ${config.statePath}`;
+}
+
+export function defaultAgentBehaviorPrompt() {
+  return `# Tunelito Local Agent Worker
+
+You are being invoked by Tunelito to review local HTML feedback and edit the matching files when appropriate.
+
+## Core Behavior
+
+- Treat each listed comment as reviewer feedback from a trusted local review session.
+- Use judgment: some comments ask for edits, some are questions, some are observations, and some may already be satisfied.
+- Make focused HTML/CSS/asset edits when the requested change is clear and safe.
+- Return status "ignored" when a comment does not ask for a file change.
+- Return status "no-op" when the requested change is already satisfied.
+- Return status "stale" or "blocked" when the quoted text or target page cannot be found, or when the request is too ambiguous to complete safely.
+- Address only the comment IDs listed below.
+- Use each comment's pagePath to find the matching HTML file. For pagePath "/", inspect index.html if it exists.
+- Do not edit the comments inbox.
+- Do not edit the resolution ledger.
+- Keep changes focused on the requested local files.
+- Return only JSON as your final response. Do not wrap it in Markdown.`;
 }
 
 function normalizeSingleResult(item) {
@@ -700,4 +723,8 @@ function isTerminalStatus(status) {
 
 function preview(value) {
   return String(value || "").replace(/\s+/g, " ").slice(0, 240);
+}
+
+function normalizePromptText(value) {
+  return String(value || "").trim();
 }
