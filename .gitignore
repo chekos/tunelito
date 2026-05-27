@@ -8,3 +8,4 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/audit.log
 .agent-work/
+.tunelito/

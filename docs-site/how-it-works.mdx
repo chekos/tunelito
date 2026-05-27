@@ -29,6 +29,13 @@ The server handles:
 - page-specific comment streams when serving a folder
 - optional Cloudflare Tunnel startup
 
+When `--agent` is enabled, a separate worker handles:
+
+- polling the persistent comments file
+- invoking Codex, Claude Code, or a custom local command
+- recording status in `.tunelito/agent/state.json`
+- writing a readable `.tunelito/agent/log.md`
+
 ## Source HTML is not modified
 
 The injection happens only in the HTTP response. Your source HTML files remain untouched.
@@ -50,6 +57,8 @@ site.comments.md
 ```
 
 The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart. Folder comments include visible page paths so a person or coding agent can map feedback back to the right HTML file.
+
+The local agent worker does not edit this Markdown file. It treats comments as an append-only inbox and writes resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices.
 
 ## Live mode
 

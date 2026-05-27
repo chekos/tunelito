@@ -10,8 +10,10 @@ The CLI owns process orchestration:
 - choose host/port/comments path
 - accept either a single HTML file or a folder target
 - choose persistent or ephemeral live mode
+- choose optional local agent worker settings
 - generate the review key
 - start the local server
+- start the local agent worker when requested
 - optionally start Cloudflare Tunnel
 - print shareable URLs and session events
 
@@ -26,6 +28,15 @@ The server owns local IO and transport:
 - keep folder-mode comment streams page-specific while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
 - broadcast reload events when source HTML changes
+
+The local agent worker owns comment follow-up when `--agent` is enabled:
+
+- poll the persistent markdown comments inbox
+- keep `.tunelito/agent/state.json` as the durable resolution ledger
+- invoke Codex, Claude Code, or a custom local command with a bounded prompt
+- require structured JSON results before marking comments resolved
+- write `.tunelito/agent/log.md` for readable run history
+- skip comments already marked `resolved`, `no-op`, `blocked`, `stale`, `ignored`, or `partial`
 
 The browser client owns reviewer interaction:
 
@@ -44,6 +55,10 @@ The browser client owns reviewer interaction:
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep `--live` comments ephemeral; do not write them to markdown.
+- Keep agent resolution state out of the comments markdown; the server owns comment persistence.
+- Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
+- Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
+- Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.
 
 ## Extension Points
@@ -54,6 +69,7 @@ Prefer these extension points before inventing new architecture:
 - server route under `/__tunelito/*`
 - message type in `src/ws.js` and `src/client.js`
 - markdown metadata field in `src/comments.js`
+- agent state/prompt/provider logic in `src/agent-worker.js`
 - test coverage in `test/*.test.js`
 
 ## Agent-Native Fit

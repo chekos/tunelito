@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
 
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -31,6 +31,58 @@ test("parseArgs supports ephemeral live mode", () => {
   const opts = parseArgs(["page.html", "--live"]);
   assert.equal(opts.live, true);
   assert.equal(opts.filePath, resolve("page.html"));
+});
+
+test("parseArgs supports local agent worker options", () => {
+  const opts = parseArgs([
+    "site",
+    "--agent",
+    "codex",
+    "--agent-interval",
+    "30",
+    "--agent-trigger",
+    "all",
+    "--agent-max-attempts",
+    "3",
+    "--agent-state",
+    "agent-state.json",
+  ]);
+
+  assert.equal(opts.agent, "codex");
+  assert.equal(opts.agentIntervalSeconds, 30);
+  assert.equal(opts.agentTrigger, "all");
+  assert.equal(opts.agentMaxAttempts, 3);
+  assert.equal(opts.agentStatePath, resolve("agent-state.json"));
+});
+
+test("parseArgs supports custom agent commands", () => {
+  const opts = parseArgs(["site", "--agent-command", "openclaw run --stdin"]);
+  assert.equal(opts.agent, "custom");
+  assert.equal(opts.agentCommand, "openclaw run --stdin");
+});
+
+test("agentBlockedPaths includes the derived local agent log", () => {
+  const statePath = resolve("agent-state.json");
+  assert.deepEqual(agentBlockedPaths(statePath), [
+    statePath,
+    `${statePath}.tmp`,
+    resolve("log.md"),
+  ]);
+});
+
+test("parseArgs rejects agent mode with live comments", () => {
+  assert.throws(() => parseArgs(["site", "--live", "--agent", "codex"]), /--agent requires persistent comments/);
+});
+
+test("parseArgs rejects custom commands for preset providers", () => {
+  assert.throws(
+    () => parseArgs(["site", "--agent-command", "openclaw run --stdin", "--agent", "codex"]),
+    /--agent-command can only be used with --agent custom/,
+  );
+});
+
+test("parseArgs rejects unsupported agent providers", () => {
+  assert.throws(() => parseArgs(["site", "--agent", "openclaw"]), /Unsupported --agent provider/);
 });
 
 test("isCliEntry recognizes npm-style symlinked bin paths", () => {

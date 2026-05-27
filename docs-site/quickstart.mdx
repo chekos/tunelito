@@ -40,6 +40,22 @@ site.comments.md
 
 Each folder comment includes the page path, so a person or coding agent can map feedback back to the right HTML file.
 
+## Start a review with local agent follow-up
+
+If Codex is installed and logged in locally:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-trigger all
+```
+
+If Claude Code is installed and logged in locally:
+
+```bash
+npx --yes tunelito ./site --agent claude --agent-trigger all
+```
+
+The worker uses the local CLI's existing authentication. Tunelito records handled comment IDs in `.tunelito/agent/state.json` so the same comment is not applied repeatedly.
+
 ## Local-only preview
 
 Use this when you do not want to expose a public tunnel:
@@ -64,4 +80,4 @@ Press `Ctrl+C` in the terminal. Tunelito stops the local server and tunnel proce
 
 ## Next step
 
-Follow the [folder review tutorial](/tutorial) to collect comments across multiple HTML pages and have a local coding agent act on the Markdown inbox.
+Follow the [folder review tutorial](/tutorial) to collect comments across multiple HTML pages and have a local coding agent edit the matching source files.

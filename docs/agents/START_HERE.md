@@ -26,6 +26,7 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 - `src/server.js`: HTTP server, file serving, review-key auth, WebSocket upgrade, WebRTC signaling.
 - `src/client.js`: injected browser UI and live annotation behavior.
 - `src/comments.js`: markdown persistence and comment restoration.
+- `src/agent-worker.js`: opt-in local coding-agent worker, resolution ledger, provider commands.
 - `src/inject.js`: HTML injection and CSP meta handling.
 - `src/ws.js`: minimal WebSocket hub.
 - `src/tunnel.js`: Cloudflare Tunnel process management.

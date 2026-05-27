@@ -25,6 +25,10 @@ export async function createTunelitoServer(options) {
   const liveMode = Boolean(options.liveMode || options.live);
   const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(targetPath));
   const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: targetPath });
+  const blockedPaths = [
+    ...blockedCommentPaths(commentsPath),
+    ...(options.blockedPaths || []).filter(Boolean).map((path) => resolve(path)),
+  ];
   const events = new EventEmitter();
   const hub = new WebSocketHub();
   const peers = new Map();
@@ -42,6 +46,7 @@ export async function createTunelitoServer(options) {
       sourceName,
       comments,
       commentsPath,
+      blockedPaths,
       liveMode,
       accessKey,
     });
@@ -200,7 +205,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, liveMode, accessKey }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, blockedPaths, liveMode, accessKey }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -236,7 +241,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   }
 
   if (directoryMode) {
-    const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, { blockedPaths: blockedCommentPaths(commentsPath) });
+    const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, { blockedPaths });
     if (!asset) {
       sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
       return;
@@ -268,7 +273,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     return;
   }
 
-  const asset = resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths: blockedCommentPaths(commentsPath) });
+  const asset = resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths });
   if (!asset) {
     sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
     return;
@@ -493,12 +498,21 @@ function findPeerClient(peers, peerId, pagePath = "") {
 }
 
 function createWatcher(path, recursive, onChange) {
+  const handleChange = (_eventType, filename) => {
+    if (isIgnoredWatchFilename(filename)) return;
+    onChange();
+  };
   try {
-    return watch(path, { persistent: true, recursive }, onChange);
+    return watch(path, { persistent: true, recursive }, handleChange);
   } catch (error) {
     if (!recursive) throw error;
-    return watch(path, { persistent: true }, onChange);
+    return watch(path, { persistent: true }, handleChange);
   }
+}
+
+export function isIgnoredWatchFilename(filename) {
+  if (!filename) return false;
+  return String(filename).split(/[\\/]+/).includes(".tunelito");
 }
 
 function isHtmlPath(pathname) {

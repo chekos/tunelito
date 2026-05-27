@@ -19,6 +19,8 @@ Tunelito turns a local HTML file or folder of HTML files into a temporary live r
 - Sync comments over WebSocket, with WebRTC peer-to-peer collaboration in `--live`.
 - Persist comments to Markdown by default, or keep them ephemeral with `--live`.
 - Include page paths and comment IDs in Markdown for agent inbox workflows.
+- Run an opt-in local agent worker with Codex, Claude Code, or a custom CLI.
+- Track resolved/no-op/blocked/stale comments in `.tunelito/agent/state.json` to avoid repeated edits.
 - Reload connected browsers when source HTML changes.
 - Expose the local server through a temporary Cloudflare Tunnel.
 - Require keyed review URLs by default.
@@ -37,6 +39,18 @@ For a folder-backed mini-site:
 npx --yes tunelito ./site
 ```
 
+For unattended local agent follow-up with Codex:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-trigger all
+```
+
+For Claude Code:
+
+```bash
+npx --yes tunelito ./site --agent claude --agent-trigger all
+```
+
 ## Local-only review
 
 ```bash
@@ -47,5 +61,7 @@ tunelito ./page.html --no-tunnel --open
 
 - Do not use Tunelito as permanent hosting.
 - Do not share sensitive material unless the user accepts bearer-link exposure.
+- Do not enable `--agent-trigger all` for untrusted reviewers; comments become local agent instructions.
+- Do not use `--agent` with `--live`; live comments are ephemeral and cannot be polled.
 - Canvas, video, images, and cross-origin iframes are not yet annotatable.
 - Comments remain readable in Markdown even if highlights cannot reattach after text edits.

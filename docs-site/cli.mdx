@@ -4,7 +4,7 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.3.1
+Tunelito 0.4.0
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -13,6 +13,14 @@ Options:
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --live                Use ephemeral live collaboration mode; do not write comments to disk
+  --agent <codex|claude|custom>
+                        Run a local coding-agent worker for persistent comments
+  --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
+  --agent-interval <s>  Agent polling interval in seconds (default: 120)
+  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: @agent)
+  --agent-max-attempts <n>
+                        Stop retrying a comment after n attempts (default: 2)
+  --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -56,4 +64,22 @@ Run an ephemeral in-meeting session:
 
 ```bash
 tunelito ./page.html --live
+```
+
+Run Codex against actionable comments:
+
+```bash
+tunelito ./site --agent codex --agent-trigger all
+```
+
+Run Claude Code against comments containing `@agent`:
+
+```bash
+tunelito ./site --agent claude
+```
+
+Use another local CLI:
+
+```bash
+tunelito ./site --agent-command "openclaw run --stdin" --agent-trigger all
 ```
