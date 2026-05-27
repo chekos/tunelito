@@ -17,12 +17,12 @@ npm run ci
 ## Package smoke
 
 ```bash
-rm -rf /tmp/tunelito-pack /tmp/tunelito-prefix
-mkdir -p /tmp/tunelito-pack /tmp/tunelito-prefix
-npm pack --pack-destination /tmp/tunelito-pack
-npm install -g --prefix /tmp/tunelito-prefix /tmp/tunelito-pack/tunelito-*.tgz
-/tmp/tunelito-prefix/bin/tunelito --version
+npm run pack:check
 ```
+
+This packs the current tree, installs the tarball into a clean global prefix,
+and verifies both the installed `tunelito` binary and an `npx --package`
+execution path.
 
 ## npm install smoke
 

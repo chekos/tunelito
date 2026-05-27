@@ -57,9 +57,7 @@ Required:
 ```bash
 npm run release:check -- <version-or-tag>
 npm run ci
-npm pack
-npm install -g --prefix /tmp/tunelito-prefix ./tunelito-*.tgz
-/tmp/tunelito-prefix/bin/tunelito --version
+npm run pack:check
 ```
 
 After publishing to npm, verify the public install path:

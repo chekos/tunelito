@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds an automated package smoke check that proves the packed tarball exposes a runnable `tunelito` CLI through global install and `npx --package`.
+
 ## 0.4.1
 
 - Makes the local agent worker evaluate all persistent comments by default, with `--agent-trigger` still available for marker-gated sessions.
