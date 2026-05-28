@@ -25,7 +25,7 @@ The server owns local IO and transport:
 - protect shared sessions with `tunelito_key`
 - accept WebSocket comment events
 - write/read markdown comments or keep live-mode comments in memory
-- keep folder-mode comment streams page-specific while storing one markdown inbox
+- keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
 - broadcast reload events when source HTML changes
 
@@ -41,6 +41,7 @@ The local agent worker owns comment follow-up when `--agent` is enabled:
 The browser client owns reviewer interaction:
 
 - capture text selections
+- create unanchored page notes and site-wide notes
 - render comment controls
 - submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries

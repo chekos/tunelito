@@ -188,6 +188,95 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
   }
 });
 
+test("directory mode supports page notes and site-wide comments", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-comment-scopes-"));
+  const commentsPath = join(siteDir, "site.comments.md");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><main>Home page</main></body></html>");
+  writeFileSync(join(siteDir, "about.html"), "<!doctype html><html><body><main>About page</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    const root = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(root.socket);
+    await waitFor(root.socket, "open");
+    await waitUntil(() => root.messages.some((message) => message.type === "hello"));
+
+    const aboutSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    aboutSocketUrl.searchParams.set("tunelito_page", "/about.html");
+    const about = openJsonSocket(aboutSocketUrl);
+    sockets.push(about.socket);
+    await waitFor(about.socket, "open");
+    await waitUntil(() => about.messages.some((message) => message.type === "hello"));
+
+    about.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Aki",
+        scope: "page",
+        quote: "",
+        body: "Add opening hours to this page.",
+      },
+    }));
+    await waitUntil(() => about.messages.some((message) => message.type === "comment" && message.comment.body === "Add opening hours to this page."));
+
+    about.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Aki",
+        scope: "site",
+        quote: "",
+        body: "Use the same heading rhythm across every itinerary page.",
+      },
+    }));
+    await waitUntil(() => root.messages.some((message) => message.type === "comment" && message.comment.body === "Use the same heading rhythm across every itinerary page."));
+
+    const rootCommentEvents = root.messages.filter((message) => message.type === "comment");
+    assert.deepEqual(rootCommentEvents.map((message) => message.comment.body), ["Use the same heading rhythm across every itinerary page."]);
+    assert.equal(rootCommentEvents[0].comment.scope, "site");
+    assert.equal(rootCommentEvents[0].comment.pagePath, "/about.html");
+
+    const freshRoot = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(freshRoot.socket);
+    await waitFor(freshRoot.socket, "open");
+    await waitUntil(() => freshRoot.messages.some((message) => message.type === "hello"));
+    const freshRootHello = freshRoot.messages.find((message) => message.type === "hello");
+    assert.deepEqual(freshRootHello.comments.map((comment) => comment.body), ["Use the same heading rhythm across every itinerary page."]);
+
+    const freshAboutSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    freshAboutSocketUrl.searchParams.set("tunelito_page", "/about.html");
+    const freshAbout = openJsonSocket(freshAboutSocketUrl);
+    sockets.push(freshAbout.socket);
+    await waitFor(freshAbout.socket, "open");
+    await waitUntil(() => freshAbout.messages.some((message) => message.type === "hello"));
+    const freshAboutHello = freshAbout.messages.find((message) => message.type === "hello");
+    assert.deepEqual(freshAboutHello.comments.map((comment) => comment.body), [
+      "Add opening hours to this page.",
+      "Use the same heading rhythm across every itinerary page.",
+    ]);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /scope: `page`/);
+    assert.match(markdown, /scope: `site`/);
+    assert.match(markdown, /_Page note \(no selected text\)\._/);
+    assert.match(markdown, /_Site note \(no selected text\)\._/);
+
+    const clientScript = await fetch(new URL("/__tunelito/client.js", instance.localUrl)).then((res) => res.text());
+    assert.match(clientScript, /Page note/);
+    assert.match(clientScript, /Site note/);
+    assert.match(clientScript, /data-scope="site"/);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
 test("watcher ignores local agent ledger paths", () => {
   assert.equal(isIgnoredWatchFilename(".tunelito/agent/state.json"), true);
   assert.equal(isIgnoredWatchFilename("nested/.tunelito/agent/log.md"), true);

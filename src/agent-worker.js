@@ -387,6 +387,7 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
 
 export function fingerprintComment(comment) {
   const payload = {
+    scope: comment.scope || "page",
     pagePath: comment.pagePath || "",
     quote: comment.quote || "",
     body: comment.body || "",
@@ -558,6 +559,9 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 - Return status "stale" or "blocked" when the quoted text or target page cannot be found, or when the request is too ambiguous to complete safely.
 - Address only the comment IDs listed below.
 - Use each comment's pagePath to find the matching HTML file. For pagePath "/", inspect index.html if it exists.
+- Page-scope comments apply to the listed pagePath.
+- Site-scope comments apply to the whole served folder or site. Inspect related HTML files and update every clearly relevant page when the request is actionable.
+- Comments may have no selected quote. Use the body, scope, and pagePath to decide the target; mark broad or unclear requests "blocked" or "partial" instead of guessing.
 - Do not edit the comments inbox.
 - Do not edit the resolution ledger.
 - Keep changes focused on the requested local files.
@@ -699,6 +703,7 @@ function formatCommentForPrompt(comment) {
   return {
     id: comment.id,
     author: comment.author,
+    scope: comment.scope || "page",
     pagePath: comment.pagePath || "/",
     quote: comment.quote,
     body: comment.body,

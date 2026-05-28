@@ -4,7 +4,7 @@
 
 Tunelito turns any local HTML file or folder of HTML files into a temporary live review room.
 
-Run one command, share the printed URL on a call, and reviewers can select text on the page to leave live comments. You keep editing the HTML in your normal editor; connected browsers reload when files change. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
+Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the HTML in your normal editor; connected browsers reload when files change. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
 
 Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
@@ -29,7 +29,7 @@ site/
 site.comments.md
 ```
 
-Each comment includes the page path and a visible comment id, so Claude Code, Codex, or another local agent can poll that file and apply edits to the matching HTML file.
+Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can poll that file and apply edits to the matching HTML file or the whole folder when a comment is site-wide.
 
 To let a local agent handle comments while Tunelito runs:
 
@@ -74,7 +74,9 @@ tunelito ./page.html --live
 ## What Reviewers Can Do
 
 - Select text on desktop or mobile.
-- Tap `Comment` and leave a note.
+- Tap `Comment` and leave a note on the selected text.
+- Add a `Page note` without selecting text.
+- Add a `Site note` that appears on every page in a folder review.
 - See other comments appear live.
 - In `--live`, see peer cursors and live selection highlights when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
@@ -123,7 +125,7 @@ Options:
 
 ## How It Works
 
-Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox with page paths recorded per comment. The injected client handles selection, comment composition, highlights, live sync, and reload notices. The original HTML files are not modified.
+Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, and reload notices. The original HTML files are not modified.
 
 The server also:
 
@@ -169,7 +171,23 @@ The markdown is meant to be readable in any editor:
 > selected text
 
 This sentence needs a clearer verb.
+
+_Context: scope: `page` · page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
 ```
+
+Unanchored notes are stored without a selected quote:
+
+```markdown
+## Jane at 2026-05-22 18:05:00 UTC
+
+_Site note (no selected text)._
+
+Use the same heading rhythm across every itinerary page.
+
+_Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
+```
+
+If a site comment is created from selected text, Tunelito keeps the quote for context and highlights it on the origin page only.
 
 Tunelito also stores hidden metadata comments so the live session can be restored after a restart.
 
@@ -177,7 +195,7 @@ In `--live`, comments are not written to markdown and are not restored after res
 
 ## Agent Comment Loop
 
-The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `page: ...` and `id: ...` in their visible context.
+The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context.
 
 Tunelito can run the local agent worker for you:
 
@@ -218,7 +236,7 @@ Quick walkthrough:
 1. Run `npx --yes tunelito ./site --agent codex --no-tunnel --open`.
 2. Select text in the browser and leave a comment.
 3. The local worker invokes Codex for new unresolved comments.
-4. Codex edits the source HTML file named by the comment's `page: ...` context.
+4. Codex edits the source HTML file named by a page-scoped comment's `page: ...` context, or the relevant files for a site-scoped comment.
 5. Tunelito reloads connected browsers after the saved HTML change.
 
 ## Live Mode
@@ -235,9 +253,10 @@ Before sharing a live session:
 2. Wait for the `Public:` URL.
 3. Open that URL on your phone.
 4. Select text and submit a short comment.
-5. Confirm the terminal logs `Comment from ...`.
-6. Confirm `<page>.comments.md` contains the comment.
-7. Edit and save the HTML file; the phone should reload.
+5. Add a short page note or site note from the comments panel.
+6. Confirm the terminal logs `Comment from ...`.
+7. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
+8. Edit and save the HTML file; the phone should reload.
 
 For an ephemeral call, run with `--live` and skip the markdown-file check.
 

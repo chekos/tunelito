@@ -13,7 +13,7 @@ The worker does not use model API keys directly. It starts your installed local 
 npx --yes tunelito ./site --agent codex
 ```
 
-Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant page path, quote, comment body, and comment ID. Codex decides whether to edit, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
+Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant scope, page path, optional quote, comment body, and comment ID. Codex decides whether to edit, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
 
 ## Start with Claude Code
 
@@ -78,6 +78,15 @@ npx --yes tunelito ./site --agent codex --agent-prompt-file agent-system-prompt.
 ```
 
 Prompt replacement changes the behavior instructions, but Tunelito still appends the workspace context, required JSON output shape, and pending comments.
+
+## Page and site comments
+
+The worker prompt includes `scope` for every comment:
+
+- `page`: edit the HTML file identified by the comment's page path.
+- `site`: inspect the served folder and update every clearly relevant page.
+
+Comments may have no selected quote when reviewers use `Page note` or `Site note`. In that case the agent should rely on the body, scope, and page path. Broad site comments should become `blocked` or `partial` if the agent cannot safely infer the exact edit.
 
 ## Resolution state
 

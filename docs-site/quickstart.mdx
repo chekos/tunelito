@@ -23,7 +23,7 @@ Tunelito also prints the comments file path:
 Comments: /path/to/page.comments.md
 ```
 
-Reviewers select text in the browser, click `Comment`, and Tunelito writes the note to that Markdown file.
+Reviewers select text in the browser, click `Comment`, and Tunelito writes the note to that Markdown file. They can also use `Page note` for unanchored feedback on the current page or `Site note` for feedback that should appear on every page in a folder review.
 
 To review a folder-backed mini-site, pass the folder instead:
 
@@ -38,7 +38,7 @@ site/
 site.comments.md
 ```
 
-Each folder comment includes the page path, so a person or coding agent can map feedback back to the right HTML file.
+Each folder comment includes a scope and page path, so a person or coding agent can map page feedback back to the right HTML file or treat site feedback as applying across the folder.
 
 ## Start a review with local agent follow-up
 

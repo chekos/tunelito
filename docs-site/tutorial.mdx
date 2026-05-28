@@ -1,9 +1,9 @@
 ---
 title: "Tutorial: folder review with agent follow-up"
-description: "Serve a folder of HTML files, collect page-specific comments, and have a local coding agent edit the matching source files."
+description: "Serve a folder of HTML files, collect page and site comments, and have a local coding agent edit the matching source files."
 ---
 
-This walkthrough uses Tunelito as a local review server for a folder-backed mini-site. Reviewers leave comments in the browser. Tunelito writes one Markdown inbox, and an opt-in local agent worker can call Codex, Claude Code, or another CLI to edit the matching HTML files.
+This walkthrough uses Tunelito as a local review server for a folder-backed mini-site. Reviewers leave selected-text comments, page notes, or site-wide notes in the browser. Tunelito writes one Markdown inbox, and an opt-in local agent worker can call Codex, Claude Code, or another CLI to edit the matching HTML files.
 
 ## 1. Create a small HTML folder
 
@@ -67,9 +67,15 @@ Public:  https://example.trycloudflare.com/?tunelito_key=...
 
 Share the `Public:` URL with reviewers. Keep the terminal process running while the review is active.
 
-## 3. Leave a comment
+## 3. Leave comments
 
-Open the served page, select text, and click `Comment`. On another page, such as `/about.html`, comments are still written to the same Markdown file but include the page path.
+Open the served page and try three comment types:
+
+1. Select text and click `Comment`. This creates an anchored page comment and highlights the selected text when possible.
+2. Open the comments panel and click `Page note`. This creates an unanchored note for the current page.
+3. Click `Site note`. This creates a note that appears on every page in the folder review.
+
+On another page, such as `/about.html`, comments are still written to the same Markdown file. Each comment includes a scope and page path.
 
 The comments file will look like this:
 
@@ -82,7 +88,15 @@ The comments file will look like this:
 
 Make this sentence more specific.
 
-_Context: page: `/about.html` - path: `body > main > p` - text offset: 18 - id: `c_...`_
+_Context: scope: `page` · page: `/about.html` · path: `body > main > p` · text offset: 18 · id: `c_...`_
+
+## Jane at 2026-05-26 21:03:00 UTC
+
+_Site note (no selected text)._
+
+Use the same heading rhythm on every page.
+
+_Context: scope: `site` · page: `/about.html` · id: `c_...`_
 ```
 
 No marker is required by default. If you start Tunelito with `--agent-trigger "@agent"`, include `@agent` in comments that should be handled.
@@ -99,7 +113,7 @@ review-site/
     log.md
 ```
 
-When the agent saves HTML changes, Tunelito asks connected browsers to reload.
+When the agent saves HTML changes, Tunelito asks connected browsers to reload. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page; if the request is broad or unclear, the worker prompt tells the agent to return `blocked` or `partial` instead of guessing.
 
 Resolved comments are skipped on future polling cycles. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
 
@@ -114,13 +128,13 @@ npx --yes tunelito ./review-site
 Then ask a coding agent to inspect the Markdown inbox:
 
 ```text
-Monitor review-site.comments.md every 2 minutes. For each new actionable comment, use the visible page path to edit the matching HTML file. After each change, report the comment id and what changed.
+Monitor review-site.comments.md every 2 minutes. For each new actionable comment, use `scope: page` comments to edit the matching HTML file and `scope: site` comments to update all clearly relevant pages. After each change, report the comment id and what changed.
 ```
 
 For one manual pass instead of polling:
 
 ```text
-Read review-site.comments.md, address every actionable unresolved comment in the matching HTML files, then summarize comment ids and edits.
+Read review-site.comments.md, address every actionable unresolved page or site comment in the matching HTML files, then summarize comment ids and edits.
 ```
 
 ## 6. Stop the review

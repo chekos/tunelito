@@ -3,7 +3,7 @@ title: "Comments"
 description: "How Tunelito stores reviewer comments and restores live session state."
 ---
 
-Reviewers select text and leave comments from the injected Tunelito panel. Comments sync live to connected browsers and are written to Markdown immediately.
+Reviewers can select text and leave anchored comments from the injected Tunelito panel. They can also add unanchored page notes or site-wide notes without selecting text. Comments sync live to connected browsers and are written to Markdown immediately.
 
 Use `--live` when comments should be ephemeral and disappear with the local server instead of being written to disk.
 
@@ -27,6 +27,17 @@ Use `--out` to choose a different path:
 tunelito ./page.html --out ./review-notes.md
 ```
 
+## Comment scopes
+
+Tunelito stores a `scope` for every comment:
+
+- `page`: feedback belongs to the current page. Selected-text comments and page notes use this scope by default.
+- `site`: feedback belongs to the whole served folder. Site notes appear in the sidebar on every page in a folder review.
+
+Site comments still record the page where they were created. That origin page gives a person or agent useful context, but the comment is visible across the folder session.
+
+If a site comment is created from selected text, the quote is preserved for context and highlighted on the origin page only. Other pages show the sidebar entry without trying to attach that quote to unrelated text.
+
 ## Markdown format
 
 The comment file is designed to be readable:
@@ -40,14 +51,26 @@ The comment file is designed to be readable:
 
 This sentence needs a clearer verb.
 
-_Context: page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
+_Context: scope: `page` · page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
+```
+
+Unanchored notes do not include a quote block:
+
+```markdown
+## Jane at 2026-05-22 18:05:00 UTC
+
+_Site note (no selected text)._
+
+Use the same heading rhythm across every itinerary page.
+
+_Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 ```
 
 Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart.
 
 ## Agent inbox workflow
 
-The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to periodically inspect the comments file, edit the matching source HTML, and report which visible comment IDs were addressed.
+The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to periodically inspect the comments file, edit the matching source HTML for page comments, apply clearly relevant changes across the folder for site comments, and report which visible comment IDs were addressed.
 
 Tunelito can also run that polling loop for you. By default, every persistent comment is sent to the worker and the local agent decides whether to edit, return `no-op`, or mark it `ignored`:
 

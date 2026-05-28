@@ -11,15 +11,16 @@ export function defaultCommentsPath(filePath) {
 export function normalizeComment(input, now = new Date()) {
   const id = input.id || `c_${now.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const author = cleanText(input.author || "Anonymous", 80) || "Anonymous";
+  const scope = normalizeCommentScope(input.scope);
   const quote = cleanText(input.quote || "", 4000);
   const body = cleanText(input.body || input.comment || "", 8000);
 
-  if (!quote.trim()) throw new Error("Comment is missing a selected quote");
   if (!body.trim()) throw new Error("Comment body is empty");
 
   return {
     id,
     author,
+    scope,
     quote,
     body,
     prefix: cleanText(input.prefix || "", 1000),
@@ -30,6 +31,14 @@ export function normalizeComment(input, now = new Date()) {
     textEnd: Number.isFinite(input.textEnd) ? input.textEnd : null,
     created: input.created || now.toISOString(),
   };
+}
+
+export function normalizeCommentScope(scope) {
+  return String(scope || "").trim().toLowerCase() === "site" ? "site" : "page";
+}
+
+export function isSiteComment(comment) {
+  return normalizeCommentScope(comment?.scope) === "site";
 }
 
 export function createCommentStore({ commentsPath, sourcePath }) {
@@ -104,13 +113,19 @@ export function renderCommentsMarkdown({ comments, sourcePath }) {
     lines.push(`${METADATA_PREFIX} ${encodeComment(comment)} ${METADATA_SUFFIX}`);
     lines.push(`## ${comment.author} at ${formatDate(comment.created)}`);
     lines.push("");
-    for (const line of comment.quote.trim().split(/\r?\n/)) {
-      lines.push(`> ${line}`);
+    const quote = String(comment.quote || "");
+    if (quote.trim()) {
+      for (const line of quote.trim().split(/\r?\n/)) {
+        lines.push(`> ${line}`);
+      }
+    } else {
+      lines.push(`_${scopeLabel(comment.scope)} note (no selected text)._`);
     }
     lines.push("");
     lines.push(comment.body.trim());
     lines.push("");
     const context = [];
+    context.push(`scope: \`${normalizeCommentScope(comment.scope)}\``);
     if (comment.pagePath) context.push(`page: \`${comment.pagePath}\``);
     if (comment.path) context.push(`path: \`${comment.path}\``);
     if (Number.isFinite(comment.textStart)) context.push(`text offset: ${comment.textStart}`);
@@ -158,4 +173,8 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
+}
+
+function scopeLabel(scope) {
+  return normalizeCommentScope(scope) === "site" ? "Site" : "Page";
 }
