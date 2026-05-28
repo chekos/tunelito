@@ -358,6 +358,119 @@ console.log(JSON.stringify({
   assert.deepEqual(state.comments.c_stuck.filesChanged, ["index.html"]);
 });
 
+test("agent worker preserves continuation context after a retryable follow-up failure", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-followup-retry-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(join(siteDir, ".tunelito", "agent"), { recursive: true });
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const logPath = join(siteDir, ".tunelito", "agent", "log.md");
+  const callsPath = join(dir, "calls.txt");
+  const scriptPath = join(dir, "fake-agent.mjs");
+
+  const item = comment({
+    id: "c_retry",
+    quote: "Old card copy.",
+    body: "Update this card and the linked detail panel.",
+    pagePath: "/index.html",
+  });
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Old card copy.</p><p>Old panel copy.</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({ sourcePath: siteDir, comments: [item] }));
+  writeFileSync(statePath, `${JSON.stringify({
+    version: 1,
+    updatedAt: "2026-05-28T00:00:00.000Z",
+    comments: {
+      c_retry: {
+        id: "c_retry",
+        fingerprint: fingerprintComment(item),
+        status: "needs_followup",
+        attempts: 1,
+        passes: 1,
+        summary: "Updated the card copy.",
+        filesChanged: ["index.html"],
+        completedTasks: ["Update card copy"],
+        remainingTasks: ["Update linked detail panel"],
+        lastPassAt: "2026-05-28T00:00:00.000Z",
+      },
+    },
+  }, null, 2)}\n`);
+  writeFileSync(scriptPath, `
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const prompt = await new Promise((resolve) => {
+  let raw = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => { raw += chunk; });
+  process.stdin.on("end", () => resolve(raw));
+});
+const calls = process.env.TUNELITO_TEST_CALLS;
+const next = (existsSync(calls) ? Number(readFileSync(calls, "utf8")) : 0) + 1;
+writeFileSync(calls, String(next));
+if (next === 1) {
+  console.log(JSON.stringify({
+    comments: [{ id: "other_comment", status: "resolved" }]
+  }));
+} else {
+  if (!prompt.includes('"continuation"')) throw new Error("missing continuation block after retry");
+  if (!prompt.includes("Update linked detail panel")) throw new Error("missing remaining task after retry");
+  const html = readFileSync("index.html", "utf8").replace("Old panel copy.", "Detail panel copy is now finished.");
+  writeFileSync("index.html", html);
+  console.log(JSON.stringify({
+    comments: [{
+      id: "c_retry",
+      status: "resolved",
+      summary: "Finished the detail panel.",
+      filesChanged: ["index.html"],
+      completedTasks: ["Update linked detail panel"],
+      remainingTasks: []
+    }]
+  }));
+}
+`);
+
+  process.env.TUNELITO_TEST_CALLS = callsPath;
+  try {
+    const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)}`;
+    const first = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 3,
+      maxPasses: 4,
+      log() {},
+    });
+    assert.equal(first.statuses.c_retry, "pending");
+    assert.equal(loadAgentState(statePath).comments.c_retry.previousStatus, "needs_followup");
+
+    const second = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 3,
+      maxPasses: 4,
+      log() {},
+    });
+
+    assert.equal(second.statuses.c_retry, "resolved");
+    const state = loadAgentState(statePath);
+    assert.equal(state.comments.c_retry.status, "resolved");
+    assert.equal(state.comments.c_retry.passes, 2);
+    assert.deepEqual(state.comments.c_retry.completedTasks, ["Update card copy", "Update linked detail panel"]);
+    assert.match(readFileSync(join(siteDir, "index.html"), "utf8"), /Detail panel copy is now finished/);
+  } finally {
+    delete process.env.TUNELITO_TEST_CALLS;
+  }
+});
+
 test("agent worker blocks comments when the agent output is not structured JSON", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-invalid-"));
   const siteDir = join(dir, "site");
