@@ -127,7 +127,7 @@
           max-height: calc(100vh - 32px);
           z-index: 2147483646;
           display: none;
-          grid-template-rows: auto auto 1fr auto;
+          grid-template-rows: auto auto auto 1fr auto;
           overflow: hidden;
           border: 1px solid rgba(15, 23, 42, .14);
           border-radius: 10px;
@@ -174,6 +174,16 @@
           border-bottom: 1px solid #eef2f7;
           background: #f8fafc;
         }
+        .note-actions {
+          display: flex;
+          gap: 8px;
+          padding: 10px 14px;
+          border-bottom: 1px solid #eef2f7;
+          background: #fff;
+        }
+        .note-actions button {
+          flex: 1;
+        }
         input, textarea {
           width: 100%;
           border: 1px solid #d7dde8;
@@ -208,6 +218,10 @@
           border-left: 3px solid #99f6e4;
           padding-left: 8px;
           margin-bottom: 8px;
+        }
+        .quote.note {
+          color: #64748b;
+          border-left-color: #cbd5e1;
         }
         .meta {
           color: #64748b;
@@ -291,6 +305,37 @@
           padding: 12px;
         }
         .composer.open { display: block; }
+        .composer-meta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 9px;
+        }
+        .composer-scope {
+          color: #64748b;
+          font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .scope-toggle {
+          display: inline-flex;
+          border: 1px solid #d7dde8;
+          border-radius: 7px;
+          overflow: hidden;
+        }
+        .scope-toggle button {
+          border: 0;
+          border-right: 1px solid #d7dde8;
+          background: #fff;
+          color: #334155;
+          font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 7px 9px;
+          cursor: pointer;
+        }
+        .scope-toggle button:last-child { border-right: 0; }
+        .scope-toggle button.active {
+          background: #0f766e;
+          color: #fff;
+        }
         .composer .actions {
           display: flex;
           justify-content: flex-end;
@@ -359,6 +404,13 @@
       <button class="launcher" title="Open Tunelito comments">Comments <span class="count">0</span></button>
       <button class="selection">Comment</button>
       <div class="composer" role="dialog" aria-label="Add comment">
+        <div class="composer-meta">
+          <span class="composer-scope">Page comment</span>
+          <div class="scope-toggle" role="group" aria-label="Comment scope">
+            <button type="button" data-scope="page">Page</button>
+            <button type="button" data-scope="site">Site</button>
+          </div>
+        </div>
         <div class="quote"></div>
         <textarea placeholder="Leave a comment on this selection"></textarea>
         <div class="actions">
@@ -376,6 +428,10 @@
         </div>
         <div class="identity">
           <input class="name" autocomplete="name" placeholder="Your name" />
+        </div>
+        <div class="note-actions" aria-label="Add unanchored comment">
+          <button class="secondary" data-action="page-note">Page note</button>
+          <button class="secondary" data-action="site-note">Site note</button>
         </div>
         <div class="comments"></div>
         <div class="footer">
@@ -410,6 +466,11 @@
       event.preventDefault();
       openComposer();
     });
+    shadow.querySelector("[data-action='page-note']").addEventListener("click", () => openNoteComposer("page"));
+    shadow.querySelector("[data-action='site-note']").addEventListener("click", () => openNoteComposer("site"));
+    for (const button of composer.querySelectorAll("[data-scope]")) {
+      button.addEventListener("click", () => setComposerScope(button.dataset.scope));
+    }
     composer.querySelector("[data-action='cancel']").addEventListener("click", closeComposer);
     composer.querySelector("[data-action='save']").addEventListener("click", submitComment);
     composer.querySelector("textarea").addEventListener("keydown", (event) => {
@@ -506,6 +567,7 @@
       }
     }
     return {
+      scope: "page",
       quote,
       prefix,
       suffix,
@@ -520,7 +582,8 @@
     if (!state.pendingSelection) return;
     hideSelectionButton();
     const rect = state.pendingSelection.rect || (window.getSelection()?.rangeCount ? rectSnapshot(window.getSelection().getRangeAt(0).getBoundingClientRect()) : null);
-    ui.composer.querySelector(".quote").textContent = state.pendingSelection.quote.slice(0, 260);
+    state.pendingSelection.scope = normalizeScope(state.pendingSelection.scope);
+    setComposerScope(state.pendingSelection.scope);
     ui.composer.querySelector("textarea").value = "";
     if (isMobileViewport()) {
       ui.composer.style.left = "";
@@ -533,9 +596,50 @@
     ui.composer.querySelector("textarea").focus();
   }
 
+  function openNoteComposer(scope) {
+    ui.panel.classList.add("open");
+    hideSelectionButton();
+    window.getSelection()?.removeAllRanges();
+    state.pendingSelection = {
+      scope: normalizeScope(scope),
+      quote: "",
+      prefix: "",
+      suffix: "",
+      path: "",
+      textStart: null,
+      textEnd: null,
+      rect: null,
+    };
+    openComposer();
+  }
+
   function closeComposer() {
     ui.composer.classList.remove("open");
     state.pendingSelection = null;
+  }
+
+  function setComposerScope(scope) {
+    if (!state.pendingSelection) return;
+    state.pendingSelection.scope = normalizeScope(scope);
+    for (const button of ui.composer.querySelectorAll("[data-scope]")) {
+      button.classList.toggle("active", button.dataset.scope === state.pendingSelection.scope);
+    }
+    ui.composer.querySelector(".composer-scope").textContent = `${scopeLabel(state.pendingSelection.scope)} comment`;
+    const textarea = ui.composer.querySelector("textarea");
+    textarea.placeholder = state.pendingSelection.quote.trim()
+      ? "Leave a comment on this selection"
+      : `Leave a ${state.pendingSelection.scope} note`;
+    updateComposerPreview();
+  }
+
+  function updateComposerPreview() {
+    if (!state.pendingSelection) return;
+    const quote = ui.composer.querySelector(".quote");
+    const hasQuote = Boolean(state.pendingSelection.quote.trim());
+    quote.textContent = hasQuote
+      ? state.pendingSelection.quote.slice(0, 260)
+      : `${scopeLabel(state.pendingSelection.scope)} note (no selected text)`;
+    quote.classList.toggle("note", !hasQuote);
   }
 
   function submitComment() {
@@ -551,6 +655,7 @@
     const comment = {
       ...(state.liveMode ? { id: createEventId("c"), created: new Date().toISOString() } : {}),
       ...state.pendingSelection,
+      scope: normalizeScope(state.pendingSelection.scope),
       body,
       author,
       pagePath: state.pagePath,
@@ -577,7 +682,7 @@
   function renderComments() {
     ui.count.textContent = String(state.comments.length);
     if (!state.comments.length) {
-      ui.comments.innerHTML = `<div class="empty">Select text on the page to leave the first comment.</div>`;
+      ui.comments.innerHTML = `<div class="empty">Select text, or add a page or site note.</div>`;
       updateHighlights();
       return;
     }
@@ -591,8 +696,12 @@
         <div class="quote"></div>
         <div class="body"></div>
       `;
-      item.querySelector(".meta").textContent = `${comment.author} · ${formatTime(comment.created)}`;
-      item.querySelector(".quote").textContent = compact(comment.quote, 220);
+      const scope = normalizeScope(comment.scope);
+      const quote = item.querySelector(".quote");
+      const hasQuote = Boolean(String(comment.quote || "").trim());
+      item.querySelector(".meta").textContent = `${comment.author} · ${scope} · ${formatTime(comment.created)}`;
+      quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
+      quote.classList.toggle("note", !hasQuote);
       item.querySelector(".body").textContent = comment.body;
       item.addEventListener("click", () => scrollToComment(comment));
       ui.comments.appendChild(item);
@@ -903,6 +1012,8 @@
   }
 
   function findRangeForComment(comment) {
+    if (!String(comment?.quote || "").trim()) return null;
+    if (normalizeScope(comment.scope) === "site" && comment.pagePath && normalizePagePath(comment.pagePath) !== normalizePagePath(state.pagePath)) return null;
     const textNodes = getTextNodes(document.body);
     const fullText = textNodes.map((entry) => entry.node.textContent).join("");
     const exact = comment.prefix || comment.suffix ? `${comment.prefix}${comment.quote}${comment.suffix}` : null;
@@ -1052,6 +1163,19 @@
   function compact(value, length) {
     const text = String(value || "").replace(/\s+/g, " ").trim();
     return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+  }
+
+  function normalizeScope(scope) {
+    return String(scope || "").toLowerCase() === "site" ? "site" : "page";
+  }
+
+  function scopeLabel(scope) {
+    return normalizeScope(scope) === "site" ? "Site" : "Page";
+  }
+
+  function normalizePagePath(path) {
+    const value = String(path || "/");
+    return value.startsWith("/") ? value : `/${value}`;
   }
 
   function createEventId(prefix) {

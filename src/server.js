@@ -4,7 +4,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, readdirSync, realpathSync, statSync, watch } from "node:fs";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, renderCommentsMarkdown } from "./comments.js";
+import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, renderCommentsMarkdown } from "./comments.js";
 import { CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
@@ -83,7 +83,7 @@ export async function createTunelitoServer(options) {
 
   function commentsForPage(pagePath) {
     if (!directoryMode) return comments.all();
-    return comments.all().filter((comment) => normalizePagePath(comment.pagePath) === pagePath);
+    return comments.all().filter((comment) => isSiteComment(comment) || normalizePagePath(comment.pagePath) === pagePath);
   }
 
   function peerListForPage(pagePath, exceptId = "") {
@@ -103,6 +103,15 @@ export async function createTunelitoServer(options) {
       const peer = peers.get(client);
       if (peer?.pagePath === pagePath) client.send(data);
     }
+  }
+
+  function broadcastComment(comment) {
+    const data = { type: "comment", comment };
+    if (!directoryMode || isSiteComment(comment)) {
+      hub.broadcast(data);
+      return;
+    }
+    broadcastToPage(normalizePagePath(comment.pagePath), data);
   }
 
   hub.on("connection", (client, req) => {
@@ -153,7 +162,7 @@ export async function createTunelitoServer(options) {
       try {
         const comment = comments.add({ ...(event.comment || {}), pagePath: peer?.pagePath || normalizePagePath(event.comment?.pagePath) });
         events.emit("comment", comment);
-        broadcastToPage(normalizePagePath(comment.pagePath), { type: "comment", comment });
+        broadcastComment(comment);
       } catch (error) {
         client.send({ type: "error", message: error.message });
       }

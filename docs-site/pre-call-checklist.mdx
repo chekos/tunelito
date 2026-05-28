@@ -15,10 +15,11 @@ Use this before sharing a live session.
 3. Wait for the `Public:` URL.
 4. Open the public URL on your phone.
 5. Select text and submit a short comment.
-6. Confirm the terminal logs `Comment from ...`.
-7. Confirm `<page>.comments.md` contains the comment.
-8. Edit and save the HTML file.
-9. Confirm the phone reloads.
+6. Add a short page note or site note from the comments panel.
+7. Confirm the terminal logs `Comment from ...`.
+8. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
+9. Edit and save the HTML file.
+10. Confirm the phone reloads.
 
 For an ephemeral call where comments should not be written to disk, run `npx --yes tunelito ./page.html --live` and skip the markdown-file check.
 

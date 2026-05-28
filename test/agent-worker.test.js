@@ -183,6 +183,31 @@ test("agent queue skips resolved comments and marks changed resolved comments fo
   assert.equal(state.comments.c_done.status, "changed_needs_review");
 });
 
+test("agent fingerprint and prompt include comment scope", () => {
+  const pageNote = comment({
+    id: "c_scope",
+    scope: "page",
+    quote: "",
+    body: "Add a stronger one-day summary.",
+  });
+  const siteNote = { ...pageNote, scope: "site" };
+
+  assert.notEqual(fingerprintComment(pageNote), fingerprintComment(siteNote));
+
+  const prompt = buildAgentPrompt({
+    comments: [siteNote],
+    commentsPath: "/tmp/site.comments.md",
+    workspaceRoot: "/tmp/site",
+    statePath: "/tmp/site/.tunelito/agent/state.json",
+    trigger: DEFAULT_AGENT_TRIGGER,
+    maxAttempts: 2,
+  });
+
+  assert.match(prompt, /"scope": "site"/);
+  assert.match(prompt, /Site-scope comments/);
+  assert.match(prompt, /may have no selected quote/);
+});
+
 test("agent trigger defaults to all comments and supports explicit mention filters", () => {
   const unmentioned = comment({ id: "c_2", body: "Make this shorter." });
   const mentioned = comment({ id: "c_3", body: "@Agent Make this shorter." });
@@ -294,6 +319,7 @@ function comment(overrides = {}) {
   return {
     id: "c_test",
     author: "Jane",
+    scope: "page",
     quote: "Explain the project here.",
     body: "Make this more specific.",
     prefix: "",
