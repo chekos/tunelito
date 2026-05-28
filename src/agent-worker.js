@@ -784,15 +784,18 @@ function formatCommentForPrompt(comment, existing, { maxPasses } = {}) {
     textEnd: comment.textEnd,
     created: comment.created,
   };
-  if (existing?.status === "needs_followup") {
+  const hasContinuationContext = existing?.status === "needs_followup" || existing?.previousStatus === "needs_followup";
+  if (hasContinuationContext) {
     formatted.continuation = {
-      status: existing.status,
+      status: "needs_followup",
+      retryStatus: existing.status || "",
       passesCompleted: Number(existing.passes || 0),
       maxPasses,
       previousSummary: existing.summary || "",
       filesChanged: normalizeStringList(existing.filesChanged),
       completedTasks: normalizeStringList(existing.completedTasks),
       remainingTasks: normalizeStringList(existing.remainingTasks),
+      lastError: existing.lastError || "",
       lastPassAt: existing.lastPassAt || existing.updatedAt || "",
     };
   }
