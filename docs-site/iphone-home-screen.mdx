@@ -1,0 +1,128 @@
+---
+title: "iPhone Home Screen"
+description: "Make a Tunelito-served HTML folder behave like a standalone iPhone web app."
+---
+
+Tunelito can serve any local HTML folder, but iPhone Home Screen behavior belongs to the site you are serving. If a saved Home Screen icon opens internal links in an in-app browser or Safari-like overlay, the folder likely needs web app metadata.
+
+Tunelito should not inject this metadata by default. The app name, icons, launch page, and navigation scope are part of the reviewed site.
+
+## When to use this
+
+Use this guide when:
+
+- you serve a folder-backed mini-site with Tunelito
+- you add the Tunelito URL to your iPhone Home Screen
+- tapping internal links opens a browser sheet instead of staying in the saved app
+- you want a trip itinerary, prototype, or review site to feel like an app on mobile
+
+External links are different. Maps, `tel:` links, reservation pages, Tabelog, and other off-site URLs can still open outside the saved app.
+
+## Add web app metadata
+
+Add a manifest file to the folder root:
+
+```json
+{
+  "name": "Japan 2026",
+  "short_name": "Japan",
+  "start_url": "/itinerary-mobile.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
+```
+
+Use a `start_url` that points to your hub page. Use a `scope` that covers every internal page you want to keep inside the Home Screen app.
+
+Then add these tags to every HTML page:
+
+```html
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Japan 2026">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1115">
+```
+
+Keep the viewport tag too:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+```
+
+## Keep internal links in scope
+
+Internal links should be same-origin and inside the manifest scope:
+
+```html
+<a href="itinerary-day-04.html">Day 4</a>
+<a href="/itinerary-day-04.html">Day 4</a>
+```
+
+Avoid opening internal app pages in a new browsing context:
+
+```html
+<!-- Avoid this for internal pages -->
+<a href="itinerary-day-04.html" target="_blank">Day 4</a>
+```
+
+It is fine for external links to use `target="_blank"`:
+
+```html
+<a href="https://maps.google.com/?q=Kanazawa" target="_blank" rel="noopener">Map</a>
+```
+
+## Prompt a coding agent
+
+For an existing Tunelito folder, ask Claude Code, Codex, or another local agent:
+
+```text
+Make this HTML folder work well when added to an iPhone Home Screen.
+
+Add a manifest.webmanifest with display standalone, a start_url pointing at the main hub page, and a scope that includes every internal HTML page. Add iOS apple-mobile-web-app meta tags, theme color, and apple-touch-icon links to every HTML page. Keep internal links same-origin and inside the app scope with no target="_blank". External links like Google Maps, restaurant pages, and tel: links can still open outside the app.
+```
+
+If the folder is a trip itinerary, include the app name and launch page:
+
+```text
+Use app name "Japan 2026" and start_url "/itinerary-mobile.html".
+```
+
+## Test on iPhone
+
+1. Start Tunelito:
+
+   ```bash
+   npx --yes tunelito ./site --no-tunnel
+   ```
+
+2. Open the served URL in Safari on iPhone.
+3. Use Share > Add to Home Screen.
+4. Launch the saved icon.
+5. Tap internal links between pages. They should navigate inside the saved app.
+6. Tap external links. They may open Safari, Maps, Phone, or another app.
+
+If links still escape, check:
+
+- the page has the manifest and Apple meta tags
+- the manifest `scope` covers the clicked URL
+- the link is same-origin
+- the link does not use `target="_blank"` for internal pages
+- the Home Screen icon was re-added after metadata changed
+
+## References
+
+- [Apple: Configuring Web Applications](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html)
+- [Apple Support: Turn a website into an app in Safari on iPhone](https://support.apple.com/en-mide/guide/iphone/iphea86e5236/ios)
+- [MDN: Create a standalone app](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Create_a_standalone_app)

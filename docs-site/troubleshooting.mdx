@@ -33,6 +33,10 @@ Tunelito does not configure third-party STUN or TURN servers.
 
 Mobile browsers expose selection events differently. Try selecting a shorter phrase, then tap the Tunelito comment button once it appears.
 
+## Home Screen links open a browser sheet
+
+This is usually site metadata, not Tunelito. Add a web app manifest plus iOS Home Screen meta tags to the HTML folder, and keep internal links inside the manifest scope without `target="_blank"`. See the [iPhone Home Screen guide](/iphone-home-screen).
+
 ## Page JavaScript behaves differently
 
 Tunelito removes strict in-page CSP meta tags from the served response so the injected same-origin client can run. It does not write that change back to disk.
