@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import {
   DEFAULT_AGENT_INTERVAL_SECONDS,
   DEFAULT_AGENT_MAX_ATTEMPTS,
+  DEFAULT_AGENT_MAX_PASSES,
   DEFAULT_AGENT_TRIGGER,
   defaultAgentLogPath,
   createAgentWorker,
@@ -43,6 +44,8 @@ Options:
                         Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: ${DEFAULT_AGENT_MAX_ATTEMPTS})
+  --agent-max-passes <n>
+                        Stop continuing a multi-pass comment after n agent passes (default: ${DEFAULT_AGENT_MAX_PASSES})
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
@@ -62,6 +65,7 @@ export function parseArgs(argv) {
     agentIntervalSeconds: DEFAULT_AGENT_INTERVAL_SECONDS,
     agentTrigger: DEFAULT_AGENT_TRIGGER,
     agentMaxAttempts: DEFAULT_AGENT_MAX_ATTEMPTS,
+    agentMaxPasses: DEFAULT_AGENT_MAX_PASSES,
   };
   const positional = [];
 
@@ -118,6 +122,13 @@ export function parseArgs(argv) {
         throw new Error(`Invalid --agent-max-attempts value: ${value}`);
       }
       opts.agentMaxAttempts = attempts;
+    } else if (arg === "--agent-max-passes") {
+      const value = argv[++i];
+      const passes = Number.parseInt(value, 10);
+      if (!Number.isInteger(passes) || passes < 1) {
+        throw new Error(`Invalid --agent-max-passes value: ${value}`);
+      }
+      opts.agentMaxPasses = passes;
     } else if (arg === "--agent-state") {
       const value = argv[++i];
       if (!value || value.startsWith("--")) throw new Error("--agent-state requires a value");
@@ -235,6 +246,7 @@ async function main() {
       intervalSeconds: opts.agentIntervalSeconds,
       trigger: opts.agentTrigger,
       maxAttempts: opts.agentMaxAttempts,
+      maxPasses: opts.agentMaxPasses,
       promptAppend: agentPromptOptions.append,
       promptOverride: agentPromptOptions.override,
     })

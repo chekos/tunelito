@@ -35,8 +35,10 @@ The local agent worker owns comment follow-up when `--agent` is enabled:
 - keep `.tunelito/agent/state.json` as the durable resolution ledger
 - invoke Codex, Claude Code, or a custom local command with a bounded prompt
 - require structured JSON results before marking comments resolved
+- continue any inline, page, or site comment that returns `needs_followup`, carrying forward completed and remaining tasks
 - write `.tunelito/agent/log.md` for readable run history
-- skip comments already marked `resolved`, `no-op`, `blocked`, `stale`, `ignored`, or `partial`
+- skip comments already marked `resolved`, `no-op`, `blocked`, `stale`, `ignored`, `partial`, or `changed_needs_review`
+- stop continuation when `--agent-max-passes` is reached or a follow-up pass reports no observable progress
 
 The browser client owns reviewer interaction:
 

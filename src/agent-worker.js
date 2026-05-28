@@ -18,10 +18,11 @@ import { loadCommentsFromMarkdown } from "./comments.js";
 export const DEFAULT_AGENT_INTERVAL_SECONDS = 120;
 export const DEFAULT_AGENT_TRIGGER = "all";
 export const DEFAULT_AGENT_MAX_ATTEMPTS = 2;
+export const DEFAULT_AGENT_MAX_PASSES = 3;
 
 const STATE_VERSION = 1;
 const TERMINAL_STATUSES = new Set(["resolved", "no-op", "blocked", "stale", "ignored", "partial", "changed_needs_review"]);
-const RESULT_STATUSES = new Set(["resolved", "no-op", "blocked", "stale", "ignored", "partial"]);
+const RESULT_STATUSES = new Set(["resolved", "no-op", "blocked", "stale", "ignored", "partial", "needs_followup"]);
 const CAPTURE_LIMIT = 200_000;
 
 export function createAgentWorker({
@@ -33,13 +34,14 @@ export function createAgentWorker({
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
   promptAppend = "",
   promptOverride = "",
   spawnFn = spawn,
   now = () => new Date(),
   log = console.log,
 } = {}) {
-  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, promptAppend, promptOverride });
+  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, maxPasses, promptAppend, promptOverride });
   let timer = null;
   let running = false;
   let stopped = false;
@@ -118,7 +120,8 @@ export async function runAgentPass({
   statePath,
   logPath,
   trigger,
-  maxAttempts,
+  maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
   promptAppend,
   promptOverride,
   reason = "manual",
@@ -141,20 +144,23 @@ export async function runAgentPass({
   }
 
   const comments = loadCommentsFromMarkdown(commentsPath);
-  const prepared = prepareAgentQueue(comments, state, { trigger, maxAttempts, now });
+  const prepared = prepareAgentQueue(comments, state, { trigger, maxAttempts, maxPasses, now });
   if (prepared.changed) saveAgentState(statePath, state, now);
   if (!prepared.pending.length) return { processed: 0, reason: "no-pending-comments" };
 
   const runId = `run_${now().getTime().toString(36)}`;
   const startedAt = now().toISOString();
+  const priorStatesById = Object.fromEntries(prepared.pending.map((item) => [item.comment.id, state.comments[item.comment.id] || null]));
   for (const item of prepared.pending) {
-    const attempts = Number(state.comments[item.comment.id]?.attempts || 0) + 1;
+    const existing = state.comments[item.comment.id] || {};
+    const attempts = Number(existing.attempts || 0) + 1;
     state.comments[item.comment.id] = {
-      ...state.comments[item.comment.id],
+      ...existing,
       id: item.comment.id,
       fingerprint: item.fingerprint,
       status: "in_progress",
       attempts,
+      previousStatus: existing.status || null,
       pagePath: item.comment.pagePath || "",
       quote: preview(item.comment.quote),
       body: preview(item.comment.body),
@@ -172,6 +178,8 @@ export async function runAgentPass({
     statePath,
     trigger,
     maxAttempts,
+    maxPasses,
+    commentStates: priorStatesById,
     promptAppend,
     promptOverride,
   });
@@ -249,7 +257,7 @@ export async function runAgentPass({
       statuses[item.comment.id] = state.comments[item.comment.id].status;
       continue;
     }
-    markResult(state, item.comment, item.fingerprint, result, finishedAt);
+    markResult(state, item.comment, item.fingerprint, result, { now: finishedAt, maxPasses });
     statuses[item.comment.id] = state.comments[item.comment.id].status;
   }
 
@@ -279,6 +287,7 @@ export function normalizeAgentConfig({
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
   promptAppend = "",
   promptOverride = "",
 } = {}) {
@@ -293,6 +302,7 @@ export function normalizeAgentConfig({
   if (!targetPath) throw new Error("--agent requires a target HTML file or folder");
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 1) throw new Error("--agent-interval must be a positive number of seconds");
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
+  if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
 
   const workspaceRoot = agentWorkspaceRoot(targetPath);
   const resolvedStatePath = resolve(statePath || defaultAgentStatePath(targetPath));
@@ -307,6 +317,7 @@ export function normalizeAgentConfig({
     intervalSeconds,
     trigger: trigger || DEFAULT_AGENT_TRIGGER,
     maxAttempts,
+    maxPasses,
     promptAppend: normalizePromptText(promptAppend),
     promptOverride: normalizePromptText(promptOverride),
   };
@@ -348,7 +359,7 @@ export function saveAgentState(statePath, state, now = () => new Date()) {
   renameSync(temp, statePath);
 }
 
-export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRIGGER, maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS, now = () => new Date() } = {}) {
+export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRIGGER, maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS, maxPasses = DEFAULT_AGENT_MAX_PASSES, now = () => new Date() } = {}) {
   const pending = [];
   let changed = false;
   for (const comment of comments) {
@@ -371,7 +382,15 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
     }
 
     if (isTerminalStatus(existing?.status)) continue;
-    if (Number(existing?.attempts || 0) >= maxAttempts) {
+    if (existing?.status === "needs_followup" && Number(existing?.passes || 0) >= maxPasses) {
+      markPassLimitPartial(state, comment, fingerprint, {
+        now: now().toISOString(),
+        maxPasses,
+      });
+      changed = true;
+      continue;
+    }
+    if (failureAttempts(existing) >= maxAttempts) {
       markBlocked(state, comment, fingerprint, {
         now: now().toISOString(),
         error: `Attempt limit reached (${maxAttempts}).`,
@@ -402,7 +421,7 @@ export function commentMatchesTrigger(comment, trigger = DEFAULT_AGENT_TRIGGER) 
   return text.toLowerCase().includes(String(trigger).toLowerCase());
 }
 
-export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, promptAppend = "", promptOverride = "" }) {
+export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, commentStates = {}, promptAppend = "", promptOverride = "" }) {
   const behavior = normalizePromptText(promptOverride) || defaultAgentBehaviorPrompt();
   const hostInstructions = normalizePromptText(promptAppend);
   const sections = [
@@ -414,7 +433,8 @@ export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, stateP
 - Comments inbox: ${commentsPath}
 - Resolution ledger: ${statePath}
 - Trigger: ${trigger}
-- Max attempts per comment: ${maxAttempts}`,
+- Max retry attempts per comment: ${maxAttempts}
+- Max passes per comment: ${maxPasses}`,
     `## Output Contract
 
 Return only JSON as your final response. Do not wrap it in Markdown. Use this shape:
@@ -423,15 +443,17 @@ Return only JSON as your final response. Do not wrap it in Markdown. Use this sh
   "comments": [
     {
       "id": "comment id",
-      "status": "resolved | no-op | blocked | stale | ignored | partial",
+      "status": "resolved | no-op | blocked | stale | ignored | partial | needs_followup",
       "summary": "short description",
-      "filesChanged": ["relative/path.html"]
+      "filesChanged": ["relative/path.html"],
+      "completedTasks": ["work completed this pass"],
+      "remainingTasks": ["specific work to continue on a later pass"]
     }
   ]
 }`,
     `## Comments To Address
 
-${JSON.stringify(comments.map(formatCommentForPrompt), null, 2)}`,
+${JSON.stringify(comments.map((comment) => formatCommentForPrompt(comment, commentStates[comment.id], { maxPasses })), null, 2)}`,
   ].filter(Boolean);
 
   return `${sections.join("\n\n")}\n`;
@@ -526,6 +548,8 @@ export function normalizeResultPayload(payload) {
     stale: "stale",
     ignored: "ignored",
     partial: "partial",
+    needsFollowup: "needs_followup",
+    needs_followup: "needs_followup",
   })) {
     if (!Array.isArray(payload?.[key])) continue;
     for (const item of payload[key]) {
@@ -541,7 +565,7 @@ export function describeAgentConfig(config) {
   const trigger = config.trigger === "all" ? "all comments" : `comments containing "${config.trigger}"`;
   const provider = config.provider === "custom" ? `custom command (${config.command})` : config.provider;
   const prompt = config.promptOverride ? "; custom prompt" : config.promptAppend ? "; extra instructions" : "";
-  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s${prompt}; state ${config.statePath}`;
+  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s; max ${config.maxPasses} passes${prompt}; state ${config.statePath}`;
 }
 
 export function defaultAgentBehaviorPrompt() {
@@ -559,9 +583,13 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 - Return status "stale" or "blocked" when the quoted text or target page cannot be found, or when the request is too ambiguous to complete safely.
 - Address only the comment IDs listed below.
 - Use each comment's pagePath to find the matching HTML file. For pagePath "/", inspect index.html if it exists.
-- Page-scope comments apply to the listed pagePath.
+- Page-scope comments apply to the listed pagePath. They may be anchored inline selections or unanchored page notes.
 - Site-scope comments apply to the whole served folder or site. Inspect related HTML files and update every clearly relevant page when the request is actionable.
 - Comments may have no selected quote. Use the body, scope, and pagePath to decide the target; mark broad or unclear requests "blocked" or "partial" instead of guessing.
+- If an actionable comment is too large for one safe pass, complete one coherent slice now and return status "needs_followup" with completedTasks and remainingTasks.
+- Continuation can apply to any comment scope: inline selected-text comments, page notes, and site notes.
+- When a comment includes continuation context, continue from the listed remainingTasks and do not redo completedTasks.
+- Return "resolved" only when the comment is fully addressed. Return "partial" when some work was done but you are stopping because the remaining work is ambiguous, unsafe, or beyond the pass limit.
 - Do not edit the comments inbox.
 - Do not edit the resolution ledger.
 - Keep changes focused on the requested local files.
@@ -576,7 +604,9 @@ function normalizeSingleResult(item) {
     id: String(item.id),
     status,
     summary: String(item.summary || item.message || ""),
-    filesChanged: Array.isArray(item.filesChanged) ? item.filesChanged.map(String) : [],
+    filesChanged: normalizeStringList(item.filesChanged),
+    completedTasks: normalizeStringList(item.completedTasks),
+    remainingTasks: normalizeStringList(item.remainingTasks),
   };
 }
 
@@ -584,6 +614,7 @@ function normalizeStatus(status) {
   const value = String(status || "").trim().toLowerCase();
   if (value === "noop" || value === "no_op") return "no-op";
   if (value === "success" || value === "complete" || value === "completed") return "resolved";
+  if (value === "needs-followup" || value === "needs-follow-up" || value === "needs followup" || value === "needs follow-up" || value === "followup" || value === "follow-up" || value === "continue") return "needs_followup";
   return value;
 }
 
@@ -601,24 +632,51 @@ function resultCandidates(output) {
   return candidates;
 }
 
-function markResult(state, comment, fingerprint, result, now) {
+function markResult(state, comment, fingerprint, result, { now, maxPasses }) {
+  const previous = state.comments[comment.id] || {};
+  const passes = Number(previous.passes || 0) + 1;
+  let status = result.status;
+  let lastError = null;
+
+  const wasContinuation = previous.status === "needs_followup" || previous.previousStatus === "needs_followup";
+  if (status === "needs_followup" && wasContinuation && !hasContinuationProgress(previous, result)) {
+    status = "partial";
+    lastError = "Agent requested follow-up without observable progress.";
+  }
+  if (status === "needs_followup" && !result.remainingTasks.length) {
+    status = "partial";
+    lastError = "Agent requested follow-up without remaining tasks.";
+  }
+  if (status === "needs_followup" && passes >= maxPasses) {
+    status = "partial";
+    lastError = `Pass limit reached (${maxPasses}).`;
+  }
+
+  const completedAt = status === "needs_followup" ? null : now;
+  const filesChanged = mergeStringLists(previous.filesChanged, result.filesChanged);
+  const completedTasks = mergeStringLists(previous.completedTasks, result.completedTasks);
   state.comments[comment.id] = {
-    ...state.comments[comment.id],
+    ...previous,
     id: comment.id,
     fingerprint,
-    status: result.status,
+    status,
     summary: result.summary,
-    filesChanged: result.filesChanged,
-    completedAt: now,
+    filesChanged,
+    completedTasks,
+    remainingTasks: result.remainingTasks,
+    passes,
+    lastPassAt: now,
+    completedAt,
+    previousStatus: undefined,
     updatedAt: now,
-    lastError: null,
+    lastError,
   };
 }
 
 function markRetryOrBlocked(state, comment, fingerprint, { now, maxAttempts, error }) {
-  const attempts = Number(state.comments[comment.id]?.attempts || 0);
-  if (attempts >= maxAttempts) {
-    markBlocked(state, comment, fingerprint, { now, error });
+  const failures = failureAttempts(state.comments[comment.id]) + 1;
+  if (failures >= maxAttempts) {
+    markBlocked(state, comment, fingerprint, { now, error, failures });
     return;
   }
   state.comments[comment.id] = {
@@ -627,17 +685,31 @@ function markRetryOrBlocked(state, comment, fingerprint, { now, maxAttempts, err
     fingerprint,
     status: "pending",
     lastError: error,
+    failures,
     updatedAt: now,
   };
 }
 
-function markBlocked(state, comment, fingerprint, { now, error }) {
+function markBlocked(state, comment, fingerprint, { now, error, failures }) {
   state.comments[comment.id] = {
     ...state.comments[comment.id],
     id: comment.id,
     fingerprint,
     status: "blocked",
     lastError: error,
+    failures: typeof failures === "number" ? failures : state.comments[comment.id]?.failures,
+    completedAt: now,
+    updatedAt: now,
+  };
+}
+
+function markPassLimitPartial(state, comment, fingerprint, { now, maxPasses }) {
+  state.comments[comment.id] = {
+    ...state.comments[comment.id],
+    id: comment.id,
+    fingerprint,
+    status: "partial",
+    lastError: `Pass limit reached (${maxPasses}).`,
     completedAt: now,
     updatedAt: now,
   };
@@ -699,8 +771,8 @@ function wrapSpawn(spawnFn, onChild) {
   };
 }
 
-function formatCommentForPrompt(comment) {
-  return {
+function formatCommentForPrompt(comment, existing, { maxPasses } = {}) {
+  const formatted = {
     id: comment.id,
     author: comment.author,
     scope: comment.scope || "page",
@@ -712,6 +784,19 @@ function formatCommentForPrompt(comment) {
     textEnd: comment.textEnd,
     created: comment.created,
   };
+  if (existing?.status === "needs_followup") {
+    formatted.continuation = {
+      status: existing.status,
+      passesCompleted: Number(existing.passes || 0),
+      maxPasses,
+      previousSummary: existing.summary || "",
+      filesChanged: normalizeStringList(existing.filesChanged),
+      completedTasks: normalizeStringList(existing.completedTasks),
+      remainingTasks: normalizeStringList(existing.remainingTasks),
+      lastPassAt: existing.lastPassAt || existing.updatedAt || "",
+    };
+  }
+  return formatted;
 }
 
 function emptyAgentState() {
@@ -726,8 +811,43 @@ function isTerminalStatus(status) {
   return TERMINAL_STATUSES.has(String(status || ""));
 }
 
+function failureAttempts(existing) {
+  if (!existing) return 0;
+  if (Number.isInteger(Number(existing.failures))) return Number(existing.failures);
+  if (existing.lastError && (existing.status === "pending" || existing.status === "in_progress")) return Number(existing.attempts || 0);
+  return 0;
+}
+
+function hasContinuationProgress(previous, result) {
+  if (result.filesChanged.length) return true;
+  if (hasNewStringItem(previous.completedTasks, result.completedTasks)) return true;
+  if (!sameStringList(previous.remainingTasks, result.remainingTasks)) return true;
+  return false;
+}
+
+function hasNewStringItem(previousValues, nextValues) {
+  const previous = new Set(normalizeStringList(previousValues));
+  return normalizeStringList(nextValues).some((value) => !previous.has(value));
+}
+
+function sameStringList(left, right) {
+  const leftValues = normalizeStringList(left);
+  const rightValues = normalizeStringList(right);
+  if (leftValues.length !== rightValues.length) return false;
+  return leftValues.every((value, index) => value === rightValues[index]);
+}
+
+function mergeStringLists(left, right) {
+  return Array.from(new Set([...normalizeStringList(left), ...normalizeStringList(right)]));
+}
+
 function preview(value) {
   return String(value || "").replace(/\s+/g, " ").slice(0, 240);
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
 function normalizePromptText(value) {

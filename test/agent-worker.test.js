@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { renderCommentsMarkdown } from "../src/comments.js";
 import {
+  DEFAULT_AGENT_MAX_PASSES,
   DEFAULT_AGENT_TRIGGER,
   buildAgentPrompt,
   commentMatchesTrigger,
@@ -102,6 +103,261 @@ console.log(JSON.stringify({
   }
 });
 
+test("agent worker continues an inline page comment across multiple passes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-followup-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const logPath = join(siteDir, ".tunelito", "agent", "log.md");
+  const callsPath = join(dir, "calls.txt");
+  const scriptPath = join(dir, "fake-agent.mjs");
+
+  writeFileSync(join(siteDir, "day-03.html"), "<!doctype html><html><body><main><p>Old lunch copy.</p><p>Old transit copy.</p></main></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [comment({
+      id: "c_multi",
+      scope: "page",
+      quote: "Old lunch copy.",
+      body: "Rewrite the lunch section and then tighten the transit section too.",
+      pagePath: "/day-03.html",
+    })],
+  }));
+  writeFileSync(scriptPath, `
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const prompt = await new Promise((resolve) => {
+  let raw = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => { raw += chunk; });
+  process.stdin.on("end", () => resolve(raw));
+});
+const calls = process.env.TUNELITO_TEST_CALLS;
+const next = (existsSync(calls) ? Number(readFileSync(calls, "utf8")) : 0) + 1;
+writeFileSync(calls, String(next));
+let html = readFileSync("day-03.html", "utf8");
+if (next === 1) {
+  html = html.replace("Old lunch copy.", "Lunch at a reserved neighborhood counter.");
+  writeFileSync("day-03.html", html);
+  console.log(JSON.stringify({
+    comments: [{
+      id: "c_multi",
+      status: "needs_followup",
+      summary: "Updated the lunch copy and left transit for the next pass.",
+      filesChanged: ["day-03.html"],
+      completedTasks: ["Rewrite the lunch section"],
+      remainingTasks: ["Tighten the transit section"]
+    }]
+  }));
+} else {
+  if (!prompt.includes("Tighten the transit section")) throw new Error("missing continuation task");
+  if (!prompt.includes("Updated the lunch copy")) throw new Error("missing previous summary");
+  html = html.replace("Old transit copy.", "Transit notes are short, direct, and timed for mobile use.");
+  writeFileSync("day-03.html", html);
+  console.log(JSON.stringify({
+    comments: [{
+      id: "c_multi",
+      status: "resolved",
+      summary: "Finished lunch and transit updates.",
+      filesChanged: ["day-03.html"],
+      completedTasks: ["Rewrite the lunch section", "Tighten the transit section"],
+      remainingTasks: []
+    }]
+  }));
+}
+`);
+
+  process.env.TUNELITO_TEST_CALLS = callsPath;
+  try {
+    const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)}`;
+    const first = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 2,
+      maxPasses: 4,
+      log() {},
+    });
+
+    assert.equal(first.processed, 1);
+    assert.equal(first.statuses.c_multi, "needs_followup");
+    assert.equal(loadAgentState(statePath).comments.c_multi.status, "needs_followup");
+    assert.equal(loadAgentState(statePath).comments.c_multi.passes, 1);
+
+    const second = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 2,
+      maxPasses: 4,
+      log() {},
+    });
+
+    assert.equal(second.processed, 1);
+    assert.equal(second.statuses.c_multi, "resolved");
+    assert.equal(readFileSync(callsPath, "utf8"), "2");
+    const state = loadAgentState(statePath);
+    assert.equal(state.comments.c_multi.status, "resolved");
+    assert.equal(state.comments.c_multi.attempts, 2);
+    assert.equal(state.comments.c_multi.passes, 2);
+    assert.deepEqual(state.comments.c_multi.completedTasks, ["Rewrite the lunch section", "Tighten the transit section"]);
+    assert.deepEqual(state.comments.c_multi.remainingTasks, []);
+    assert.match(readFileSync(join(siteDir, "day-03.html"), "utf8"), /reserved neighborhood counter/);
+    assert.match(readFileSync(join(siteDir, "day-03.html"), "utf8"), /Transit notes are short/);
+  } finally {
+    delete process.env.TUNELITO_TEST_CALLS;
+  }
+});
+
+test("agent worker converts follow-up requests to partial at the pass limit", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-max-passes-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const logPath = join(siteDir, ".tunelito", "agent", "log.md");
+  const callsPath = join(dir, "calls.txt");
+  const scriptPath = join(dir, "fake-agent.mjs");
+
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [comment({ id: "c_limit", body: "Redesign this page in several stages.", pagePath: "/" })],
+  }));
+  writeFileSync(scriptPath, `
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+process.stdin.resume();
+await new Promise((resolve) => process.stdin.on("end", resolve));
+const calls = process.env.TUNELITO_TEST_CALLS;
+writeFileSync(calls, String((existsSync(calls) ? Number(readFileSync(calls, "utf8")) : 0) + 1));
+console.log(JSON.stringify({
+  comments: [{
+    id: "c_limit",
+    status: "needs_followup",
+    summary: "Completed one slice but more remains.",
+    filesChanged: ["index.html"],
+    completedTasks: ["Fix page spacing"],
+    remainingTasks: ["Restyle cards"]
+  }]
+}));
+`);
+
+  process.env.TUNELITO_TEST_CALLS = callsPath;
+  try {
+    const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)}`;
+    const first = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 2,
+      maxPasses: 1,
+      log() {},
+    });
+    assert.equal(first.statuses.c_limit, "partial");
+    assert.equal(loadAgentState(statePath).comments.c_limit.status, "partial");
+    assert.deepEqual(loadAgentState(statePath).comments.c_limit.remainingTasks, ["Restyle cards"]);
+
+    const second = await runAgentPass({
+      provider: "custom",
+      command,
+      commentsPath,
+      targetPath: siteDir,
+      workspaceRoot: siteDir,
+      statePath,
+      logPath,
+      trigger: DEFAULT_AGENT_TRIGGER,
+      maxAttempts: 2,
+      maxPasses: 1,
+      log() {},
+    });
+    assert.equal(second.processed, 0);
+    assert.equal(readFileSync(callsPath, "utf8"), "1");
+  } finally {
+    delete process.env.TUNELITO_TEST_CALLS;
+  }
+});
+
+test("agent worker stops follow-up loops that report no progress", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-no-progress-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(join(siteDir, ".tunelito", "agent"), { recursive: true });
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const logPath = join(siteDir, ".tunelito", "agent", "log.md");
+  const scriptPath = join(dir, "fake-agent.mjs");
+
+  const item = comment({ id: "c_stuck", body: "Make broad mobile improvements.", pagePath: "/" });
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({ sourcePath: siteDir, comments: [item] }));
+  writeFileSync(statePath, `${JSON.stringify({
+    version: 1,
+    updatedAt: "2026-05-27T00:00:00.000Z",
+    comments: {
+      c_stuck: {
+        id: "c_stuck",
+        fingerprint: fingerprintComment(item),
+        status: "needs_followup",
+        attempts: 1,
+        passes: 1,
+        summary: "Started the mobile cleanup.",
+        completedTasks: ["Fix bottom nav"],
+        remainingTasks: ["Restyle cards"],
+        filesChanged: ["index.html"],
+      },
+    },
+  }, null, 2)}\n`);
+  writeFileSync(scriptPath, `
+process.stdin.resume();
+await new Promise((resolve) => process.stdin.on("end", resolve));
+console.log(JSON.stringify({
+  comments: [{
+    id: "c_stuck",
+    status: "needs_followup",
+    summary: "Still needs card restyling.",
+    filesChanged: [],
+    completedTasks: ["Fix bottom nav"],
+    remainingTasks: ["Restyle cards"]
+  }]
+}));
+`);
+
+  const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)}`;
+  const result = await runAgentPass({
+    provider: "custom",
+    command,
+    commentsPath,
+    targetPath: siteDir,
+    workspaceRoot: siteDir,
+    statePath,
+    logPath,
+    trigger: DEFAULT_AGENT_TRIGGER,
+    maxAttempts: 2,
+    maxPasses: 4,
+    log() {},
+  });
+
+  assert.equal(result.statuses.c_stuck, "partial");
+  const state = loadAgentState(statePath);
+  assert.equal(state.comments.c_stuck.status, "partial");
+  assert.match(state.comments.c_stuck.lastError, /without observable progress/);
+  assert.deepEqual(state.comments.c_stuck.filesChanged, ["index.html"]);
+});
+
 test("agent worker blocks comments when the agent output is not structured JSON", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-invalid-"));
   const siteDir = join(dir, "site");
@@ -183,7 +439,7 @@ test("agent queue skips resolved comments and marks changed resolved comments fo
   assert.equal(state.comments.c_done.status, "changed_needs_review");
 });
 
-test("agent fingerprint and prompt include comment scope", () => {
+test("agent fingerprint and prompt include comment scope and pass limits", () => {
   const pageNote = comment({
     id: "c_scope",
     scope: "page",
@@ -201,11 +457,13 @@ test("agent fingerprint and prompt include comment scope", () => {
     statePath: "/tmp/site/.tunelito/agent/state.json",
     trigger: DEFAULT_AGENT_TRIGGER,
     maxAttempts: 2,
+    maxPasses: DEFAULT_AGENT_MAX_PASSES,
   });
 
   assert.match(prompt, /"scope": "site"/);
   assert.match(prompt, /Site-scope comments/);
   assert.match(prompt, /may have no selected quote/);
+  assert.match(prompt, /Max passes per comment/);
 });
 
 test("agent trigger defaults to all comments and supports explicit mention filters", () => {
@@ -257,7 +515,7 @@ test("buildAgentPrompt can replace the built-in behavior prompt", () => {
   assert.match(defaultAgentBehaviorPrompt(), /Return only JSON/);
 });
 
-test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buckets", () => {
+test("parseAgentResult accepts direct JSON, Claude JSON wrappers, follow-ups, and legacy buckets", () => {
   assert.deepEqual(parseAgentResult(JSON.stringify({
     comments: [{ id: "c_1", status: "success", summary: "Done", filesChanged: ["index.html"] }],
   })).comments, [{
@@ -265,6 +523,8 @@ test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buc
     status: "resolved",
     summary: "Done",
     filesChanged: ["index.html"],
+    completedTasks: [],
+    remainingTasks: [],
   }]);
 
   assert.deepEqual(parseAgentResult(JSON.stringify({
@@ -274,6 +534,8 @@ test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buc
     status: "no-op",
     summary: "",
     filesChanged: [],
+    completedTasks: [],
+    remainingTasks: [],
   });
 
   assert.deepEqual(parseAgentResult(JSON.stringify({
@@ -283,6 +545,26 @@ test("parseAgentResult accepts direct JSON, Claude JSON wrappers, and legacy buc
     status: "blocked",
     summary: "Missing page",
     filesChanged: [],
+    completedTasks: [],
+    remainingTasks: [],
+  });
+
+  assert.deepEqual(parseAgentResult(JSON.stringify({
+    comments: [{
+      id: "c_4",
+      status: "needs_followup",
+      summary: "Finished the first slice.",
+      filesChanged: ["index.html"],
+      completedTasks: ["Update heading"],
+      remainingTasks: ["Update cards"],
+    }],
+  })).comments[0], {
+    id: "c_4",
+    status: "needs_followup",
+    summary: "Finished the first slice.",
+    filesChanged: ["index.html"],
+    completedTasks: ["Update heading"],
+    remainingTasks: ["Update cards"],
   });
 });
 

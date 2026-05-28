@@ -46,6 +46,8 @@ test("parseArgs supports local agent worker options", () => {
     "Use short copy.",
     "--agent-max-attempts",
     "3",
+    "--agent-max-passes",
+    "5",
     "--agent-state",
     "agent-state.json",
   ]);
@@ -55,7 +57,13 @@ test("parseArgs supports local agent worker options", () => {
   assert.equal(opts.agentTrigger, "@agent");
   assert.equal(opts.agentInstructions, "Use short copy.");
   assert.equal(opts.agentMaxAttempts, 3);
+  assert.equal(opts.agentMaxPasses, 5);
   assert.equal(opts.agentStatePath, resolve("agent-state.json"));
+});
+
+test("parseArgs rejects invalid agent max passes values", () => {
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "0"]), /Invalid --agent-max-passes/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "x"]), /Invalid --agent-max-passes/);
 });
 
 test("parseArgs and loadAgentPromptOptions support prompt files", () => {
