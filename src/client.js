@@ -98,26 +98,81 @@
           right: 18px;
           bottom: 18px;
           z-index: 2147483647;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid #0f766e;
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(148, 163, 184, .36);
           border-radius: 999px;
-          background: #0f766e;
+          background: rgba(15, 23, 42, .66);
           color: #fff;
-          font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          padding: 10px 13px;
-          box-shadow: 0 12px 32px rgba(15, 23, 42, .2);
+          padding: 0;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, .22);
           cursor: pointer;
+          appearance: none;
+          -webkit-appearance: none;
+          backdrop-filter: blur(14px) saturate(1.2);
+          -webkit-backdrop-filter: blur(14px) saturate(1.2);
+          transition: background .16s ease, border-color .16s ease, transform .16s ease;
         }
-        .launcher span {
+        .launcher:hover,
+        .launcher.active {
+          border-color: rgba(45, 212, 191, .72);
+          background: rgba(15, 118, 110, .88);
+          transform: translateY(-1px);
+        }
+        .launcher:focus-visible {
+          outline: 2px solid #2dd4bf;
+          outline-offset: 3px;
+        }
+        .launcher-glyph {
+          position: relative;
+          display: block;
+          width: 18px;
+          height: 14px;
+          border: 2px solid currentColor;
+          border-radius: 5px;
+        }
+        .launcher-glyph::before {
+          content: "";
+          position: absolute;
+          left: 4px;
+          right: 4px;
+          top: 3px;
+          height: 2px;
+          border-radius: 999px;
+          background: currentColor;
+          box-shadow: 0 4px 0 currentColor;
+          opacity: .86;
+        }
+        .launcher-glyph::after {
+          content: "";
+          position: absolute;
+          left: 4px;
+          bottom: -6px;
+          width: 7px;
+          height: 7px;
+          border-left: 2px solid currentColor;
+          border-bottom: 2px solid currentColor;
+          transform: skew(-28deg);
+        }
+        .count {
+          position: absolute;
+          top: -6px;
+          right: -6px;
           min-width: 18px;
           height: 18px;
-          display: inline-grid;
+          display: grid;
           place-items: center;
           border-radius: 999px;
-          background: rgba(255,255,255,.2);
-          font-size: 11px;
+          border: 2px solid #fff;
+          background: #0f766e;
+          color: #fff;
+          font: 800 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 0 4px;
+        }
+        .count[hidden] {
+          display: none;
         }
         .panel {
           position: fixed;
@@ -353,10 +408,14 @@
         button.primary { border-color: #0f766e; background: #0f766e; color: #fff; }
         @media (max-width: 640px) {
           .launcher {
-            right: max(12px, env(safe-area-inset-right));
-            bottom: max(12px, env(safe-area-inset-bottom));
-            min-height: 44px;
-            padding: 12px 14px;
+            right: max(10px, env(safe-area-inset-right));
+            bottom: calc(80px + env(safe-area-inset-bottom));
+            width: 44px;
+            height: 44px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .2);
+          }
+          .launcher-glyph {
+            transform: scale(.88);
           }
           .panel {
             top: auto;
@@ -401,7 +460,10 @@
           }
         }
       </style>
-      <button class="launcher" title="Open Tunelito comments">Comments <span class="count">0</span></button>
+      <button class="launcher" type="button" title="Open Tunelito comments" aria-label="Open Tunelito comments" aria-expanded="false">
+        <span class="launcher-glyph" aria-hidden="true"></span>
+        <span class="count" hidden>0</span>
+      </button>
       <button class="selection">Comment</button>
       <div class="composer" role="dialog" aria-label="Add comment">
         <div class="composer-meta">
@@ -453,8 +515,8 @@
     markdownLink.hidden = configuredLiveMode;
     name.value = state.author;
 
-    launcher.addEventListener("click", () => panel.classList.toggle("open"));
-    shadow.querySelector(".icon-button").addEventListener("click", () => panel.classList.remove("open"));
+    launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
+    shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
     name.addEventListener("input", () => {
       state.author = name.value.trim();
       localStorage.setItem("tunelito:author", state.author);
@@ -497,6 +559,12 @@
     const url = new URL(path, location.href);
     if (accessKey) url.searchParams.set("tunelito_key", accessKey);
     return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function setPanelOpen(open) {
+    ui.panel.classList.toggle("open", open);
+    ui.launcher.classList.toggle("active", open);
+    ui.launcher.setAttribute("aria-expanded", String(open));
   }
 
   function bindSelection() {
@@ -597,7 +665,7 @@
   }
 
   function openNoteComposer(scope) {
-    ui.panel.classList.add("open");
+    setPanelOpen(true);
     hideSelectionButton();
     window.getSelection()?.removeAllRanges();
     state.pendingSelection = {
@@ -680,7 +748,12 @@
   }
 
   function renderComments() {
-    ui.count.textContent = String(state.comments.length);
+    const count = state.comments.length;
+    ui.count.textContent = count > 99 ? "99+" : String(count);
+    ui.count.hidden = count === 0;
+    const launcherLabel = count ? `Open Tunelito comments (${count})` : "Open Tunelito comments";
+    ui.launcher.setAttribute("aria-label", launcherLabel);
+    ui.launcher.title = launcherLabel;
     if (!state.comments.length) {
       ui.comments.innerHTML = `<div class="empty">Select text, or add a page or site note.</div>`;
       updateHighlights();
