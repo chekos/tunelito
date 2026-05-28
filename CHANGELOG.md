@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-05-28
+
 - Preserves saved `needs_followup` continuation context after retryable local-agent failures so retries still receive completed and remaining tasks.
 
 ## 0.6.0 - 2026-05-28
