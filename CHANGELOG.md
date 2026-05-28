@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-05-28
+
 - Adds page notes and site-wide comments: reviewers can now leave unanchored feedback, folder sessions show site comments on every page, and the local agent worker receives comment scope in its prompt and retry fingerprint.
 - Adds an automated package smoke check that proves the packed tarball exposes a runnable `tunelito` CLI through global install and `npx --package`.
 
