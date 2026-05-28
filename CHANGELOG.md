@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.2 - 2026-05-28
+
 - Makes the injected comments launcher less disruptive on mobile by replacing the large bottom pill with a compact icon button and count badge above common bottom navigation.
 
 ## 0.6.1 - 2026-05-28
