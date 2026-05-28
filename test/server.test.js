@@ -271,6 +271,10 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /Page note/);
     assert.match(clientScript, /Site note/);
     assert.match(clientScript, /data-scope="site"/);
+    assert.match(clientScript, /class="launcher-glyph"/);
+    assert.match(clientScript, /aria-label="Open Tunelito comments"/);
+    assert.match(clientScript, /width: 44px;\s+height: 44px;/);
+    assert.doesNotMatch(clientScript, /Comments <span class="count"/);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
