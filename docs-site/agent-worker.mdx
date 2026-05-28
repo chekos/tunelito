@@ -13,7 +13,7 @@ The worker does not use model API keys directly. It starts your installed local 
 npx --yes tunelito ./site --agent codex
 ```
 
-Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant scope, page path, optional quote, comment body, and comment ID. Codex decides whether to edit, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
+Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant scope, page path, optional quote, comment body, and comment ID. Codex decides whether to edit, continue with `needs_followup`, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
 
 ## Start with Claude Code
 
@@ -86,7 +86,38 @@ The worker prompt includes `scope` for every comment:
 - `page`: edit the HTML file identified by the comment's page path.
 - `site`: inspect the served folder and update every clearly relevant page.
 
-Comments may have no selected quote when reviewers use `Page note` or `Site note`. In that case the agent should rely on the body, scope, and page path. Broad site comments should become `blocked` or `partial` if the agent cannot safely infer the exact edit.
+Page comments can be selected-text comments or unanchored page notes. Comments may have no selected quote when reviewers use `Page note` or `Site note`. In that case the agent should rely on the body, scope, and page path.
+
+## Multi-pass comments
+
+Some comments are too large for one safe pass: a selected paragraph may ask for copy and layout changes, a page note may ask for a redesign, or a site note may ask for consistent treatment across many pages.
+
+When the worker can make useful progress but more work remains, the agent can return `needs_followup`:
+
+```json
+{
+  "comments": [
+    {
+      "id": "c_...",
+      "status": "needs_followup",
+      "summary": "Fixed the bottom navigation and mobile spacing.",
+      "filesChanged": ["itinerary-mobile.css"],
+      "completedTasks": ["Fix bottom navigation", "Tighten mobile spacing"],
+      "remainingTasks": ["Restyle day cards", "Audit heading rhythm"]
+    }
+  ]
+}
+```
+
+Tunelito stores those tasks in `.tunelito/agent/state.json` and queues the same comment again on the next poll. The next prompt includes the previous summary, completed tasks, remaining tasks, changed files, and pass count. This works for inline selected-text comments, page notes, and site notes.
+
+Use `--agent-max-passes` to bound continuation:
+
+```bash
+npx --yes tunelito ./site --agent claude --agent-max-passes 6
+```
+
+If the pass limit is reached, or if a follow-up pass reports no changed files, no new completed tasks, and the same remaining tasks, Tunelito marks the comment `partial` instead of looping forever.
 
 ## Resolution state
 
@@ -105,6 +136,7 @@ The state file records each comment ID, fingerprint, attempts, status, summary, 
 Statuses include:
 
 - `resolved`: the agent made the requested change
+- `needs_followup`: the agent made progress and wants another pass with saved remaining tasks
 - `no-op`: the requested change was already satisfied
 - `ignored`: the comment did not ask for a file change
 - `blocked`: the agent could not safely complete the request
@@ -120,6 +152,8 @@ Use `--agent-max-attempts` to bound retries:
 npx --yes tunelito ./site --agent codex --agent-max-attempts 1
 ```
 
+Retry attempts are for failed runs or missing result entries. Multi-pass continuation is controlled separately with `--agent-max-passes`.
+
 If the agent output is not structured JSON, Tunelito marks the comment `blocked` instead of rerunning the same instruction blindly.
 
 ## Required agent output
@@ -133,7 +167,9 @@ The final agent response must be JSON:
       "id": "c_...",
       "status": "resolved",
       "summary": "Updated about.html copy.",
-      "filesChanged": ["about.html"]
+      "filesChanged": ["about.html"],
+      "completedTasks": ["Updated about.html copy"],
+      "remainingTasks": []
     }
   ]
 }

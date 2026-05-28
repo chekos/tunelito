@@ -43,7 +43,7 @@ HTML
 For local-only review:
 
 ```bash
-npx --yes tunelito ./review-site --agent codex --no-tunnel --open
+npx --yes tunelito ./review-site --agent codex --agent-max-passes 5 --no-tunnel --open
 ```
 
 For a shareable public tunnel:
@@ -52,7 +52,7 @@ For a shareable public tunnel:
 npx --yes tunelito ./review-site --agent codex
 ```
 
-Use `--agent claude` for Claude Code. Use `--agent-command "<your command>"` for another local CLI that accepts a prompt on stdin and returns JSON.
+Use `--agent claude` for Claude Code. Use `--agent-command "<your command>"` for another local CLI that accepts a prompt on stdin and returns JSON. `--agent-max-passes` lets one large comment continue across several bounded passes.
 
 Tunelito prints a local URL, a comments file, and, when tunneling works, a public URL:
 
@@ -60,7 +60,7 @@ Tunelito prints a local URL, a comments file, and, when tunneling works, a publi
 Tunelito is running
 Local:   http://127.0.0.1:4317/?tunelito_key=...
 Comments: /path/to/review-site.comments.md
-Agent:   codex; checks all comments every 120s; state /path/to/review-site/.tunelito/agent/state.json
+Agent:   codex; checks all comments every 120s; max 5 passes; state /path/to/review-site/.tunelito/agent/state.json
 Access:  review key required by the printed URLs
 Public:  https://example.trycloudflare.com/?tunelito_key=...
 ```
@@ -115,7 +115,9 @@ review-site/
     log.md
 ```
 
-When the agent saves HTML changes, Tunelito asks connected browsers to reload. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page; if the request is broad or unclear, the worker prompt tells the agent to return `blocked` or `partial` instead of guessing.
+When the agent saves HTML changes, Tunelito asks connected browsers to reload. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page.
+
+If a selected-text comment, page note, or site note needs more than one pass, the agent can return `needs_followup` with completed and remaining tasks. Tunelito stores that continuation in the state file and sends the same comment again on the next poll. If the agent reaches `--agent-max-passes` or stops making progress, Tunelito marks the comment `partial`.
 
 Resolved comments are skipped on future polling cycles. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
 
@@ -130,7 +132,7 @@ npx --yes tunelito ./review-site
 Then ask a coding agent to inspect the Markdown inbox:
 
 ```text
-Monitor review-site.comments.md every 2 minutes. For each new actionable comment, use `scope: page` comments to edit the matching HTML file and `scope: site` comments to update all clearly relevant pages. After each change, report the comment id and what changed.
+Monitor review-site.comments.md every 2 minutes. For each new actionable comment, use `scope: page` comments to edit the matching HTML file and `scope: site` comments to update all clearly relevant pages. If one comment needs multiple passes, keep a completed/remaining task list so the next pass continues instead of repeating work. After each change, report the comment id and what changed.
 ```
 
 For one manual pass instead of polling:

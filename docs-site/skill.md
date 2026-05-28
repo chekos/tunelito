@@ -21,6 +21,7 @@ Tunelito turns a local HTML file or folder of HTML files into a temporary live r
 - Include scopes, page paths, and comment IDs in Markdown for agent inbox workflows.
 - Run an opt-in local agent worker with Codex, Claude Code, or a custom CLI.
 - Track resolved/no-op/blocked/stale comments in `.tunelito/agent/state.json` to avoid repeated edits.
+- Continue larger inline, page, or site comments across bounded `needs_followup` passes with completed and remaining tasks.
 - Reload connected browsers when source HTML changes.
 - Expose the local server through a temporary Cloudflare Tunnel.
 - Require keyed review URLs by default.
@@ -43,6 +44,12 @@ For unattended local agent follow-up with Codex:
 
 ```bash
 npx --yes tunelito ./site --agent codex
+```
+
+For broad comments that may need several passes:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-max-passes 5
 ```
 
 For Claude Code:

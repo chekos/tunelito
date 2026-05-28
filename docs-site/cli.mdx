@@ -4,7 +4,7 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.4.1
+Tunelito 0.5.0
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -27,6 +27,8 @@ Options:
                         Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: 2)
+  --agent-max-passes <n>
+                        Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
@@ -77,6 +79,12 @@ Run Codex against review comments:
 
 ```bash
 tunelito ./site --agent codex
+```
+
+Allow broad comments to continue for up to five passes:
+
+```bash
+tunelito ./site --agent codex --agent-max-passes 5
 ```
 
 Run Claude Code against review comments:

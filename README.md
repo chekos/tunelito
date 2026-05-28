@@ -29,7 +29,7 @@ site/
 site.comments.md
 ```
 
-Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can poll that file and apply edits to the matching HTML file or the whole folder when a comment is site-wide.
+Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can poll that file, apply edits to the matching HTML file or the whole folder when a comment is site-wide, and continue larger comments across bounded follow-up passes.
 
 To let a local agent handle comments while Tunelito runs:
 
@@ -115,6 +115,8 @@ Options:
                         Replace the built-in agent behavior prompt from a file
   --agent-max-attempts <n>
                         Stop retrying a comment after n attempts (default: 2)
+  --agent-max-passes <n>
+                        Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
@@ -213,6 +215,12 @@ The built-in provider presets reuse your local CLI auth:
 
 By default, the worker evaluates every comment and decides whether to edit, return `no-op`, or mark the comment `ignored`. Use `--agent-trigger "@agent"` or another marker when you want stricter sessions.
 
+Large actionable comments can span multiple agent passes. The agent can return `needs_followup` with `completedTasks` and `remainingTasks`; Tunelito queues the same comment again with that continuation context until it is `resolved`, `blocked`, `partial`, or reaches `--agent-max-passes`.
+
+```bash
+tunelito ./site --agent codex --agent-max-passes 5
+```
+
 Add host-specific guidance without changing code:
 
 ```bash
@@ -221,7 +229,7 @@ tunelito ./site --agent codex --agent-instructions "Keep copy concise and preser
 
 Use `--agent-instructions-file instructions.md` for longer guidance. Use `--agent-prompt` or `--agent-prompt-file` to replace the built-in behavior prompt; Tunelito still appends the workspace context, required JSON shape, and pending comments.
 
-Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `no-op`, `ignored`, `blocked`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
+Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `needs_followup`, `no-op`, `ignored`, `blocked`, `partial`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale, while still allowing a large inline, page, or site comment to continue from its saved remaining tasks. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
 
 Treat `--agent` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
 
@@ -237,7 +245,8 @@ Quick walkthrough:
 2. Select text in the browser and leave a comment.
 3. The local worker invokes Codex for new unresolved comments.
 4. Codex edits the source HTML file named by a page-scoped comment's `page: ...` context, or the relevant files for a site-scoped comment.
-5. Tunelito reloads connected browsers after the saved HTML change.
+5. If Codex returns `needs_followup`, Tunelito sends the same comment again with completed and remaining tasks on the next pass.
+6. Tunelito reloads connected browsers after saved HTML changes.
 
 ## Live Mode
 

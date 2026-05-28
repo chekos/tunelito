@@ -56,6 +56,7 @@ Product-level local agent worker behavior:
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.
 - Agent output must be structured by comment ID so handled comments are not retried indefinitely.
+- `needs_followup` continuations must stay bounded by `--agent-max-passes` and stop if a follow-up pass reports no observable progress.
 
 The Claude Code hooks should block:
 

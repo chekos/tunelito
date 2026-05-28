@@ -56,6 +56,14 @@ npx --yes tunelito ./site --agent claude
 
 The worker uses the local CLI's existing authentication. Tunelito records handled comment IDs in `.tunelito/agent/state.json` so the same comment is not applied repeatedly.
 
+For larger comments that may need more than one pass, set a pass budget:
+
+```bash
+npx --yes tunelito ./site --agent codex --agent-max-passes 5
+```
+
+The agent can return `needs_followup` with completed and remaining tasks; Tunelito will continue that same inline, page, or site comment until it resolves, stops making progress, or reaches the pass limit.
+
 ## Local-only preview
 
 Use this when you do not want to expose a public tunnel:

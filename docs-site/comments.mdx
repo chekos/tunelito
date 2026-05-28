@@ -80,6 +80,8 @@ tunelito ./site --agent codex
 
 The worker writes status to `.tunelito/agent/state.json` instead of editing the comments file. That state prevents already handled comment IDs from being retried after source edits make the original highlight stale.
 
+Large actionable comments can continue across several bounded passes. When the agent returns `needs_followup`, Tunelito saves completed and remaining tasks in the state file and queues that same comment again. This applies to selected-text comments, page notes, and site notes.
+
 For stricter sessions, ask reviewers to include `@agent` in comments they want the worker to handle:
 
 ```bash
@@ -89,7 +91,7 @@ tunelito ./site --agent claude --agent-trigger "@agent"
 Manual prompt:
 
 ```text
-Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file and summarize the comment id plus the change made.
+Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file and summarize the comment id plus the change made. For larger comments, keep track of completed and remaining tasks so the next pass continues instead of repeating work.
 ```
 
 For a complete end-to-end example, see the [folder review tutorial](/tutorial) and the [local agent worker guide](/agent-worker).
