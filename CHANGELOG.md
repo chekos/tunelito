@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-05-28
+
 - Adds multi-pass local agent continuations: agents can return `needs_followup` for any inline, page, or site comment, Tunelito carries completed and remaining tasks into the next prompt, and `--agent-max-passes` bounds broad work.
 - Separates failed-run retries from continuation passes and stops follow-up loops that report no observable progress.
 

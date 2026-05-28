@@ -92,7 +92,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.5.0
+Tunelito 0.6.0
 
 Usage: tunelito <page.html|folder> [options]
 
