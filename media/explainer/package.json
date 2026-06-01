@@ -1,0 +1,13 @@
+{
+  "name": "tunelito-explainer",
+  "private": true,
+  "type": "module",
+  "description": "HeyGen Hyperframes source for the Tunelito explainer video (HTML -> MP4).",
+  "scripts": {
+    "fonts": "node build-fonts.mjs",
+    "check": "npx --yes hyperframes@0.6.64 lint && npx --yes hyperframes@0.6.64 validate && npx --yes hyperframes@0.6.64 inspect",
+    "render:landscape": "npx --yes hyperframes@0.6.64 render -o renders/tunelito-explainer-landscape.mp4",
+    "render:narrated": "npx --yes hyperframes@0.6.64 render -c narrated.html -o renders/tunelito-explainer-landscape-narrated.mp4",
+    "render:vertical": "npx --yes hyperframes@0.6.64 render -c vertical.html -o renders/tunelito-explainer-vertical.mp4"
+  }
+}

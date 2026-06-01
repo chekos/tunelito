@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      @font-face{font-family:'Space Grotesk';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/spacegrotesk-500.woff2') format('woff2');}
+      @font-face{font-family:'Space Grotesk';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/spacegrotesk-700.woff2') format('woff2');}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/jbmono-400.woff2') format('woff2');}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/jbmono-700.woff2') format('woff2');}
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root {
+        --bg: #000814;
+        --bg2: #00102a;
+        --surface: #0d1b2a;
+        --surface2: #112740;
+        --border: #1f3556;
+        --fg: #e6eaf0;
+        --muted: #8295b2;
+        --accent: #ffc300;
+        --accent-deep: #f59e0b;
+        --live: #2ec4b6;
+        --danger: #ff7d6b;
+      }
+      html, body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--bg);
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+      }
+      .scene {
+        position: absolute;
+        top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        overflow: hidden;
+      }
+      #scene1 { z-index: 1; background: radial-gradient(1200px 800px at 50% 38%, #03204a 0%, var(--bg) 62%); }
+      #scene2 { z-index: 2; opacity: 0; background: radial-gradient(1100px 900px at 78% 30%, #0a1c38 0%, var(--bg) 60%); }
+      #scene3 { z-index: 3; opacity: 0; background: radial-gradient(1100px 900px at 25% 30%, #06203f 0%, var(--bg) 60%); }
+      #scene4 { z-index: 4; opacity: 0; background: radial-gradient(1100px 900px at 70% 40%, #07233f 0%, var(--bg) 60%); }
+      #scene5 { z-index: 5; opacity: 0; background: radial-gradient(1100px 900px at 35% 35%, #08213c 0%, var(--bg) 60%); }
+      #scene6 { z-index: 6; opacity: 0; background: radial-gradient(1200px 900px at 50% 35%, #0a1f3a 0%, var(--bg) 62%); }
+      #scene7 { z-index: 7; opacity: 0; background: radial-gradient(1200px 800px at 50% 42%, #03204a 0%, var(--bg) 62%); }
+
+      .wrap {
+        position: relative;
+        width: 100%; height: 100%;
+        display: flex; flex-direction: column;
+        justify-content: center;
+        padding: 130px 170px;
+        gap: 28px;
+      }
+      .kicker {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 24px; letter-spacing: 6px;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+      .muted { color: var(--muted); }
+
+      .glow {
+        position: absolute; border-radius: 50%;
+        filter: blur(10px); pointer-events: none;
+      }
+
+      /* ---------- Scene 1: title ---------- */
+      #s1-eyebrow { font-family: "JetBrains Mono", monospace; font-size: 26px; letter-spacing: 8px; color: var(--accent); }
+      #s1-title { font-size: 230px; font-weight: 700; letter-spacing: -4px; line-height: 0.95; }
+      #s1-title .dot { color: var(--accent); }
+      #s1-sub { font-size: 52px; font-weight: 500; color: var(--fg); max-width: 1200px; }
+      #s1-cmd {
+        margin-top: 18px;
+        font-family: "JetBrains Mono", monospace; font-size: 30px;
+        color: var(--live);
+        background: rgba(13,27,42,0.7);
+        border: 1px solid var(--border); border-radius: 12px;
+        padding: 18px 26px; width: fit-content;
+      }
+      #s1-cmd .sigil { color: var(--muted); }
+
+      /* ---------- Scene 2: problem ---------- */
+      #s2-head { font-size: 92px; font-weight: 700; letter-spacing: -2px; max-width: 1300px; line-height: 1.05; }
+      #s2-head .strike { color: var(--danger); }
+      .chips { display: flex; gap: 26px; margin-top: 24px; }
+      .chip {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 16px; padding: 26px 30px;
+        font-size: 30px; color: var(--muted);
+        display: flex; align-items: center; gap: 16px;
+      }
+      .chip .x { color: var(--danger); font-family: "JetBrains Mono", monospace; font-size: 34px; }
+
+      /* ---------- Scene 3: terminal ---------- */
+      .term {
+        width: 1320px; margin-top: 14px;
+        background: #061427; border: 1px solid var(--border);
+        border-radius: 18px; overflow: hidden;
+        box-shadow: 0 40px 90px rgba(0,0,0,0.55);
+      }
+      .term-bar {
+        height: 56px; background: #0c2034;
+        display: flex; align-items: center; gap: 12px; padding: 0 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      .term-bar .dotbtn { width: 15px; height: 15px; border-radius: 50%; }
+      .term-bar .t-title { margin-left: 16px; font-family: "JetBrains Mono", monospace; font-size: 20px; color: var(--muted); }
+      .term-body {
+        padding: 34px 40px; font-family: "JetBrains Mono", monospace;
+        font-size: 30px; line-height: 1.65;
+      }
+      .term-body .ln { white-space: pre; }
+      .term-body .prompt { color: var(--accent); }
+      .term-body .ok { color: var(--live); }
+      .term-body .lbl { color: var(--muted); }
+      .term-body .url { color: var(--fg); }
+      .term-body .key { color: var(--accent); }
+
+      /* ---------- Scene 4: reviewers ---------- */
+      .s4-grid { display: flex; gap: 70px; align-items: center; margin-top: 10px; }
+      .browser {
+        width: 1080px; background: var(--surface);
+        border: 1px solid var(--border); border-radius: 18px; overflow: hidden;
+        box-shadow: 0 40px 90px rgba(0,0,0,0.5);
+      }
+      .browser-bar { height: 58px; background: #0c2034; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--border); }
+      .browser-bar .pill { margin-left: 16px; flex: 1; height: 30px; border-radius: 8px; background: #0a1828; }
+      .browser-body { padding: 46px 54px; position: relative; }
+      .browser-body h3 { font-size: 44px; margin-bottom: 22px; }
+      .browser-body p { font-size: 30px; line-height: 1.6; color: #c6cfdd; max-width: 880px; }
+      .hl { background: rgba(46,196,182,0.28); color: #d7fff8; border-bottom: 3px solid var(--live); padding: 2px 4px; border-radius: 4px; }
+      #s4-bubble {
+        position: absolute; right: 40px; bottom: 36px;
+        width: 430px; background: #06281f; border: 1px solid var(--live);
+        border-radius: 16px; padding: 24px 26px;
+      }
+      #s4-bubble .who { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--live); margin-bottom: 10px; }
+      #s4-bubble .txt { font-size: 27px; color: #e8fffb; line-height: 1.4; }
+      .s4-list { display: flex; flex-direction: column; gap: 30px; width: 540px; }
+      .s4-item { font-size: 38px; display: flex; gap: 20px; align-items: flex-start; }
+      .s4-item .b { color: var(--accent); font-family: "JetBrains Mono", monospace; }
+      .s4-item .sub { color: var(--muted); font-size: 26px; margin-top: 6px; }
+
+      /* ---------- Scene 5: editing ---------- */
+      .s5-row { display: flex; gap: 48px; align-items: stretch; margin-top: 6px; }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+      .panel-h { height: 50px; display: flex; align-items: center; padding: 0 22px; background: #0c2034; border-bottom: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 21px; color: var(--muted); }
+      .editor { width: 720px; }
+      .editor .code { padding: 30px 32px; font-family: "JetBrains Mono", monospace; font-size: 26px; line-height: 1.7; }
+      .editor .tag { color: #6db1ff; }
+      .editor .str { color: var(--accent); }
+      .editor .txt { color: var(--fg); }
+      .s5-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; width: 150px; }
+      .s5-arrow { font-size: 70px; color: var(--accent); font-family: "JetBrains Mono", monospace; }
+      .s5-save { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--muted); text-align: center; }
+      .mini-browser { width: 600px; position: relative; }
+      .mini-browser .mb-body { padding: 40px 36px; }
+      .mini-browser .mb-body h4 { font-size: 38px; margin-bottom: 16px; }
+      .mini-browser .mb-body p { font-size: 26px; color: #c6cfdd; line-height: 1.5; }
+      #s5-reload { position: absolute; top: 70px; right: 24px; background: var(--live); color: #042; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 22px; padding: 12px 18px; border-radius: 10px; }
+      #s5-md {
+        margin-top: 34px; width: fit-content;
+        background: #061427; border: 1px solid var(--border); border-radius: 14px;
+        padding: 24px 30px; font-family: "JetBrains Mono", monospace; font-size: 25px; line-height: 1.6;
+      }
+      #s5-md .h { color: var(--accent); }
+      #s5-md .q { color: var(--live); }
+      #s5-md .c { color: var(--muted); }
+
+      /* ---------- Scene 6: agent loop ---------- */
+      #s6-head { font-size: 74px; font-weight: 700; letter-spacing: -1px; max-width: 1400px; line-height: 1.08; }
+      #s6-head em { color: var(--accent); font-style: normal; }
+      .flow { display: flex; align-items: center; gap: 28px; margin-top: 40px; flex-wrap: nowrap; }
+      .node {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+        padding: 26px 30px; font-family: "JetBrains Mono", monospace;
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .node .tag { font-size: 20px; color: var(--muted); letter-spacing: 1px; }
+      .node .main { font-size: 28px; color: var(--fg); }
+      .node.accent { border-color: var(--accent); }
+      .node.accent .main { color: var(--accent); }
+      .flow .farrow { color: var(--accent); font-size: 50px; font-family: "JetBrains Mono", monospace; }
+      .s6-chips { display: flex; gap: 26px; margin-top: 50px; }
+      .s6-chip { background: rgba(46,196,182,0.12); border: 1px solid var(--live); color: #bdf6ee; border-radius: 999px; padding: 18px 32px; font-size: 28px; }
+
+      /* ---------- Scene 7: outro ---------- */
+      #scene7 .wrap { align-items: center; text-align: center; }
+      #s7-title { font-size: 200px; font-weight: 700; letter-spacing: -4px; }
+      #s7-title .dot { color: var(--accent); }
+      #s7-tag { font-size: 48px; color: var(--fg); }
+      #s7-cmd { font-family: "JetBrains Mono", monospace; font-size: 34px; color: var(--live); background: rgba(13,27,42,0.7); border: 1px solid var(--border); border-radius: 12px; padding: 20px 32px; margin-top: 10px; }
+      #s7-cmd .sigil { color: var(--muted); }
+      #s7-foot { font-family: "JetBrains Mono", monospace; font-size: 26px; color: var(--muted); margin-top: 18px; }
+
+      /* ---------- caption subtitle overlay ---------- */
+      .cap {
+        position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+        opacity: 0; z-index: 50; white-space: nowrap;
+        background: rgba(0,6,16,0.86); border: 1px solid var(--border);
+        border-radius: 14px; padding: 18px 36px;
+        font-family: "JetBrains Mono", monospace; font-size: 32px; color: #eef3fa;
+        box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+      }
+      .cap .accent { color: var(--accent); }
+
+      /* ===================== PORTRAIT (1080x1920) OVERRIDES ===================== */
+      .wrap { padding: 150px 80px; gap: 34px; justify-content: center; }
+      .kicker { font-size: 26px; letter-spacing: 5px; }
+
+      /* Scene 1 / 7 titles */
+      #s1-title, #s7-title { font-size: 150px; letter-spacing: -3px; }
+      #s1-eyebrow { font-size: 22px; letter-spacing: 5px; }
+      #s1-sub { font-size: 50px; max-width: 900px; }
+      #s1-cmd, #s7-cmd { font-size: 32px; }
+      #s7-tag { font-size: 46px; }
+
+      /* Scene 2 */
+      #s2-head { font-size: 84px; max-width: 920px; }
+      .chips { flex-direction: column; gap: 22px; align-items: flex-start; }
+      .chip { font-size: 34px; }
+
+      /* Scene 3 terminal */
+      .term { width: 920px; }
+      .term-body { font-size: 23px; padding: 30px 34px; line-height: 1.7; }
+      #s3-cap { font-size: 30px; }
+
+      /* Scene 4 reviewers -> stacked */
+      .s4-grid { flex-direction: column; gap: 56px; align-items: stretch; }
+      .browser { width: 920px; }
+      .browser-body p { max-width: 760px; font-size: 32px; }
+      .browser-body h3 { font-size: 46px; }
+      #s4-bubble { width: 460px; }
+      .s4-list { width: 920px; gap: 34px; }
+      .s4-item { font-size: 40px; }
+      .s4-item .sub { font-size: 28px; }
+
+      /* Scene 5 editing -> stacked */
+      .s5-row { flex-direction: column; gap: 30px; align-items: stretch; }
+      .editor, .mini-browser { width: 920px; }
+      .editor .code { font-size: 30px; }
+      .mini-browser .mb-body h4 { font-size: 44px; }
+      .mini-browser .mb-body p { font-size: 30px; }
+      .s5-mid { width: 100%; flex-direction: row; gap: 18px; height: auto; }
+      .s5-arrow { transform: rotate(90deg); font-size: 60px; }
+      #s5-md { font-size: 24px; margin-top: 24px; }
+
+      /* Scene 6 agent loop -> stacked */
+      #s6-head { font-size: 66px; max-width: 920px; }
+      .flow { flex-direction: column; gap: 20px; align-items: stretch; margin-top: 30px; }
+      .node { align-items: flex-start; }
+      .node .main { font-size: 30px; }
+      .flow .farrow { transform: rotate(90deg); align-self: center; font-size: 44px; }
+      .s6-chips { flex-direction: column; gap: 18px; margin-top: 34px; align-items: flex-start; }
+      .s6-chip { font-size: 30px; }
+
+      /* Captions wrap on the narrower frame */
+      .cap { font-size: 28px; white-space: normal; max-width: 880px; text-align: center; bottom: 96px; line-height: 1.35; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="57"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- ===================== NARRATION (audio tracks) ===================== -->
+      <audio id="a1" data-start="0.5"  data-duration="5.57" data-track-index="9" src="narration/s1.wav"></audio>
+      <audio id="a2" data-start="7.0"  data-duration="7.13" data-track-index="9" src="narration/s2.wav"></audio>
+      <audio id="a3" data-start="14.7" data-duration="7.02" data-track-index="9" src="narration/s3.wav"></audio>
+      <audio id="a4" data-start="23.7" data-duration="7.92" data-track-index="9" src="narration/s4.wav"></audio>
+      <audio id="a5" data-start="32.7" data-duration="6.96" data-track-index="9" src="narration/s5.wav"></audio>
+      <audio id="a6" data-start="40.5" data-duration="7.68" data-track-index="9" src="narration/s6.wav"></audio>
+      <audio id="a7" data-start="48.7" data-duration="6.90" data-track-index="9" src="narration/s7.wav"></audio>
+
+      <!-- ===================== SCENE 1 ===================== -->
+      <div id="scene1" class="scene">
+        <div class="glow" data-layout-ignore style="width:520px;height:520px;background:rgba(255,195,0,0.18);top:120px;left:1300px;"></div>
+        <div class="wrap">
+          <div id="s1-eyebrow">LOCAL-FIRST &middot; OPEN SOURCE &middot; NODE 22+</div>
+          <div id="s1-title">Tunelito<span class="dot">.</span></div>
+          <div id="s1-sub">Turn any local HTML file into a live review room.</div>
+          <div id="s1-cmd"><span class="sigil">$</span> npx tunelito ./page.html</div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 2 ===================== -->
+      <div id="scene2" class="scene">
+        <div class="glow" data-layout-ignore style="width:560px;height:560px;background:rgba(255,125,107,0.14);top:120px;left:1180px;"></div>
+        <div class="wrap">
+          <div class="kicker" id="s2-kick">The old way</div>
+          <div id="s2-head">Sharing work-in-progress HTML is <span class="strike">clunky</span>.</div>
+          <div class="chips">
+            <div class="chip" id="s2-c1"><span class="x">&times;</span> Deploy a throwaway preview</div>
+            <div class="chip" id="s2-c2"><span class="x">&times;</span> Screenshots in Slack</div>
+            <div class="chip" id="s2-c3"><span class="x">&times;</span> Feedback scattered everywhere</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 3 ===================== -->
+      <div id="scene3" class="scene">
+        <div class="wrap">
+          <div class="kicker" id="s3-kick">One command</div>
+          <div class="term" id="s3-term">
+            <div class="term-bar">
+              <span class="dotbtn" style="background:#ff5f57"></span>
+              <span class="dotbtn" style="background:#febc2e"></span>
+              <span class="dotbtn" style="background:#28c840"></span>
+              <span class="t-title">~/project</span>
+            </div>
+            <div class="term-body">
+              <div class="ln" id="s3-l1"><span class="prompt">$</span> npx tunelito ./page.html</div>
+              <div class="ln" id="s3-l2"><span class="ok">Tunelito is running</span></div>
+              <div class="ln" id="s3-l3"><span class="lbl">Local:   </span><span class="url">http://127.0.0.1:4317/?</span><span class="key">tunelito_key=&hellip;</span></div>
+              <div class="ln" id="s3-l4"><span class="lbl">Public:  </span><span class="url">https://soft-frost.trycloudflare.com/?</span><span class="key">key=&hellip;</span></div>
+              <div class="ln" id="s3-l5"><span class="lbl">Comments: </span><span class="url">./page.comments.md</span></div>
+            </div>
+          </div>
+          <div class="muted" id="s3-cap" style="font-size:30px;margin-top:14px;">A temporary Cloudflare tunnel to your laptop &mdash; keyed URL by default.</div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 4 ===================== -->
+      <div id="scene4" class="scene">
+        <div class="wrap" style="padding:130px 130px;">
+          <div class="kicker" id="s4-kick">Reviewers just comment</div>
+          <div class="s4-grid">
+            <div class="browser" id="s4-browser">
+              <div class="browser-bar">
+                <span class="dotbtn" style="width:14px;height:14px;border-radius:50%;background:#ff5f57"></span>
+                <span class="dotbtn" style="width:14px;height:14px;border-radius:50%;background:#febc2e"></span>
+                <span class="dotbtn" style="width:14px;height:14px;border-radius:50%;background:#28c840"></span>
+                <span class="pill"></span>
+              </div>
+              <div class="browser-body">
+                <h3>Launch announcement</h3>
+                <p>Our platform helps teams move faster. <span class="hl" id="s4-hl">This sentence needs a clearer verb</span> so readers know exactly what to do next.</p>
+                <div id="s4-bubble">
+                  <div class="who">Jane &middot; just now</div>
+                  <div class="txt">Make this action-oriented &mdash; "ship reviews in minutes."</div>
+                </div>
+              </div>
+            </div>
+            <div class="s4-list" data-layout-allow-overflow>
+              <div class="s4-item" id="s4-i1"><span class="b">+</span><div>Select text, page notes, site notes<div class="sub">desktop &amp; mobile</div></div></div>
+              <div class="s4-item" id="s4-i2"><span class="b">+</span><div>Everyone sees comments live<div class="sub">synced over WebSocket</div></div></div>
+              <div class="s4-item" id="s4-i3"><span class="b">+</span><div>Your source HTML stays untouched<div class="sub">the review UI is injected</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 5 ===================== -->
+      <div id="scene5" class="scene">
+        <div class="wrap" style="padding:110px 130px;">
+          <div class="kicker" id="s5-kick">You keep editing</div>
+          <div class="s5-row">
+            <div class="panel editor" id="s5-editor">
+              <div class="panel-h">page.html &mdash; your editor</div>
+              <div class="code">
+                <div><span class="tag">&lt;h1&gt;</span><span class="txt">Ship reviews in minutes</span><span class="tag">&lt;/h1&gt;</span></div>
+                <div><span class="tag">&lt;p&gt;</span><span class="txt">No deploy. No backend.</span><span class="tag">&lt;/p&gt;</span></div>
+                <div><span class="tag">&lt;button&gt;</span><span class="str">Get started</span><span class="tag">&lt;/button&gt;</span></div>
+              </div>
+            </div>
+            <div class="s5-mid">
+              <div class="s5-arrow s5-anim">&rarr;</div>
+              <div class="s5-save s5-anim">save</div>
+            </div>
+            <div class="panel mini-browser" id="s5-mb">
+              <div class="panel-h">live preview</div>
+              <div class="mb-body">
+                <h4>Ship reviews in minutes</h4>
+                <p>No deploy. No backend.</p>
+              </div>
+              <div id="s5-reload">&#x21bb; Reloaded</div>
+            </div>
+          </div>
+          <div id="s5-md">
+            <div class="h"># Tunelito comments for `page.html`</div>
+            <div class="q">&gt; This sentence needs a clearer verb</div>
+            <div>Make this action-oriented.</div>
+            <div class="c">_scope: `page` &middot; id: `c_8f2a` &middot; saved to page.comments.md_</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 6 ===================== -->
+      <div id="scene6" class="scene">
+        <div class="glow" data-layout-ignore style="width:600px;height:600px;background:rgba(46,196,182,0.12);top:520px;left:1250px;"></div>
+        <div class="wrap">
+          <div class="kicker" id="s6-kick">Built for the AI loop</div>
+          <div id="s6-head">Comments become an <em>inbox</em> your local coding agent resolves.</div>
+          <div class="flow">
+            <div class="node flow-node"><span class="tag">REVIEWER</span><span class="main">page.comments.md</span></div>
+            <span class="farrow flow-node">&rarr;</span>
+            <div class="node accent flow-node"><span class="tag">TUNELITO</span><span class="main">--agent claude</span></div>
+            <span class="farrow flow-node">&rarr;</span>
+            <div class="node flow-node"><span class="tag">AGENT</span><span class="main">edits the HTML</span></div>
+            <span class="farrow flow-node">&rarr;</span>
+            <div class="node flow-node"><span class="tag">BROWSER</span><span class="main">live reload</span></div>
+          </div>
+          <div class="s6-chips">
+            <div class="s6-chip chip-anim">No account</div>
+            <div class="s6-chip chip-anim">No database</div>
+            <div class="s6-chip chip-anim">Files stay on your machine</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 7 ===================== -->
+      <div id="scene7" class="scene">
+        <div class="glow" data-layout-ignore style="width:560px;height:560px;background:rgba(255,195,0,0.16);top:170px;left:680px;"></div>
+        <div class="wrap">
+          <div id="s7-title">Tunelito<span class="dot">.</span></div>
+          <div id="s7-tag">Local-first live HTML reviews.</div>
+          <div id="s7-cmd"><span class="sigil">$</span> npx tunelito ./page.html</div>
+          <div id="s7-foot">github.com/chekos/tunelito &middot; MIT</div>
+        </div>
+      </div>
+
+      <!-- ===================== CAPTIONS (subtitle overlay) ===================== -->
+      <div class="cap" id="c1">Any HTML file becomes a live review room</div>
+      <div class="cap" id="c2">Feedback today is scattered everywhere</div>
+      <div class="cap" id="c3">One command &middot; a temporary, keyed public link</div>
+      <div class="cap" id="c4">Reviewers comment right on the page &mdash; live</div>
+      <div class="cap" id="c5">Keep editing &mdash; comments save to Markdown</div>
+      <div class="cap" id="c6">An inbox your local AI agent can resolve</div>
+      <div class="cap" id="c7"><span class="accent">$</span> npx tunelito ./page.html</div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      var XF = 0.6; // crossfade duration
+      function crossfade(oldSel, newSel, T) {
+        tl.to(oldSel, { opacity: 0, duration: XF, ease: "power2.inOut" }, T);
+        tl.fromTo(newSel, { opacity: 0 }, { opacity: 1, duration: XF, ease: "power2.inOut" }, T);
+      }
+
+      // ---------- Scene 1 (0 - 6.8) ----------
+      tl.from("#s1-eyebrow", { y: -24, opacity: 0, duration: 0.6, ease: "power2.out" }, 0.2);
+      tl.from("#s1-title", { y: 80, opacity: 0, duration: 0.9, ease: "power4.out" }, 0.35);
+      tl.from("#s1-sub", { y: 40, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.75);
+      tl.from("#s1-cmd", { y: 30, opacity: 0, scale: 0.96, duration: 0.6, ease: "back.out(1.6)" }, 1.05);
+
+      // ---------- Transition 1 -> 2 ----------
+      crossfade("#scene1", "#scene2", 6.8);
+
+      // ---------- Scene 2 (7.0 - 14.3) ----------
+      tl.from("#s2-kick", { x: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 7.0);
+      tl.from("#s2-head", { y: 50, opacity: 0, duration: 0.8, ease: "power3.out" }, 7.2);
+      tl.from("#s2-c1", { y: 40, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 7.7);
+      tl.from("#s2-c2", { y: 40, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 7.85);
+      tl.from("#s2-c3", { y: 40, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 8.0);
+
+      // ---------- Transition 2 -> 3 ----------
+      crossfade("#scene2", "#scene3", 14.3);
+
+      // ---------- Scene 3 (14.5 - 23.3) ----------
+      tl.from("#s3-kick", { x: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 14.6);
+      tl.from("#s3-term", { y: 60, opacity: 0, scale: 0.97, duration: 0.7, ease: "power3.out" }, 14.8);
+      tl.from("#s3-l1", { x: -20, opacity: 0, duration: 0.4, ease: "power1.out" }, 15.5);
+      tl.from("#s3-l2", { x: -20, opacity: 0, duration: 0.4, ease: "power1.out" }, 16.0);
+      tl.from("#s3-l3", { x: -20, opacity: 0, duration: 0.4, ease: "power1.out" }, 16.5);
+      tl.from("#s3-l4", { x: -20, opacity: 0, duration: 0.4, ease: "power1.out" }, 17.0);
+      tl.from("#s3-l5", { x: -20, opacity: 0, duration: 0.4, ease: "power1.out" }, 17.5);
+      tl.from("#s3-cap", { y: 24, opacity: 0, duration: 0.6, ease: "power2.out" }, 18.2);
+
+      // ---------- Transition 3 -> 4 ----------
+      crossfade("#scene3", "#scene4", 23.3);
+
+      // ---------- Scene 4 (23.5 - 32.3) ----------
+      tl.from("#s4-kick", { x: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 23.5);
+      tl.from("#s4-browser", { y: 60, opacity: 0, duration: 0.7, ease: "power3.out" }, 23.7);
+      tl.from("#s4-hl", { backgroundColor: "rgba(46,196,182,0)", duration: 0.5, ease: "power1.inOut" }, 24.6);
+      tl.from("#s4-bubble", { y: 30, opacity: 0, scale: 0.9, duration: 0.5, ease: "back.out(1.7)" }, 25.0);
+      tl.from("#s4-i1", { x: 40, opacity: 0, duration: 0.5, ease: "expo.out" }, 25.5);
+      tl.from("#s4-i2", { x: 40, opacity: 0, duration: 0.5, ease: "expo.out" }, 25.75);
+      tl.from("#s4-i3", { x: 40, opacity: 0, duration: 0.5, ease: "expo.out" }, 26.0);
+
+      // ---------- Transition 4 -> 5 ----------
+      crossfade("#scene4", "#scene5", 32.3);
+
+      // ---------- Scene 5 (32.5 - 40.3) ----------
+      tl.from("#s5-kick", { x: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 32.5);
+      tl.from("#s5-editor", { x: -50, opacity: 0, duration: 0.6, ease: "power3.out" }, 32.7);
+      tl.from(".s5-anim", { opacity: 0, scale: 0.6, duration: 0.5, ease: "back.out(2)", stagger: 0.12 }, 33.2);
+      tl.from("#s5-mb", { x: 50, opacity: 0, duration: 0.6, ease: "power3.out" }, 33.4);
+      tl.from("#s5-reload", { y: -16, opacity: 0, scale: 0.8, duration: 0.5, ease: "back.out(2)" }, 34.1);
+      tl.from("#s5-md", { y: 36, opacity: 0, duration: 0.6, ease: "power2.out" }, 34.6);
+
+      // ---------- Transition 5 -> 6 ----------
+      crossfade("#scene5", "#scene6", 40.3);
+
+      // ---------- Scene 6 (40.5 - 48.3) ----------
+      tl.from("#s6-kick", { x: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 40.5);
+      tl.from("#s6-head", { y: 50, opacity: 0, duration: 0.8, ease: "power3.out" }, 40.7);
+      tl.from(".flow-node", { y: 36, opacity: 0, duration: 0.5, ease: "power2.out", stagger: 0.13 }, 41.5);
+      tl.from(".chip-anim", { y: 24, opacity: 0, scale: 0.9, duration: 0.45, ease: "back.out(1.6)", stagger: 0.12 }, 43.2);
+
+      // ---------- Transition 6 -> 7 ----------
+      crossfade("#scene6", "#scene7", 48.3);
+
+      // ---------- Scene 7 (48.5 - 57) ----------
+      tl.from("#s7-title", { y: 70, opacity: 0, duration: 0.9, ease: "power4.out" }, 48.6);
+      tl.from("#s7-tag", { y: 30, opacity: 0, duration: 0.6, ease: "power3.out" }, 49.1);
+      tl.from("#s7-cmd", { y: 26, opacity: 0, scale: 0.96, duration: 0.6, ease: "back.out(1.6)" }, 49.5);
+      tl.from("#s7-foot", { opacity: 0, duration: 0.6, ease: "power1.out" }, 49.9);
+      // final fade (only the final scene may exit)
+      tl.to("#scene7 .wrap", { opacity: 0, duration: 0.8, ease: "power2.in" }, 56.0);
+
+      // ---------- Captions (subtitle overlay, synced to per-scene narration) ----------
+      function caption(sel, tIn, tOut) {
+        tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power2.out" }, tIn);
+        tl.to(sel, { opacity: 0, duration: 0.35, ease: "power2.in" }, tOut);
+      }
+      caption("#c1", 0.7, 6.4);
+      caption("#c2", 7.1, 13.9);
+      caption("#c3", 14.8, 22.9);
+      caption("#c4", 23.8, 31.9);
+      caption("#c5", 32.8, 39.9);
+      caption("#c6", 40.7, 47.9);
+      caption("#c7", 48.8, 55.6);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
