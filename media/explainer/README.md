@@ -49,9 +49,10 @@ The video applies the [soyserg.io](https://soyserg.io) personal brand system
   offset shadow (`10px 10px 0`) on the terminal/report cards. No ambient shadows,
   no gradients except the terracotta **highlighter pill** (the `38%`).
 - **The one delight** = marginalia. The live reviewer comments are rendered as
-  **Kalam handwritten notes** in the document margin, while the agent's action is
-  **monospace in a terracotta box** — handwriting (human) vs. machine (agent).
-  Plus the pulsing `→` arrow in the loop and a `más ideas que tiempo` aside.
+  **Kalam handwritten notes** beside the document, anchored to the highlighted
+  sentence by a leader line (terracotta dot + dashed sage curve computed from the
+  real layout), while the agent's action is **monospace in a terracotta box** —
+  handwriting (human) vs. machine (agent). The loop scene keeps the pulsing `→`.
 - **Motion:** snappy (200–450ms), restrained easing, no playful bounces.
 
 ## Source
