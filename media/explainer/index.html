@@ -67,25 +67,39 @@
       #s2-note { font-size: 30px; color: var(--muted); margin-top: 18px; max-width: 1340px; line-height: 1.4; }
       #s2-note b { color: var(--fg); font-weight: 500; }
 
-      /* Scene 3 collaborate */
-      .s3-grid { display: flex; gap: 56px; align-items: center; margin-top: 8px; }
+      /* Scene 3 collaborate + live agent edit */
+      .s3-grid { display: flex; gap: 56px; align-items: flex-start; margin-top: 8px; }
       .browser { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; box-shadow: 0 40px 90px rgba(0,0,0,0.5); }
       .browser-bar { height: 56px; background: #0c2034; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--border); }
       .browser-bar .pill { margin-left: 16px; flex: 1; height: 28px; border-radius: 8px; background: #0a1828; }
       .browser-body { padding: 44px 50px; }
-      .browser-body h3 { font-size: 42px; margin-bottom: 20px; }
-      .browser-body p { font-size: 29px; line-height: 1.6; color: #c6cfdd; }
+      .browser-body h3 { font-size: 42px; margin-bottom: 22px; }
+      .browser-body p { font-size: 30px; line-height: 1.6; color: #c6cfdd; margin: 0; }
       .hl { background: rgba(46,196,182,0.26); color: #d7fff8; border-bottom: 3px solid var(--live); padding: 2px 4px; border-radius: 4px; }
-      #s3-browser { width: 1040px; }
-      .s3-comments { width: 560px; display: flex; flex-direction: column; gap: 24px; }
+      .ins { color: #eef7f4; background: rgba(46,196,182,0.16); border-bottom: 3px solid var(--live); padding: 2px 4px; border-radius: 4px; }
+      #s3-browser { width: 1040px; position: relative; }
+      .doc { position: relative; min-height: 220px; }
+      .doc .pafter { position: absolute; inset: 0; opacity: 0; }
+      #s3-reload { position: absolute; top: 72px; right: 24px; background: var(--live); color: #032018; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 22px; padding: 12px 18px; border-radius: 10px; opacity: 0; z-index: 6; }
+      .s3-comments { width: 560px; display: flex; flex-direction: column; gap: 22px; }
       .s3-comments .lbl { font-family: "JetBrains Mono", monospace; font-size: 21px; letter-spacing: 2px; color: var(--muted); }
-      .ccard { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; display: flex; gap: 18px; }
+      .ccard { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; display: flex; gap: 18px; align-items: flex-start; }
       .ccard .av { flex: none; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 24px; color: #04110d; }
+      .ccard .body { flex: 1; }
       .ccard .who { font-family: "JetBrains Mono", monospace; font-size: 21px; color: var(--live); margin-bottom: 8px; }
       .ccard .txt { font-size: 27px; color: #e6eef0; line-height: 1.35; }
-      #s3-note { font-size: 28px; color: var(--muted); margin-top: 6px; }
+      .ccard.agent { border-color: var(--accent); background: rgba(255,195,0,0.06); }
+      .ccard.agent .who { color: var(--accent); }
+      .ccard.agent .av { background: linear-gradient(135deg, #ffc300, #2ec4b6); font-size: 28px; }
+      .agenttxt { position: relative; font-size: 24px; line-height: 1.35; color: #e6eef0; }
+      .agenttxt b { color: var(--accent); font-weight: 700; }
+      .agenttxt .dn { position: absolute; inset: 0; opacity: 0; color: var(--live); }
+      .agenttxt .dn b { color: var(--live); }
+      .ccard.agent .dot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); margin-top: 8px; }
+      #s3-note { font-size: 28px; color: var(--muted); margin-top: 2px; max-width: 1660px; }
+      #s3-note b { color: var(--fg); font-weight: 500; }
 
-      /* Scene 4 agent loop (the heart) */
+      /* Scene 4 agent loop (the mechanism) */
       #s4-head { font-size: 70px; font-weight: 700; letter-spacing: -1px; max-width: 1500px; line-height: 1.08; }
       #s4-head .em { color: var(--accent); }
       .flow { display: flex; align-items: stretch; gap: 24px; margin-top: 44px; }
@@ -98,6 +112,7 @@
       .flow .farrow { color: var(--accent); font-size: 44px; font-family: "JetBrains Mono", monospace; display: flex; align-items: center; }
       #s4-note { font-size: 30px; color: var(--muted); margin-top: 40px; max-width: 1480px; line-height: 1.45; }
       #s4-note b { color: var(--fg); font-weight: 500; }
+      #s4-note .tagpill { color: var(--accent); font-family: "JetBrains Mono", monospace; }
 
       /* Scene 5 move on */
       #s5-term { width: 1180px; margin-top: 10px; }
@@ -112,7 +127,7 @@
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="53" data-width="1920" data-height="1080">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="56" data-width="1920" data-height="1080">
 
       <!-- ===== SCENE 1 — what it is ===== -->
       <div id="scene1" class="scene">
@@ -147,10 +162,10 @@
         </div>
       </div>
 
-      <!-- ===== SCENE 3 — share + comment together ===== -->
+      <!-- ===== SCENE 3 — comment together, agent edits live ===== -->
       <div id="scene3" class="scene">
-        <div class="wrap" style="padding:130px 150px;">
-          <div class="kicker" id="s3-kick">Share the link &middot; jump on a call</div>
+        <div class="wrap" style="padding:120px 150px;">
+          <div class="kicker" id="s3-kick">Comment together &middot; your agent edits live</div>
           <div class="s3-grid">
             <div class="browser" id="s3-browser">
               <div class="browser-bar">
@@ -161,41 +176,56 @@
               </div>
               <div class="browser-body">
                 <h3>Q3 Launch report</h3>
-                <p>Adoption grew across every region this quarter. <span class="hl" id="s3-hl">The summary should lead with the headline number</span> before the regional breakdown.</p>
+                <div class="doc">
+                  <p class="pbefore" id="s3-before">Adoption grew across every region this quarter. <span class="hl" id="s3-hl">The summary should lead with the headline number</span> before the regional breakdown.</p>
+                  <p class="pafter" id="s3-after"><span class="ins">Adoption grew 38% &mdash; our strongest quarter yet.</span> Regional detail follows below.</p>
+                </div>
               </div>
+              <div id="s3-reload">&#x21bb; Reloaded</div>
             </div>
             <div class="s3-comments">
               <div class="lbl" id="s3-lbl">LIVE COMMENTS</div>
               <div class="ccard" id="s3-c1">
                 <div class="av" style="background:var(--live)">YO</div>
-                <div><div class="who">You &middot; just now</div><div class="txt">Lead with the 38% number here.</div></div>
+                <div class="body"><div class="who">You &middot; just now</div><div class="txt">Lead with the 38% number here.</div></div>
               </div>
               <div class="ccard" id="s3-c2">
                 <div class="av" style="background:var(--accent)">AR</div>
-                <div><div class="who">Coworker &middot; just now</div><div class="txt">Agreed &mdash; and tighten the regional list.</div></div>
+                <div class="body"><div class="who">Coworker &middot; just now</div><div class="txt">Agreed &mdash; and tighten the regional list.</div></div>
+              </div>
+              <div class="ccard agent" id="s3-agent">
+                <div class="av">&#10022;</div>
+                <div class="body">
+                  <div class="who">claude &middot; local agent</div>
+                  <div class="agenttxt">
+                    <span class="ed" id="s3-ag-ed">Reading comments &rarr; editing <b>report.html</b></span>
+                    <span class="dn" id="s3-ag-dn">Updated <b>report.html</b> &middot; reloaded &#10003;</span>
+                  </div>
+                </div>
+                <div class="dot" id="s3-dot"></div>
               </div>
             </div>
           </div>
-          <div id="s3-note">You both leave comments, right on the page &mdash; everyone sees them live.</div>
+          <div id="s3-note"><b>Tag the agent, or let it watch the comments</b> &mdash; it edits the page and the preview reloads, right on the call.</div>
         </div>
       </div>
 
-      <!-- ===== SCENE 4 — local agent iterates (heart) ===== -->
+      <!-- ===== SCENE 4 — how the loop works ===== -->
       <div id="scene4" class="scene">
         <div class="glow" data-layout-ignore style="width:560px;height:560px;background:rgba(46,196,182,0.12);top:540px;left:1280px;"></div>
         <div class="wrap">
-          <div class="kicker" id="s4-kick">Your local agent iterates</div>
-          <div id="s4-head">A coding agent you <span class="em">already run locally</span> reads the comments and edits the page.</div>
+          <div class="kicker" id="s4-kick">The loop, reusing your local agent</div>
+          <div id="s4-head">The coding agent you <span class="em">already run locally</span> reads the comments and edits the page.</div>
           <div class="flow">
             <div class="node flow-node"><span class="tag">REVIEWERS</span><span class="main">report.comments.md</span></div>
             <span class="farrow flow-node">&rarr;</span>
-            <div class="node accent flow-node"><span class="tag">LOCAL AGENT</span><span class="main">claude &middot; codex</span><span class="sub">watching for new comments</span></div>
+            <div class="node accent flow-node"><span class="tag">LOCAL AGENT</span><span class="main">claude &middot; codex</span><span class="sub">tagged, or scans on an interval</span></div>
             <span class="farrow flow-node">&rarr;</span>
             <div class="node flow-node"><span class="tag">EDITS</span><span class="main">report.html</span></div>
             <span class="farrow flow-node">&rarr;</span>
             <div class="node flow-node"><span class="tag">LIVE</span><span class="main">preview reloads</span></div>
           </div>
-          <div id="s4-note"><b>Act on feedback live, on the call</b> &mdash; or let it run after. Rapid iteration, reusing the agent already on your machine.</div>
+          <div id="s4-note">Tag <span class="tagpill">@claude</span> in a comment, or let it scan on an interval. <b>Real collaboration with your teammates and your agent &mdash; at once.</b></div>
         </div>
       </div>
 
@@ -265,41 +295,52 @@
 
       crossfade("#scene2", "#scene3", 16.0);
 
-      // Scene 3 (16 - 26)
+      // Scene 3 (16 - 31) — comment, then the agent edits live
       tl.from("#s3-kick", { x: -28, opacity: 0, duration: 0.6, ease: "power2.out" }, 16.2);
       tl.from("#s3-browser", { y: 50, opacity: 0, duration: 0.8, ease: "power3.out" }, 16.4);
       tl.from("#s3-hl", { backgroundColor: "rgba(46,196,182,0)", duration: 0.5, ease: "power1.inOut" }, 17.3);
       tl.from("#s3-lbl", { opacity: 0, duration: 0.4, ease: "power1.out" }, 17.6);
-      tl.from("#s3-c1", { x: 36, opacity: 0, duration: 0.6, ease: "power3.out" }, 17.9);
-      tl.from("#s3-c2", { x: 36, opacity: 0, duration: 0.6, ease: "power3.out" }, 18.4);
-      tl.from("#s3-note", { y: 22, opacity: 0, duration: 0.7, ease: "power2.out" }, 19.2);
+      tl.from("#s3-c1", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 17.9);
+      tl.from("#s3-c2", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 18.5);
+      // the local agent picks the comments up
+      tl.from("#s3-agent", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 19.4);
+      tl.to("#s3-dot", { scale: 1.55, opacity: 0.35, duration: 0.45, ease: "sine.inOut", repeat: 4, yoyo: true }, 19.8);
+      tl.from("#s3-note", { y: 20, opacity: 0, duration: 0.7, ease: "power2.out" }, 20.0);
+      // ...and the page updates live
+      tl.to("#s3-before", { opacity: 0, duration: 0.45, ease: "power2.inOut" }, 22.2);
+      tl.fromTo("#s3-after", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power2.inOut" }, 22.25);
+      tl.fromTo("#s3-reload", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.7)" }, 22.3);
+      tl.to("#s3-ag-ed", { opacity: 0, duration: 0.35, ease: "power1.inOut" }, 22.4);
+      tl.fromTo("#s3-ag-dn", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.inOut" }, 22.55);
+      tl.to("#s3-dot", { opacity: 0, duration: 0.3, ease: "power1.out", overwrite: "auto" }, 22.4);
+      tl.to("#s3-reload", { opacity: 0, duration: 0.4, ease: "power1.in" }, 25.2);
 
-      crossfade("#scene3", "#scene4", 26.0);
+      crossfade("#scene3", "#scene4", 31.0);
 
-      // Scene 4 (26 - 38) — the heart
-      tl.from("#s4-kick", { x: -28, opacity: 0, duration: 0.6, ease: "power2.out" }, 26.2);
-      tl.from("#s4-head", { y: 44, opacity: 0, duration: 0.9, ease: "power3.out" }, 26.4);
-      tl.from(".flow-node", { y: 30, opacity: 0, duration: 0.55, ease: "power2.out", stagger: 0.16 }, 27.4);
-      tl.from("#s4-note", { y: 24, opacity: 0, duration: 0.7, ease: "power2.out" }, 29.3);
+      // Scene 4 (31 - 42)
+      tl.from("#s4-kick", { x: -28, opacity: 0, duration: 0.6, ease: "power2.out" }, 31.2);
+      tl.from("#s4-head", { y: 44, opacity: 0, duration: 0.9, ease: "power3.out" }, 31.4);
+      tl.from(".flow-node", { y: 30, opacity: 0, duration: 0.55, ease: "power2.out", stagger: 0.16 }, 32.4);
+      tl.from("#s4-note", { y: 24, opacity: 0, duration: 0.7, ease: "power2.out" }, 34.3);
 
-      crossfade("#scene4", "#scene5", 38.0);
+      crossfade("#scene4", "#scene5", 42.0);
 
-      // Scene 5 (38 - 47)
-      tl.from("#s5-kick", { x: -28, opacity: 0, duration: 0.6, ease: "power2.out" }, 38.2);
-      tl.from("#s5-term", { y: 44, opacity: 0, duration: 0.7, ease: "power3.out" }, 38.4);
-      tl.from("#s5-l1", { opacity: 0, duration: 0.4, ease: "power1.out" }, 39.1);
-      tl.from("#s5-l2", { opacity: 0, duration: 0.4, ease: "power1.out" }, 39.6);
-      tl.from("#s5-md", { y: 30, opacity: 0, duration: 0.7, ease: "power2.out" }, 40.2);
-      tl.from("#s5-note", { y: 22, opacity: 0, duration: 0.7, ease: "power2.out" }, 41.4);
+      // Scene 5 (42 - 50)
+      tl.from("#s5-kick", { x: -28, opacity: 0, duration: 0.6, ease: "power2.out" }, 42.2);
+      tl.from("#s5-term", { y: 44, opacity: 0, duration: 0.7, ease: "power3.out" }, 42.4);
+      tl.from("#s5-l1", { opacity: 0, duration: 0.4, ease: "power1.out" }, 43.1);
+      tl.from("#s5-l2", { opacity: 0, duration: 0.4, ease: "power1.out" }, 43.6);
+      tl.from("#s5-md", { y: 30, opacity: 0, duration: 0.7, ease: "power2.out" }, 44.2);
+      tl.from("#s5-note", { y: 22, opacity: 0, duration: 0.7, ease: "power2.out" }, 45.4);
 
-      crossfade("#scene5", "#scene6", 47.0);
+      crossfade("#scene5", "#scene6", 50.0);
 
-      // Scene 6 (47 - 53)
-      tl.from("#s6-title", { y: 60, opacity: 0, duration: 0.9, ease: "power4.out" }, 47.3);
-      tl.from("#s6-tag",   { y: 28, opacity: 0, duration: 0.7, ease: "power3.out" }, 47.9);
-      tl.from("#s6-cmd",   { y: 24, opacity: 0, duration: 0.6, ease: "power2.out" }, 48.4);
-      tl.from("#s6-foot",  { opacity: 0, duration: 0.6, ease: "power1.out" }, 48.9);
-      tl.to("#scene6 .wrap", { opacity: 0, duration: 0.8, ease: "power2.in" }, 52.0);
+      // Scene 6 (50 - 56)
+      tl.from("#s6-title", { y: 60, opacity: 0, duration: 0.9, ease: "power4.out" }, 50.3);
+      tl.from("#s6-tag",   { y: 28, opacity: 0, duration: 0.7, ease: "power3.out" }, 50.9);
+      tl.from("#s6-cmd",   { y: 24, opacity: 0, duration: 0.6, ease: "power2.out" }, 51.4);
+      tl.from("#s6-foot",  { opacity: 0, duration: 0.6, ease: "power1.out" }, 51.9);
+      tl.to("#scene6 .wrap", { opacity: 0, duration: 0.8, ease: "power2.in" }, 55.0);
 
       window.__timelines["main"] = tl;
     </script>

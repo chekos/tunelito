@@ -1,6 +1,6 @@
 # Tunelito explainer video
 
-A ~53-second explainer for Tunelito, authored as HTML and rendered to MP4 with
+A ~56-second explainer for Tunelito, authored as HTML and rendered to MP4 with
 [HeyGen Hyperframes](https://github.com/heygen-com/hyperframes) (an HTML-to-video
 renderer built for agents: it seeks each frame in headless Chrome and encodes with
 FFmpeg, so the same input is deterministic).
@@ -16,7 +16,7 @@ none of this ships to npm.
 | `renders/tunelito-explainer-landscape.mp4` | 1920×1080 | README / docs / landing page |
 | `renders/tunelito-explainer-vertical.mp4` | 1080×1920 | Shorts / Reels / TikTok |
 
-Both are silent, 53s, 30fps, H.264.
+Both are silent, 56s, 30fps, H.264.
 
 ## Narrative
 
@@ -24,10 +24,13 @@ A calm, factual product walkthrough — no problem-pitch, no narration:
 
 1. **What it is** — a live, shareable preview for the rich HTML your coding agent builds.
 2. **Point it at a page** — `npx tunelito ./report.html` serves it over a secure tunnel. No deploy, no API keys, no setup.
-3. **Share the link, jump on a call** — you and a coworker leave comments right on the page, live.
-4. **Your local agent iterates** — comments land in Markdown; the coding agent you already run locally reads them and edits the page; the preview reloads.
+3. **Comment together, your agent edits live** *(the hero beat)* — you and a coworker leave comments on the page; a `claude · local agent` card picks them up, and the weak sentence **rewrites in the browser** with a "⟳ Reloaded" flash. Human + agent collaborating in real time.
+4. **The loop** — comments land in Markdown; tag `@claude` or let the agent scan on an interval; it edits the page; the preview reloads. Reusing the coding agent you already run locally.
 5. **Then move on** — kill the process, the tunnel closes, your file never left your machine, and every comment is saved in Markdown beside it.
 6. **Outro** — point it at a page, iterate together, move on.
+
+The scene-3 live edit is two stacked paragraphs (before/after) crossfaded by the
+timeline — deterministic and seek-safe, like everything else here.
 
 ## Source
 
