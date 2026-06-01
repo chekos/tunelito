@@ -32,6 +32,28 @@ A calm, factual product walkthrough — no problem-pitch, no narration:
 The scene-3 live edit is two stacked paragraphs (before/after) crossfaded by the
 timeline — deterministic and seek-safe, like everything else here.
 
+## Design system — "México Noir" (Joyful Brutalist Minimalism)
+
+The video applies the [soyserg.io](https://soyserg.io) personal brand system
+(*"Leave the edges showing, but light them with a smile"*):
+
+- **Palette:** Bone `#FFFEF9` page, Noir `#0A0A0A` ink, Graphite `#2A2A2A` body,
+  Desert Sand `#F4F1E8` quiet bands, **Terracotta `#B84C2F`** as the lone accent,
+  Sage `#657458` for metadata and the grid, Accent Pop `#FF5E3A` for tiny moments.
+- **Notebook grid** painted on the page (20px minor / 100px major sage lines) —
+  the signature "scaffolding" motif.
+- **Type:** Source Serif 4 (variable) for display + body, **Kalam** for handwritten
+  margin notes, JetBrains Mono for the "system monospace" role (terminals, build
+  stats, timestamps).
+- **Brutalist frames:** 2px solid-noir borders, zero radius, and the one hard
+  offset shadow (`10px 10px 0`) on the terminal/report cards. No ambient shadows,
+  no gradients except the terracotta **highlighter pill** (the `38%`).
+- **The one delight** = marginalia. The live reviewer comments are rendered as
+  **Kalam handwritten notes** in the document margin, while the agent's action is
+  **monospace in a terracotta box** — handwriting (human) vs. machine (agent).
+  Plus the pulsing `→` arrow in the loop and a `más ideas que tiempo` aside.
+- **Motion:** snappy (200–450ms), restrained easing, no playful bounces.
+
 ## Source
 
 | File | Composition |
@@ -39,12 +61,14 @@ timeline — deterministic and seek-safe, like everything else here.
 | `index.html` | Landscape 1920×1080 (the master timeline) |
 | `vertical.html` | The same composition reflowed to portrait via a 1080×1920 override layer |
 
-One paused GSAP timeline crossfades six absolutely-positioned `.scene` layers.
+One paused GSAP timeline crossfades six absolutely-positioned `.scene` layers over
+the bone + notebook-grid background.
 
 Shared assets:
 
-- `fonts/` — Space Grotesk (display) + JetBrains Mono (code/UI), self-hosted `.woff2`
-  so the renderer embeds them deterministically. Regenerate with `npm run fonts`.
+- `fonts/` — Source Serif 4 (roman + italic, variable), Kalam 300/400/700, and
+  JetBrains Mono 400/700, self-hosted `.woff2` so the renderer embeds them
+  deterministically. Regenerate with `npm run fonts`.
 - `vendor/gsap.min.js` — GSAP 3.14.2, vendored locally (the build sandbox blocks the
   CDN via TLS interception; vendoring also keeps renders reproducible offline).
 
