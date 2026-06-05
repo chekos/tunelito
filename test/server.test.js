@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { request } from "node:http";
+import { connect } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -551,6 +552,41 @@ test("server can require a review access key", async () => {
   }
 });
 
+test("server closes malformed WebSocket frames without exiting", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-ws-malformed-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body>WebSocket still running</body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const socket = await rawWebSocket(instance.originUrl);
+    socket.write(Buffer.from([
+      0x81,
+      0x7f,
+      0x20,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+    ]));
+    await waitForNodeEvent(socket, "close");
+
+    const response = await fetch(instance.localUrl);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /WebSocket still running/);
+  } finally {
+    await instance.close();
+  }
+});
+
 test("server returns 405 for unsupported methods and preserves auth headers", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-method-"));
   const htmlPath = join(dir, "page.html");
@@ -616,5 +652,56 @@ function rawGet(baseUrl, path) {
     });
     req.on("error", reject);
     req.end();
+  });
+}
+
+function rawWebSocket(baseUrl) {
+  const url = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const socket = connect(Number(url.port), url.hostname);
+    let response = "";
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("Timed out waiting for WebSocket upgrade"));
+    }, 1000);
+
+    socket.setEncoding("binary");
+    socket.on("connect", () => {
+      socket.write([
+        "GET /__tunelito/ws HTTP/1.1",
+        `Host: ${url.host}`,
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+        "",
+        "",
+      ].join("\r\n"));
+    });
+    socket.on("data", (chunk) => {
+      response += chunk;
+      if (response.includes("\r\n\r\n")) {
+        clearTimeout(timer);
+        if (response.startsWith("HTTP/1.1 101")) resolve(socket);
+        else {
+          socket.destroy();
+          reject(new Error(`Unexpected WebSocket upgrade response: ${response.split(/\r?\n/, 1)[0]}`));
+        }
+      }
+    });
+    socket.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+function waitForNodeEvent(target, event) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${event}`)), 1000);
+    target.once(event, () => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 }

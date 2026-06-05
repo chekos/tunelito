@@ -66,6 +66,17 @@ test("parseArgs rejects invalid agent max passes values", () => {
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "x"]), /Invalid --agent-max-passes/);
 });
 
+test("parseArgs rejects partial numeric option values", () => {
+  assert.throws(() => parseArgs(["page.html", "--port", "4317junk"]), /Invalid --port value/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-interval", "30s"]), /Invalid --agent-interval value/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-attempts", "2.5"]), /Invalid --agent-max-attempts value/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "2.5"]), /Invalid --agent-max-passes value/);
+});
+
+test("parseArgs rejects option-looking host values", () => {
+  assert.throws(() => parseArgs(["page.html", "--host", "--no-tunnel"]), /--host requires a value/);
+});
+
 test("parseArgs and loadAgentPromptOptions support prompt files", () => {
   const dir = mkdtempSync(`${tmpdir()}/tunelito-agent-prompt-`);
   const instructionsPath = resolve(dir, "instructions.md");

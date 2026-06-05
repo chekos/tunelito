@@ -7,7 +7,7 @@ export function injectTunelitoClient(html, { sourceName, liveMode = false } = {}
   const script = `<script src="${CLIENT_ROUTE}" data-source-name="${escapeAttribute(sourceName || "HTML page")}"${liveAttribute}></script>`;
   let output = stripMetaCsp(String(html));
 
-  if (output.includes(CLIENT_ROUTE)) return output;
+  if (hasTunelitoClientScript(output)) return output;
 
   if (/<\/body\s*>/i.test(output)) {
     return output.replace(/<\/body\s*>/i, `${script}\n</body>`);
@@ -33,4 +33,14 @@ function escapeAttribute(value) {
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function hasTunelitoClientScript(html) {
+  const scriptTags = String(html).matchAll(/<script\b[^>]*>/gi);
+  for (const match of scriptTags) {
+    const src = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(match[0]);
+    const value = src?.[1] ?? src?.[2] ?? src?.[3] ?? "";
+    if (value.split(/[?#]/, 1)[0] === CLIENT_ROUTE) return true;
+  }
+  return false;
 }

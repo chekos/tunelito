@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.6.3 - 2026-06-05
+
+- Prevents visible reviewer text that looks like Tunelito metadata from being restored as an extra hidden comment.
+- Closes malformed WebSocket frames without taking down the local review server.
+- Keeps client injection working when the served HTML mentions `/__tunelito/client.js` as ordinary page text.
+- Rejects partial numeric CLI option values such as `--port 4317junk`.
+
 ## 0.6.2 - 2026-05-28
 
 - Makes the injected comments launcher less disruptive on mobile by replacing the large bottom pill with a compact icon button and count badge above common bottom navigation.

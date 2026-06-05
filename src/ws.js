@@ -78,7 +78,14 @@ class WebSocketConnection extends EventEmitter {
   consume(chunk) {
     this.buffer = Buffer.concat([this.buffer, chunk]);
     while (this.buffer.length >= 2) {
-      const frame = decodeFrame(this.buffer);
+      let frame;
+      try {
+        frame = decodeFrame(this.buffer);
+      } catch {
+        this.buffer = Buffer.alloc(0);
+        this.close();
+        return;
+      }
       if (!frame) return;
       this.buffer = this.buffer.subarray(frame.consumed);
 
