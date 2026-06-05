@@ -32,6 +32,21 @@ test("injectTunelitoClient strips CSP meta tags and avoids duplicate injection",
   assert.equal(reinjected.match(new RegExp(CLIENT_ROUTE, "g")).length, 1);
 });
 
+test("injectTunelitoClient ignores literal route text when checking for duplicates", () => {
+  const html = `<!doctype html><html><body><p>Literal ${CLIENT_ROUTE} text only.</p></body></html>`;
+  const injected = injectTunelitoClient(html, { sourceName: "demo.html" });
+
+  assert.match(injected, new RegExp(`<script src="${CLIENT_ROUTE.replace(".", "\\.")}"`));
+  assert.equal((injected.match(/<script\b/g) || []).length, 1);
+});
+
+test("injectTunelitoClient recognizes unquoted existing client script sources", () => {
+  const html = `<!doctype html><html><body><script src=${CLIENT_ROUTE}></script><main>Hello</main></body></html>`;
+  const injected = injectTunelitoClient(html, { sourceName: "demo.html" });
+
+  assert.equal((injected.match(new RegExp(CLIENT_ROUTE, "g")) || []).length, 1);
+});
+
 test("stripMetaCsp removes case-insensitive CSP meta tags", () => {
   const stripped = stripMetaCsp(`<meta HTTP-EQUIV='content-security-policy' content="default-src 'self'"><p>x</p>`);
   assert.equal(stripped, "<p>x</p>");

@@ -80,58 +80,35 @@ export function parseArgs(argv) {
     } else if (arg === "--live") {
       opts.live = true;
     } else if (arg === "--agent") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent requires a provider: codex, claude, or custom");
+      const value = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom");
       opts.agent = value.toLowerCase();
     } else if (arg === "--agent-command") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-command requires a value");
+      const value = requiredValue(argv[++i], "--agent-command");
       opts.agentCommand = value;
       if (!opts.agent) opts.agent = "custom";
     } else if (arg === "--agent-interval") {
       const value = argv[++i];
-      const interval = Number.parseInt(value, 10);
-      if (!Number.isInteger(interval) || interval < 1) {
-        throw new Error(`Invalid --agent-interval value: ${value}`);
-      }
-      opts.agentIntervalSeconds = interval;
+      opts.agentIntervalSeconds = parseIntegerValue(value, "--agent-interval", { min: 1 });
     } else if (arg === "--agent-trigger") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-trigger requires a value");
-      opts.agentTrigger = value;
+      opts.agentTrigger = requiredValue(argv[++i], "--agent-trigger");
     } else if (arg === "--agent-instructions") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-instructions requires a value");
-      opts.agentInstructions = value;
+      opts.agentInstructions = requiredValue(argv[++i], "--agent-instructions");
     } else if (arg === "--agent-instructions-file") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-instructions-file requires a value");
+      const value = requiredValue(argv[++i], "--agent-instructions-file");
       opts.agentInstructionsPath = resolve(value);
     } else if (arg === "--agent-prompt") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-prompt requires a value");
-      opts.agentPrompt = value;
+      opts.agentPrompt = requiredValue(argv[++i], "--agent-prompt");
     } else if (arg === "--agent-prompt-file") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-prompt-file requires a value");
+      const value = requiredValue(argv[++i], "--agent-prompt-file");
       opts.agentPromptPath = resolve(value);
     } else if (arg === "--agent-max-attempts") {
       const value = argv[++i];
-      const attempts = Number.parseInt(value, 10);
-      if (!Number.isInteger(attempts) || attempts < 1) {
-        throw new Error(`Invalid --agent-max-attempts value: ${value}`);
-      }
-      opts.agentMaxAttempts = attempts;
+      opts.agentMaxAttempts = parseIntegerValue(value, "--agent-max-attempts", { min: 1 });
     } else if (arg === "--agent-max-passes") {
       const value = argv[++i];
-      const passes = Number.parseInt(value, 10);
-      if (!Number.isInteger(passes) || passes < 1) {
-        throw new Error(`Invalid --agent-max-passes value: ${value}`);
-      }
-      opts.agentMaxPasses = passes;
+      opts.agentMaxPasses = parseIntegerValue(value, "--agent-max-passes", { min: 1 });
     } else if (arg === "--agent-state") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--agent-state requires a value");
+      const value = requiredValue(argv[++i], "--agent-state");
       opts.agentStatePath = resolve(value);
     } else if (arg === "--no-auth") {
       opts.auth = false;
@@ -139,17 +116,11 @@ export function parseArgs(argv) {
       opts.open = true;
     } else if (arg === "--port") {
       const value = argv[++i];
-      const port = Number.parseInt(value, 10);
-      if (!Number.isInteger(port) || port < 0 || port > 65535) {
-        throw new Error(`Invalid --port value: ${value}`);
-      }
-      opts.port = port;
+      opts.port = parseIntegerValue(value, "--port", { min: 0, max: 65535 });
     } else if (arg === "--host") {
-      opts.host = argv[++i];
-      if (!opts.host) throw new Error("--host requires a value");
+      opts.host = requiredValue(argv[++i], "--host");
     } else if (arg === "--out") {
-      const value = argv[++i];
-      if (!value || value.startsWith("--")) throw new Error("--out requires a value");
+      const value = requiredValue(argv[++i], "--out");
       opts.commentsPath = resolve(value);
     } else if (arg.startsWith("--")) {
       throw new Error(`Unknown option: ${arg}`);
@@ -184,6 +155,20 @@ export function parseArgs(argv) {
   }
   if (positional[0]) opts.filePath = resolve(positional[0]);
   return opts;
+}
+
+function requiredValue(value, option, detail = "value") {
+  if (!value || value.startsWith("--")) throw new Error(`${option} requires a ${detail}`);
+  return value;
+}
+
+function parseIntegerValue(value, option, { min, max } = {}) {
+  if (!/^\d+$/.test(String(value || ""))) throw new Error(`Invalid ${option} value: ${value}`);
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || (min != null && number < min) || (max != null && number > max)) {
+    throw new Error(`Invalid ${option} value: ${value}`);
+  }
+  return number;
 }
 
 async function main() {

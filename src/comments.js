@@ -98,7 +98,7 @@ export function createMemoryCommentStore() {
 export function renderCommentsMarkdown({ comments, sourcePath }) {
   const sourceName = sourcePath ? basename(sourcePath) : "HTML page";
   const lines = [
-    `# Tunelito comments for \`${sourceName}\``,
+    `# Tunelito comments for \`${visibleMarkdownText(sourceName)}\``,
     "",
     "_This file is updated live by Tunelito. The hidden metadata comments let Tunelito restore the session if you restart it._",
     "",
@@ -110,30 +110,7 @@ export function renderCommentsMarkdown({ comments, sourcePath }) {
   }
 
   for (const comment of comments) {
-    lines.push(`${METADATA_PREFIX} ${encodeComment(comment)} ${METADATA_SUFFIX}`);
-    lines.push(`## ${comment.author} at ${formatDate(comment.created)}`);
-    lines.push("");
-    const quote = String(comment.quote || "");
-    if (quote.trim()) {
-      for (const line of quote.trim().split(/\r?\n/)) {
-        lines.push(`> ${line}`);
-      }
-    } else {
-      lines.push(`_${scopeLabel(comment.scope)} note (no selected text)._`);
-    }
-    lines.push("");
-    lines.push(comment.body.trim());
-    lines.push("");
-    const context = [];
-    context.push(`scope: \`${normalizeCommentScope(comment.scope)}\``);
-    if (comment.pagePath) context.push(`page: \`${comment.pagePath}\``);
-    if (comment.path) context.push(`path: \`${comment.path}\``);
-    if (Number.isFinite(comment.textStart)) context.push(`text offset: ${comment.textStart}`);
-    if (comment.id) context.push(`id: \`${comment.id}\``);
-    if (context.length) {
-      lines.push(`_Context: ${context.join(" · ")}_`);
-      lines.push("");
-    }
+    lines.push(...renderCommentMarkdownLines(comment));
   }
 
   return lines.join("\n");
@@ -143,11 +120,15 @@ export function loadCommentsFromMarkdown(commentsPath) {
   if (!commentsPath || !existsSync(commentsPath)) return [];
   const raw = readFileSync(commentsPath, "utf8");
   const comments = [];
-  const pattern = /<!--\s*tunelito-comment:\s*([A-Za-z0-9_-]+)\s*-->/g;
+  const pattern = /^<!--[ \t]*tunelito-comment:[ \t]*([A-Za-z0-9_-]+)[ \t]*-->[ \t]*$/gm;
   let match;
   while ((match = pattern.exec(raw))) {
     try {
-      comments.push(normalizeComment(decodeComment(match[1]), new Date(0)));
+      const comment = normalizeComment(decodeComment(match[1]), new Date(0));
+      const sectionEnd = renderedCommentSectionEndOffset(raw, match.index, match[0], comment);
+      if (sectionEnd === null) continue;
+      comments.push(comment);
+      pattern.lastIndex = Math.max(pattern.lastIndex, sectionEnd);
     } catch {
       // Ignore stale or hand-edited metadata; the readable markdown still remains.
     }
@@ -155,10 +136,85 @@ export function loadCommentsFromMarkdown(commentsPath) {
   return comments;
 }
 
+function renderCommentMarkdownLines(comment, options = {}) {
+  const lines = [];
+  lines.push(`${METADATA_PREFIX} ${encodeComment(comment)} ${METADATA_SUFFIX}`);
+  lines.push(renderCommentHeading(comment, options));
+  lines.push("");
+  const quote = visibleMarkdownText(comment.quote || "", options);
+  if (quote.trim()) {
+    for (const line of quote.trim().split(/\r?\n/)) {
+      lines.push(`> ${line}`);
+    }
+  } else {
+    lines.push(`_${scopeLabel(comment.scope)} note (no selected text)._`);
+  }
+  lines.push("");
+  lines.push(visibleMarkdownText(comment.body, options).trim());
+  lines.push("");
+  const contextLine = renderCommentContextLine(comment, options);
+  if (contextLine) {
+    lines.push(contextLine);
+    lines.push("");
+  }
+  return lines;
+}
+
+function renderCommentHeading(comment, options = {}) {
+  return `## ${visibleMarkdownText(comment.author, options)} at ${visibleMarkdownText(formatDate(comment.created), options)}`;
+}
+
+function renderCommentContextLine(comment, options = {}) {
+  const context = [];
+  context.push(`scope: \`${normalizeCommentScope(comment.scope)}\``);
+  if (comment.pagePath) context.push(`page: \`${visibleMarkdownText(comment.pagePath, options)}\``);
+  if (comment.path) context.push(`path: \`${visibleMarkdownText(comment.path, options)}\``);
+  if (Number.isFinite(comment.textStart)) context.push(`text offset: ${comment.textStart}`);
+  if (comment.id) context.push(`id: \`${visibleMarkdownText(comment.id, options)}\``);
+  if (!context.length) return "";
+  return `_Context: ${context.join(" · ")}_`;
+}
+
+function renderedCommentSectionEndOffset(raw, offset, metadataLine, comment) {
+  return matchRenderedCommentSection(raw, offset, metadataLine, comment)
+    ?? matchRenderedCommentSection(raw, offset, metadataLine, comment, { escapeMetadataMarkers: false });
+}
+
+function matchRenderedCommentSection(raw, offset, metadataLine, comment, options = {}) {
+  const expected = renderCommentMarkdownLines(comment, options);
+  expected[0] = metadataLine;
+  return matchLineEndingTolerant(raw, offset, expected.join("\n"));
+}
+
+function matchLineEndingTolerant(raw, offset, expected) {
+  let rawIndex = offset;
+  let expectedIndex = 0;
+  while (expectedIndex < expected.length) {
+    if (expected[expectedIndex] === "\n") {
+      if (raw.startsWith("\r\n", rawIndex)) rawIndex += 2;
+      else if (raw[rawIndex] === "\n") rawIndex += 1;
+      else return null;
+      expectedIndex += 1;
+    } else if (raw[rawIndex] === expected[expectedIndex]) {
+      rawIndex += 1;
+      expectedIndex += 1;
+    } else {
+      return null;
+    }
+  }
+  return rawIndex;
+}
+
 function cleanText(value, limit) {
   return String(value ?? "")
     .replace(/\u0000/g, "")
     .slice(0, limit);
+}
+
+function visibleMarkdownText(value, { escapeMetadataMarkers = true } = {}) {
+  const text = String(value ?? "");
+  if (!escapeMetadataMarkers) return text;
+  return text.replace(/<!--[ \t]*tunelito-comment:/g, "&lt;!-- tunelito-comment:");
 }
 
 function encodeComment(comment) {
