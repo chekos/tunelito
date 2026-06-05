@@ -44,6 +44,8 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 6. Run `npm run ci` before commit or handoff.
 7. Summarize what changed, what passed, and any residual risk.
 
+For end-to-end feature, PR, package, or release work, use `docs/agents/IDEA_TO_RELEASE.md` as the lifecycle map.
+
 ## Agent-Native Principle
 
 The repository should encode the team's process in files. If an agent learns something non-obvious, add or improve a playbook instead of leaving it only in chat history.

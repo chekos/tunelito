@@ -2,7 +2,7 @@
 
 You are working in Tunelito, a local-first CLI that turns any HTML file into a live review room with injected comments.
 
-Read `docs/agents/START_HERE.md` before making changes. The repository is intentionally set up for agent-driven development, so use the playbooks instead of rediscovering process.
+Read `docs/agents/START_HERE.md` before making changes. For feature, PR, package, or release work, also read `docs/agents/IDEA_TO_RELEASE.md`. The repository is intentionally set up for agent-driven development, so use the playbooks instead of rediscovering process.
 
 ## Non-Negotiables
 

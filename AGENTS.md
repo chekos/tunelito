@@ -5,9 +5,10 @@ Tunelito is maintained by coding agents. Treat this repository as an agent-nativ
 ## Start Here
 
 1. Read `docs/agents/START_HERE.md`.
-2. Check `git status -sb` before editing.
-3. Use `rg` for search and `npm run ci` before shipping.
-4. Preserve user data: do not edit `*.comments.md`, `.env*`, local archives, walkthrough exports, or generated tunnel/session artifacts unless the user explicitly asks.
+2. For feature, PR, package, or release work, read `docs/agents/IDEA_TO_RELEASE.md`.
+3. Check `git status -sb` before editing.
+4. Use `rg` for search and `npm run ci` before shipping.
+5. Preserve user data: do not edit `*.comments.md`, `.env*`, local archives, walkthrough exports, or generated tunnel/session artifacts unless the user explicitly asks.
 
 ## Project Commands
 
@@ -32,6 +33,7 @@ npm run ci
 ## Documentation Map
 
 - `docs/agents/START_HERE.md`: repo orientation for any agent.
+- `docs/agents/IDEA_TO_RELEASE.md`: end-to-end lifecycle from idea through PR, release, and publish verification.
 - `docs/agents/WORKFLOW.md`: standard autonomous development loop.
 - `docs/agents/QUALITY_GATES.md`: checks required by change type.
 - `docs/agents/ARCHITECTURE.md`: system boundaries and invariants.

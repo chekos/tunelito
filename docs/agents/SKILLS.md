@@ -50,5 +50,6 @@ These skills set `disable-model-invocation: true` so Claude does not decide to r
 - side-effect skills are manual-only
 - every subagent has matching frontmatter
 - required playbooks exist
+- the idea-to-release lifecycle map exists
 
 Add new policy checks there when conventions become important enough to enforce.

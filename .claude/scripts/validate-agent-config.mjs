@@ -78,6 +78,7 @@ function validateAgents() {
 function validatePlaybooks() {
   const required = [
     "docs/agents/START_HERE.md",
+    "docs/agents/IDEA_TO_RELEASE.md",
     "docs/agents/WORKFLOW.md",
     "docs/agents/QUALITY_GATES.md",
     "docs/agents/ARCHITECTURE.md",
