@@ -14,9 +14,9 @@ Use this guide when:
 - you serve a folder-backed mini-site with Tunelito
 - you add the Tunelito URL to your iPhone Home Screen
 - tapping internal links opens a browser sheet instead of staying in the saved app
-- you want a trip itinerary, prototype, or review site to feel like an app on mobile
+- you want a prototype, travel guide, or review site to feel like an app on mobile
 
-External links are different. Maps, `tel:` links, reservation pages, Tabelog, and other off-site URLs can still open outside the saved app.
+External links are different. Maps, `tel:` links, booking pages, and other off-site URLs can still open outside the saved app.
 
 ## Add web app metadata
 
@@ -24,9 +24,9 @@ Add a manifest file to the folder root:
 
 ```json
 {
-  "name": "Japan 2026",
-  "short_name": "Japan",
-  "start_url": "/itinerary-mobile.html",
+  "name": "Review Site",
+  "short_name": "Review",
+  "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0f1115",
@@ -50,7 +50,7 @@ Then add these tags to every HTML page:
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Japan 2026">
+<meta name="apple-mobile-web-app-title" content="Review Site">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f1115">
 ```
@@ -66,21 +66,21 @@ Keep the viewport tag too:
 Internal links should be same-origin and inside the manifest scope:
 
 ```html
-<a href="itinerary-day-04.html">Day 4</a>
-<a href="/itinerary-day-04.html">Day 4</a>
+<a href="section-04.html">Section 4</a>
+<a href="/section-04.html">Section 4</a>
 ```
 
 Avoid opening internal app pages in a new browsing context:
 
 ```html
 <!-- Avoid this for internal pages -->
-<a href="itinerary-day-04.html" target="_blank">Day 4</a>
+<a href="section-04.html" target="_blank">Section 4</a>
 ```
 
 It is fine for external links to use `target="_blank"`:
 
 ```html
-<a href="https://maps.google.com/?q=Kanazawa" target="_blank" rel="noopener">Map</a>
+<a href="https://maps.google.com/?q=Example+Venue" target="_blank" rel="noopener">Map</a>
 ```
 
 ## Prompt a coding agent
@@ -93,10 +93,10 @@ Make this HTML folder work well when added to an iPhone Home Screen.
 Add a manifest.webmanifest with display standalone, a start_url pointing at the main hub page, and a scope that includes every internal HTML page. Add iOS apple-mobile-web-app meta tags, theme color, and apple-touch-icon links to every HTML page. Keep internal links same-origin and inside the app scope with no target="_blank". External links like Google Maps, restaurant pages, and tel: links can still open outside the app.
 ```
 
-If the folder is a trip itinerary, include the app name and launch page:
+If the folder has a specific title, include the app name and launch page:
 
 ```text
-Use app name "Japan 2026" and start_url "/itinerary-mobile.html".
+Use app name "Review Site" and start_url "/index.html".
 ```
 
 ## Test on iPhone
