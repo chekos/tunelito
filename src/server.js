@@ -200,12 +200,23 @@ export async function createTunelitoServer(options) {
   });
 
   let watchTimer = null;
-  const watcher = createWatcher(directoryMode ? rootDir : filePath, directoryMode, () => {
-    clearTimeout(watchTimer);
-    watchTimer = setTimeout(() => {
-      events.emit("document-changed");
-      hub.broadcast({ type: "document-changed" });
-    }, 120);
+  let sourceFileSignature = directoryMode ? null : fileSignature(filePath);
+  const watcher = createWatcher({
+    path: rootDir,
+    recursive: directoryMode,
+    filename: directoryMode ? "" : basename(filePath),
+    onChange: () => {
+      if (!directoryMode) {
+        const nextSignature = fileSignature(filePath);
+        if (nextSignature === sourceFileSignature) return;
+        sourceFileSignature = nextSignature;
+      }
+      clearTimeout(watchTimer);
+      watchTimer = setTimeout(() => {
+        events.emit("document-changed");
+        hub.broadcast({ type: "document-changed" });
+      }, 120);
+    },
   });
 
   const host = options.host || "127.0.0.1";
@@ -579,9 +590,10 @@ function findPeerClient(peers, peerId, pagePath = "") {
   return null;
 }
 
-function createWatcher(path, recursive, onChange) {
-  const handleChange = (_eventType, filename) => {
-    if (isIgnoredWatchFilename(filename)) return;
+function createWatcher({ path, recursive, filename: expectedFilename, onChange }) {
+  const handleChange = (_eventType, actualFilename) => {
+    if (isIgnoredWatchFilename(actualFilename)) return;
+    if (!isWatchedFilename(actualFilename, expectedFilename)) return;
     onChange();
   };
   try {
@@ -589,6 +601,22 @@ function createWatcher(path, recursive, onChange) {
   } catch (error) {
     if (!recursive) throw error;
     return watch(path, { persistent: true }, handleChange);
+  }
+}
+
+function isWatchedFilename(actualFilename, expectedFilename) {
+  if (!expectedFilename || !actualFilename) return true;
+  const parts = String(actualFilename).split(/[\\/]+/);
+  return parts[parts.length - 1] === expectedFilename;
+}
+
+function fileSignature(path) {
+  try {
+    const stats = statSync(path, { bigint: true });
+    return `${stats.ino}:${stats.size}:${stats.mtimeNs}`;
+  } catch (error) {
+    if (error?.code === "ENOENT") return "missing";
+    throw error;
   }
 }
 

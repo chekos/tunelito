@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.1 - 2026-06-08
+
+- Keeps single-file live reload working after repeated atomic-save edits by watching the parent directory and filtering for the served HTML file.
+- Keeps the floating comment composer visible near the bottom of the viewport by flipping or clamping it on desktop while preserving the mobile bottom-sheet layout.
+
 ## 0.8.0 - 2026-06-08
 
 - Adds `--agent-policy` for deterministic local-agent comment gating by all comments, trigger mentions, owner comments, or owner-or-mention sessions.
