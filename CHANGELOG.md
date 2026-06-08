@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-06-08
+
 - Adds random editable reviewer names and `--owner <name>` so local owner comments are labeled for humans and local agent prompts.
 
 ## 0.6.3 - 2026-06-05
