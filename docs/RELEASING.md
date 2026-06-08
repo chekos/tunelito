@@ -57,6 +57,13 @@ All code and version changes must land through a pull request before a release i
    npx --yes tunelito ./examples/simple-review.html --no-tunnel
    ```
 
+10. Update the maintainer machine's global install to the exact released version:
+
+    ```bash
+    npm install -g tunelito@0.1.2
+    tunelito --version
+    ```
+
 ## npm Tags
 
 The publish workflow derives the npm dist-tag from the GitHub Release tag:
