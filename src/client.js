@@ -369,6 +369,8 @@
           z-index: 2147483647;
           display: none;
           width: min(360px, calc(100vw - 24px));
+          max-height: calc(100vh - 16px);
+          overflow: auto;
           border: 1px solid rgba(15, 23, 42, .16);
           border-radius: 10px;
           background: #fff;
@@ -589,6 +591,9 @@
     document.addEventListener("keyup", scheduleSelectionCapture);
     document.addEventListener("selectionchange", scheduleSelectionCapture);
     document.addEventListener("touchend", scheduleSelectionCapture, { passive: true });
+    window.addEventListener("resize", () => {
+      if (ui.composer.classList.contains("open")) positionComposer(state.pendingSelection?.rect || null);
+    });
 
     document.addEventListener("mousedown", (event) => {
       if (event.composedPath().includes(ui.selection) || event.composedPath().includes(ui.composer)) return;
@@ -669,14 +674,8 @@
     state.pendingSelection.scope = normalizeScope(state.pendingSelection.scope);
     setComposerScope(state.pendingSelection.scope);
     ui.composer.querySelector("textarea").value = "";
-    if (isMobileViewport()) {
-      ui.composer.style.left = "";
-      ui.composer.style.top = "";
-    } else {
-      ui.composer.style.left = `${Math.max(8, Math.min(window.innerWidth - 370, rect?.left || 16))}px`;
-      ui.composer.style.top = `${Math.min(window.innerHeight - 180, Math.max(8, (rect?.bottom || 80) + 8))}px`;
-    }
     ui.composer.classList.add("open");
+    positionComposer(rect);
     ui.composer.querySelector("textarea").focus();
   }
 
@@ -1068,6 +1067,32 @@
     ui.selection.style.top = `${Math.max(8, rect.top - 42)}px`;
   }
 
+  function positionComposer(anchorRect) {
+    if (isMobileViewport()) {
+      ui.composer.style.left = "";
+      ui.composer.style.top = "";
+      return;
+    }
+
+    const margin = 8;
+    const composerRect = ui.composer.getBoundingClientRect();
+    const width = composerRect.width || Math.min(360, window.innerWidth - 24);
+    const height = composerRect.height || 180;
+    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+    const anchorLeft = Number.isFinite(anchorRect?.left) ? anchorRect.left : 16;
+    const anchorTop = Number.isFinite(anchorRect?.top) ? anchorRect.top : 80;
+    const anchorBottom = Number.isFinite(anchorRect?.bottom) ? anchorRect.bottom : anchorTop;
+    const belowTop = anchorBottom + margin;
+    const aboveTop = anchorTop - height - margin;
+    const fitsBelow = belowTop + height <= window.innerHeight - margin;
+    const fitsAbove = aboveTop >= margin;
+    const preferredTop = fitsBelow || !fitsAbove ? belowTop : aboveTop;
+
+    ui.composer.style.left = `${clamp(anchorLeft, margin, maxLeft)}px`;
+    ui.composer.style.top = `${clamp(preferredTop, margin, maxTop)}px`;
+  }
+
   function updateHighlights() {
     state.highlights = [];
     if (!("CSS" in window) || !CSS.highlights || typeof Highlight === "undefined") return;
@@ -1248,6 +1273,10 @@
 
   function isMobileViewport() {
     return window.matchMedia("(max-width: 640px)").matches;
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
   }
 
   function compact(value, length) {

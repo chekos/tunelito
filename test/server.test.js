@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { request } from "node:http";
 import { connect } from "node:net";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OWNER_KEY_PARAM, createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
@@ -286,6 +286,35 @@ test("watcher ignores local agent ledger paths", () => {
   assert.equal(isIgnoredWatchFilename(".tunelito/agent/state.json"), true);
   assert.equal(isIgnoredWatchFilename("nested/.tunelito/agent/log.md"), true);
   assert.equal(isIgnoredWatchFilename("index.html"), false);
+});
+
+test("single-file watcher survives repeated atomic saves", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-atomic-watch-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body>First version</body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const socket = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+  try {
+    await waitFor(socket.socket, "open");
+    await waitUntil(() => socket.messages.some((message) => message.type === "hello"));
+    await delay(450);
+    assert.equal(messageCount(socket.messages, "document-changed"), 0);
+
+    atomicReplace(htmlPath, "<!doctype html><html><body>Second version</body></html>");
+    await waitUntil(() => messageCount(socket.messages, "document-changed") >= 1, 3000);
+
+    atomicReplace(htmlPath, "<!doctype html><html><body>Third version</body></html>");
+    await waitUntil(() => messageCount(socket.messages, "document-changed") >= 2, 3000);
+  } finally {
+    socket.socket.close();
+    await instance.close();
+  }
 });
 
 test("directory mode renders a basic HTML index when no index file exists", async () => {
@@ -716,6 +745,20 @@ function openJsonSocket(url) {
   const messages = [];
   socket.addEventListener("message", (event) => messages.push(JSON.parse(event.data)));
   return { socket, messages };
+}
+
+function atomicReplace(path, contents) {
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tempPath, contents);
+  renameSync(tempPath, path);
+}
+
+function messageCount(messages, type) {
+  return messages.filter((message) => message.type === type).length;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function waitFor(target, event) {
