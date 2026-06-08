@@ -17,8 +17,9 @@ Options:
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
-  --agent-interval <s>  Agent polling interval in seconds (default: 120)
-  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: all)
+  --agent-interval <s>  Agent fallback polling interval in seconds (default: 120)
+  --agent-policy <mode> Which comments the agent handles: all|mention|owner|owner-or-mention (default: all)
+  --agent-trigger <txt> Marker for mention policies, or "all" (default: all)
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
   --agent-instructions-file <path>
@@ -116,4 +117,10 @@ Require an explicit marker for stricter sessions:
 
 ```bash
 tunelito ./site --agent codex --agent-trigger "@agent"
+```
+
+Handle owner comments automatically and visitor comments only when tagged:
+
+```bash
+tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"
 ```

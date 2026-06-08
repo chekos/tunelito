@@ -29,7 +29,7 @@ site/
 site.comments.md
 ```
 
-Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can poll that file, apply edits to the matching HTML file or the whole folder when a comment is site-wide, and continue larger comments across bounded follow-up passes.
+Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can watch that file, apply edits to the matching HTML file or the whole folder when a comment is site-wide, and continue larger comments across bounded follow-up passes.
 
 To let a local agent handle comments while Tunelito runs:
 
@@ -114,8 +114,9 @@ Options:
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
-  --agent-interval <s>  Agent polling interval in seconds (default: 120)
-  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: all)
+  --agent-interval <s>  Agent fallback polling interval in seconds (default: 120)
+  --agent-policy <mode> Which comments the agent handles: all|mention|owner|owner-or-mention (default: all)
+  --agent-trigger <txt> Marker for mention policies, or "all" (default: all)
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
   --agent-instructions-file <path>
@@ -237,7 +238,27 @@ The built-in provider presets reuse your local CLI auth:
 - `--agent claude` runs `claude -p` with edit permissions.
 - `--agent-command "<cmd>"` runs a custom shell command with the prompt on stdin.
 
-By default, the worker evaluates every comment and decides whether to edit, return `no-op`, or mark the comment `ignored`. Use `--agent-trigger "@agent"` or another marker when you want stricter sessions.
+By default, the worker evaluates every comment and decides whether to edit, return `no-op`, or mark the comment `ignored`. It wakes when the comments markdown changes and keeps `--agent-interval` as a fallback.
+
+Use `--agent-trigger "@agent"` or another marker when you want stricter sessions:
+
+```bash
+tunelito ./site --agent codex --agent-trigger "@agent"
+```
+
+Use `--agent-policy owner` when only owner-authored comments should reach the worker:
+
+```bash
+tunelito ./site --owner "Chekos" --agent codex --agent-policy owner
+```
+
+For the recommended owner-led workflow, let owner comments through automatically and let visitors opt in with a marker:
+
+```bash
+tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+Mention-based policies require a non-`all` trigger marker.
 
 Large actionable comments can span multiple agent passes. The agent can return `needs_followup` with `completedTasks` and `remainingTasks`; Tunelito queues the same comment again with that continuation context until it is `resolved`, `blocked`, `partial`, or reaches `--agent-max-passes`.
 

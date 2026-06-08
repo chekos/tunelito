@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Adds `--agent-policy` for deterministic local-agent comment gating by all comments, trigger mentions, owner comments, or owner-or-mention sessions.
+- Wakes the local agent worker when the persistent comments markdown changes, while keeping interval polling as a fallback.
+
 ## 0.7.0 - 2026-06-08
 
 - Adds random editable reviewer names and `--owner <name>` so local owner comments are labeled for humans and local agent prompts.

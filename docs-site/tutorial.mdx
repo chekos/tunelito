@@ -105,7 +105,7 @@ No marker is required by default. If you start Tunelito with `--agent-trigger "@
 
 ## 4. Let the worker handle comments
 
-The worker polls the comments file, sends unresolved comment IDs to the selected local CLI, and records status in:
+The worker watches the comments file, sends unresolved comment IDs to the selected local CLI, keeps interval polling as a fallback, and records status in:
 
 ```text
 review-site/
@@ -117,9 +117,9 @@ review-site/
 
 When the agent saves HTML changes, Tunelito asks connected browsers to reload. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page.
 
-If a selected-text comment, page note, or site note needs more than one pass, the agent can return `needs_followup` with completed and remaining tasks. Tunelito stores that continuation in the state file and sends the same comment again on the next poll. If the agent reaches `--agent-max-passes` or stops making progress, Tunelito marks the comment `partial`.
+If a selected-text comment, page note, or site note needs more than one pass, the agent can return `needs_followup` with completed and remaining tasks. Tunelito stores that continuation in the state file and sends the same comment again on the next wake or fallback poll. If the agent reaches `--agent-max-passes` or stops making progress, Tunelito marks the comment `partial`.
 
-Resolved comments are skipped on future polling cycles. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
+Resolved comments are skipped on future worker passes. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
 
 ## 5. Manual fallback
 

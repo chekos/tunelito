@@ -9,18 +9,22 @@ import {
   renameSync,
   rmSync,
   statSync,
+  watch,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { loadCommentsFromMarkdown } from "./comments.js";
 
 export const DEFAULT_AGENT_INTERVAL_SECONDS = 120;
 export const DEFAULT_AGENT_TRIGGER = "all";
+export const DEFAULT_AGENT_POLICY = "all";
+export const AGENT_POLICIES = ["all", "mention", "owner", "owner-or-mention"];
 export const DEFAULT_AGENT_MAX_ATTEMPTS = 2;
 export const DEFAULT_AGENT_MAX_PASSES = 3;
 
 const STATE_VERSION = 1;
+const AGENT_POLICY_SET = new Set(AGENT_POLICIES);
 const TERMINAL_STATUSES = new Set(["resolved", "no-op", "blocked", "stale", "ignored", "partial", "changed_needs_review"]);
 const RESULT_STATUSES = new Set(["resolved", "no-op", "blocked", "stale", "ignored", "partial", "needs_followup"]);
 const CAPTURE_LIMIT = 200_000;
@@ -33,6 +37,7 @@ export function createAgentWorker({
   statePath,
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
   ownerName = "",
@@ -42,11 +47,12 @@ export function createAgentWorker({
   now = () => new Date(),
   log = console.log,
 } = {}) {
-  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, maxPasses, ownerName, promptAppend, promptOverride });
+  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, policy, maxAttempts, maxPasses, ownerName, promptAppend, promptOverride });
   let timer = null;
   let running = false;
   let stopped = false;
   let currentChild = null;
+  let commentsWatcher = null;
 
   async function runOnce(reason = "manual") {
     if (running || stopped) return { skipped: true, reason: running ? "running" : "stopped" };
@@ -79,30 +85,47 @@ export function createAgentWorker({
     timer.unref?.();
   }
 
+  function wake(reason = "comment") {
+    if (stopped) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    timer = setTimeout(async () => {
+      timer = null;
+      await runOnce(reason);
+      schedule(config.intervalSeconds * 1000);
+    }, 500);
+    timer.unref?.();
+  }
+
+  function startCommentsWatcher() {
+    if (commentsWatcher || stopped || !config.commentsPath) return;
+    try {
+      commentsWatcher = watch(dirname(config.commentsPath), { persistent: true }, (_eventType, filename) => {
+        if (isWatchedCommentsFilename(filename, config.commentsPath)) wake("comments-file");
+      });
+      commentsWatcher.unref?.();
+    } catch (error) {
+      log(`Agent:   comments file watch unavailable (${error.message}); using interval fallback`);
+    }
+  }
+
   return {
     ...config,
     description: describeAgentConfig(config),
     start() {
+      startCommentsWatcher();
       schedule(0);
     },
-    wake(reason = "comment") {
-      if (stopped) return;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      timer = setTimeout(async () => {
-        timer = null;
-        await runOnce(reason);
-        schedule(config.intervalSeconds * 1000);
-      }, 500);
-      timer.unref?.();
-    },
+    wake,
     async runOnce(reason) {
       return runOnce(reason);
     },
     async stop() {
       stopped = true;
+      commentsWatcher?.close();
+      commentsWatcher = null;
       if (timer) {
         clearTimeout(timer);
         timer = null;
@@ -121,6 +144,7 @@ export async function runAgentPass({
   statePath,
   logPath,
   trigger,
+  policy = DEFAULT_AGENT_POLICY,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
   ownerName = "",
@@ -146,7 +170,7 @@ export async function runAgentPass({
   }
 
   const comments = loadCommentsFromMarkdown(commentsPath);
-  const prepared = prepareAgentQueue(comments, state, { trigger, maxAttempts, maxPasses, now });
+  const prepared = prepareAgentQueue(comments, state, { trigger, policy, maxAttempts, maxPasses, now });
   if (prepared.changed) saveAgentState(statePath, state, now);
   if (!prepared.pending.length) return { processed: 0, reason: "no-pending-comments" };
 
@@ -179,6 +203,7 @@ export async function runAgentPass({
     workspaceRoot,
     statePath,
     trigger,
+    policy,
     maxAttempts,
     maxPasses,
     ownerName,
@@ -290,6 +315,7 @@ export function normalizeAgentConfig({
   statePath,
   intervalSeconds = DEFAULT_AGENT_INTERVAL_SECONDS,
   trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
   ownerName = "",
@@ -308,6 +334,10 @@ export function normalizeAgentConfig({
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 1) throw new Error("--agent-interval must be a positive number of seconds");
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
   if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
+  const normalizedPolicy = normalizeAgentPolicy(policy);
+  if (requiresMentionTrigger(normalizedPolicy) && isAllTrigger(trigger)) {
+    throw new Error(`--agent-policy ${normalizedPolicy} requires --agent-trigger with a marker such as @agent`);
+  }
 
   const workspaceRoot = agentWorkspaceRoot(targetPath);
   const resolvedStatePath = resolve(statePath || defaultAgentStatePath(targetPath));
@@ -321,6 +351,7 @@ export function normalizeAgentConfig({
     logPath: defaultAgentLogPath(resolvedStatePath),
     intervalSeconds,
     trigger: trigger || DEFAULT_AGENT_TRIGGER,
+    policy: normalizedPolicy,
     maxAttempts,
     maxPasses,
     ownerName: cleanOwnerName(ownerName),
@@ -365,9 +396,10 @@ export function saveAgentState(statePath, state, now = () => new Date()) {
   renameSync(temp, statePath);
 }
 
-export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRIGGER, maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS, maxPasses = DEFAULT_AGENT_MAX_PASSES, now = () => new Date() } = {}) {
+export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRIGGER, policy = DEFAULT_AGENT_POLICY, maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS, maxPasses = DEFAULT_AGENT_MAX_PASSES, now = () => new Date() } = {}) {
   const pending = [];
   let changed = false;
+  const normalizedPolicy = normalizeAgentPolicy(policy);
   for (const comment of comments) {
     if (!comment?.id) continue;
     const fingerprint = fingerprintComment(comment);
@@ -404,7 +436,7 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
       changed = true;
       continue;
     }
-    if (!commentMatchesTrigger(comment, trigger)) continue;
+    if (!commentMatchesAgentPolicy(comment, { policy: normalizedPolicy, trigger })) continue;
     pending.push({ comment, fingerprint });
   }
   return { pending, changed };
@@ -422,15 +454,41 @@ export function fingerprintComment(comment) {
 }
 
 export function commentMatchesTrigger(comment, trigger = DEFAULT_AGENT_TRIGGER) {
-  if (!trigger || String(trigger).toLowerCase() === "all") return true;
+  if (isAllTrigger(trigger)) return true;
   const text = `${comment.body || ""}\n${comment.quote || ""}`;
   return text.toLowerCase().includes(String(trigger).toLowerCase());
 }
 
-export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, ownerName = "", commentStates = {}, promptAppend = "", promptOverride = "" }) {
+export function commentMatchesAgentPolicy(comment, { policy = DEFAULT_AGENT_POLICY, trigger = DEFAULT_AGENT_TRIGGER } = {}) {
+  const normalizedPolicy = normalizeAgentPolicy(policy);
+  if (normalizedPolicy === "owner") return isOwnerComment(comment);
+  if (normalizedPolicy === "mention") return !isAllTrigger(trigger) && commentMatchesTrigger(comment, trigger);
+  if (normalizedPolicy === "owner-or-mention") {
+    return isOwnerComment(comment) || (!isAllTrigger(trigger) && commentMatchesTrigger(comment, trigger));
+  }
+  return commentMatchesTrigger(comment, trigger);
+}
+
+export function normalizeAgentPolicy(policy = DEFAULT_AGENT_POLICY) {
+  const normalized = String(policy || DEFAULT_AGENT_POLICY).trim().toLowerCase();
+  if (!AGENT_POLICY_SET.has(normalized)) {
+    throw new Error(`Unsupported --agent-policy: ${policy}. Use ${AGENT_POLICIES.join(", ")}.`);
+  }
+  return normalized;
+}
+
+export function isWatchedCommentsFilename(filename, commentsPath) {
+  if (!filename) return true;
+  const value = basename(String(filename));
+  const commentsFile = basename(commentsPath);
+  return value === commentsFile || value === `${commentsFile}.tmp`;
+}
+
+export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, policy = DEFAULT_AGENT_POLICY, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, ownerName = "", commentStates = {}, promptAppend = "", promptOverride = "" }) {
   const behavior = normalizePromptText(promptOverride) || defaultAgentBehaviorPrompt();
   const hostInstructions = normalizePromptText(promptAppend);
   const owner = cleanOwnerName(ownerName);
+  const normalizedPolicy = normalizeAgentPolicy(policy);
   const sections = [
     behavior,
     hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
@@ -439,6 +497,7 @@ export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, stateP
 - HTML root: ${workspaceRoot}
 - Comments inbox: ${commentsPath}
 - Resolution ledger: ${statePath}
+- Policy: ${normalizedPolicy}
 - Trigger: ${trigger}
 - Max retry attempts per comment: ${maxAttempts}
 - Max passes per comment: ${maxPasses}${owner ? `\n- Owner: ${owner}` : ""}`,
@@ -570,11 +629,11 @@ export function normalizeResultPayload(payload) {
 }
 
 export function describeAgentConfig(config) {
-  const trigger = config.trigger === "all" ? "all comments" : `comments containing "${config.trigger}"`;
+  const filter = describeAgentFilter(config.policy, config.trigger);
   const provider = config.provider === "custom" ? `custom command (${config.command})` : config.provider;
   const prompt = config.promptOverride ? "; custom prompt" : config.promptAppend ? "; extra instructions" : "";
   const owner = config.ownerName ? `; owner ${config.ownerName}` : "";
-  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s; max ${config.maxPasses} passes${owner}${prompt}; state ${config.statePath}`;
+  return `${provider}; handles ${filter}; checks every ${config.intervalSeconds}s; max ${config.maxPasses} passes${owner}${prompt}; state ${config.statePath}`;
 }
 
 export function defaultAgentBehaviorPrompt() {
@@ -585,6 +644,7 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 ## Core Behavior
 
 - Treat each listed comment as reviewer feedback from a trusted local review session.
+- Tunelito prefilters comments by the configured local agent policy before invoking you.
 - If the workspace lists an Owner, comments may include authorRole "owner" or "visitor"; use that role when host instructions ask you to prefer, ignore, or wait for owner feedback.
 - Use judgment: some comments ask for edits, some are questions, some are observations, and some may already be satisfied.
 - Make focused HTML/CSS/asset edits when the requested change is clear and safe.
@@ -626,6 +686,26 @@ function normalizeStatus(status) {
   if (value === "success" || value === "complete" || value === "completed") return "resolved";
   if (value === "needs-followup" || value === "needs-follow-up" || value === "needs followup" || value === "needs follow-up" || value === "followup" || value === "follow-up" || value === "continue") return "needs_followup";
   return value;
+}
+
+function describeAgentFilter(policy = DEFAULT_AGENT_POLICY, trigger = DEFAULT_AGENT_TRIGGER) {
+  const normalizedPolicy = normalizeAgentPolicy(policy);
+  if (normalizedPolicy === "owner") return "owner comments";
+  if (normalizedPolicy === "mention") return `comments containing "${trigger}"`;
+  if (normalizedPolicy === "owner-or-mention") return `owner comments or comments containing "${trigger}"`;
+  return isAllTrigger(trigger) ? "all comments" : `comments containing "${trigger}"`;
+}
+
+function requiresMentionTrigger(policy) {
+  return policy === "mention" || policy === "owner-or-mention";
+}
+
+function isAllTrigger(trigger) {
+  return !trigger || String(trigger).trim().toLowerCase() === "all";
+}
+
+function isOwnerComment(comment) {
+  return String(comment?.authorRole || "").trim().toLowerCase() === "owner";
 }
 
 function resultCandidates(output) {
