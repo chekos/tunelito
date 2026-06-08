@@ -13,7 +13,7 @@ The worker does not use model API keys directly. It starts your installed local 
 npx --yes tunelito ./site --agent codex
 ```
 
-Tunelito serves the folder, writes `site.comments.md`, and polls for unresolved comments. When a comment arrives, the worker invokes Codex with the relevant scope, page path, optional quote, comment body, and comment ID. Codex decides whether to edit, continue with `needs_followup`, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
+Tunelito serves the folder, writes `site.comments.md`, watches for unresolved comments, and keeps interval polling as a fallback. When a comment arrives, the worker invokes Codex with the relevant scope, page path, optional quote, comment body, and comment ID. Codex decides whether to edit, continue with `needs_followup`, return `no-op`, mark the comment `ignored`, or report a blocked/stale request.
 
 ## Start with Claude Code
 
@@ -38,7 +38,7 @@ The custom command runs from the served HTML root. Tunelito also sets:
 - `TUNELITO_AGENT_STATE`
 - `TUNELITO_OWNER_NAME`
 
-## Trigger mode
+## Agent policy
 
 By default, every persistent comment is visible to the worker. This is intended for trusted local review sessions where you shared the URL with people in the meeting.
 
@@ -61,8 +61,16 @@ npx --yes tunelito ./site --agent claude --agent-trigger "@fix"
 If you start the session with `--owner <name>`, the worker prompt includes the owner name and each comment's `authorRole`. You can combine that with prompt guidance when you want the agent to prefer owner comments or wait for owner approval:
 
 ```bash
-npx --yes tunelito ./site --owner "Chekos" --agent codex --agent-instructions "Only edit for comments marked authorRole owner."
+npx --yes tunelito ./site --owner "Chekos" --agent codex --agent-policy owner
 ```
+
+The recommended owner-led policy lets owner-authored comments through automatically and lets visitors opt in with a marker:
+
+```bash
+npx --yes tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+Mention-based policies require a non-`all` trigger marker.
 
 ## Prompt controls
 
@@ -116,7 +124,7 @@ When the worker can make useful progress but more work remains, the agent can re
 }
 ```
 
-Tunelito stores those tasks in `.tunelito/agent/state.json` and queues the same comment again on the next poll. The next prompt includes the previous summary, completed tasks, remaining tasks, changed files, and pass count. This works for inline selected-text comments, page notes, and site notes.
+Tunelito stores those tasks in `.tunelito/agent/state.json` and queues the same comment again on the next wake or poll. The next prompt includes the previous summary, completed tasks, remaining tasks, changed files, and pass count. This works for inline selected-text comments, page notes, and site notes.
 
 Use `--agent-max-passes` to bound continuation:
 

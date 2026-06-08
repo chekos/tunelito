@@ -40,6 +40,8 @@ test("parseArgs supports local agent worker options", () => {
     "codex",
     "--agent-interval",
     "30",
+    "--agent-policy",
+    "owner-or-mention",
     "--agent-trigger",
     "@agent",
     "--agent-instructions",
@@ -54,6 +56,7 @@ test("parseArgs supports local agent worker options", () => {
 
   assert.equal(opts.agent, "codex");
   assert.equal(opts.agentIntervalSeconds, 30);
+  assert.equal(opts.agentPolicy, "owner-or-mention");
   assert.equal(opts.agentTrigger, "@agent");
   assert.equal(opts.agentInstructions, "Use short copy.");
   assert.equal(opts.agentMaxAttempts, 3);
@@ -64,6 +67,17 @@ test("parseArgs supports local agent worker options", () => {
 test("parseArgs rejects invalid agent max passes values", () => {
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "0"]), /Invalid --agent-max-passes/);
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-max-passes", "x"]), /Invalid --agent-max-passes/);
+});
+
+test("parseArgs validates agent policy options", () => {
+  assert.equal(parseArgs(["site", "--agent", "codex", "--agent-policy", "owner"]).agentPolicy, "owner");
+  assert.throws(() => parseArgs(["site", "--agent-policy", "owner"]), /--agent-policy requires --agent/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-policy", "visitor"]), /Unsupported --agent-policy/);
+  assert.throws(
+    () => parseArgs(["site", "--agent", "codex", "--agent-policy", "mention"]),
+    /requires --agent-trigger/,
+  );
+  assert.doesNotThrow(() => parseArgs(["site", "--agent", "codex", "--agent-policy", "mention", "--agent-trigger", "@agent"]));
 });
 
 test("parseArgs rejects partial numeric option values", () => {

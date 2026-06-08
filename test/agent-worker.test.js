@@ -1,17 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { renderCommentsMarkdown } from "../src/comments.js";
 import {
   DEFAULT_AGENT_MAX_PASSES,
+  DEFAULT_AGENT_POLICY,
   DEFAULT_AGENT_TRIGGER,
   buildAgentPrompt,
+  commentMatchesAgentPolicy,
   commentMatchesTrigger,
+  createAgentWorker,
   defaultAgentBehaviorPrompt,
   fingerprintComment,
+  isWatchedCommentsFilename,
   loadAgentState,
   parseAgentResult,
   prepareAgentQueue,
@@ -592,6 +596,7 @@ test("agent prompt includes owner context and comment author roles", () => {
   });
 
   assert.match(prompt, /Owner: Chekos/);
+  assert.match(prompt, /Policy: all/);
   assert.match(prompt, /"authorRole": "owner"/);
   assert.match(prompt, /prefer, ignore, or wait for owner feedback/);
 });
@@ -606,6 +611,104 @@ test("agent trigger defaults to all comments and supports explicit mention filte
   assert.equal(commentMatchesTrigger(unmentioned, "@agent"), false);
   assert.equal(commentMatchesTrigger(mentioned, "@agent"), true);
   assert.equal(commentMatchesTrigger(unmentioned, "ALL"), true);
+  assert.equal(DEFAULT_AGENT_POLICY, "all");
+});
+
+test("agent policy matches owner and mention combinations", () => {
+  const visitor = comment({ id: "c_visitor", authorRole: "visitor", body: "Make this shorter." });
+  const mentionedVisitor = comment({ id: "c_mentioned", authorRole: "visitor", body: "@agent Make this shorter." });
+  const owner = comment({ id: "c_owner", authorRole: "owner", body: "Make this shorter." });
+
+  assert.equal(commentMatchesAgentPolicy(visitor, { policy: "all", trigger: DEFAULT_AGENT_TRIGGER }), true);
+  assert.equal(commentMatchesAgentPolicy(visitor, { policy: "mention", trigger: "@agent" }), false);
+  assert.equal(commentMatchesAgentPolicy(mentionedVisitor, { policy: "mention", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(owner, { policy: "owner", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(visitor, { policy: "owner", trigger: "@agent" }), false);
+  assert.equal(commentMatchesAgentPolicy(owner, { policy: "owner-or-mention", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(mentionedVisitor, { policy: "owner-or-mention", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(visitor, { policy: "owner-or-mention", trigger: "@agent" }), false);
+
+  const state = { comments: {} };
+  const queue = prepareAgentQueue([visitor, mentionedVisitor, owner], state, {
+    policy: "owner-or-mention",
+    trigger: "@agent",
+  });
+  assert.deepEqual(queue.pending.map((item) => item.comment.id), ["c_mentioned", "c_owner"]);
+});
+
+test("mention-based agent policies require a marker trigger", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-policy-"));
+  assert.throws(
+    () => createAgentWorker({
+      provider: "custom",
+      command: "true",
+      commentsPath: join(dir, "site.comments.md"),
+      targetPath: dir,
+      policy: "mention",
+      trigger: DEFAULT_AGENT_TRIGGER,
+    }),
+    /requires --agent-trigger/,
+  );
+});
+
+test("comments watcher filename matching includes the inbox and temp file", () => {
+  const commentsPath = "/tmp/site.comments.md";
+  assert.equal(isWatchedCommentsFilename("site.comments.md", commentsPath), true);
+  assert.equal(isWatchedCommentsFilename("site.comments.md.tmp", commentsPath), true);
+  assert.equal(isWatchedCommentsFilename("index.html", commentsPath), false);
+  assert.equal(isWatchedCommentsFilename(null, commentsPath), true);
+});
+
+test("agent worker wakes when the comments markdown file changes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-watch-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const callsPath = join(dir, "calls.txt");
+  const scriptPath = join(dir, "fake-agent.mjs");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(scriptPath, `
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+process.stdin.resume();
+await new Promise((resolve) => process.stdin.on("end", resolve));
+const calls = process.env.TUNELITO_TEST_CALLS;
+writeFileSync(calls, String((existsSync(calls) ? Number(readFileSync(calls, "utf8")) : 0) + 1));
+console.log(JSON.stringify({
+  comments: [{
+    id: "c_watch",
+    status: "resolved",
+    summary: "Handled the watched comment.",
+    filesChanged: []
+  }]
+}));
+`);
+
+  process.env.TUNELITO_TEST_CALLS = callsPath;
+  const worker = createAgentWorker({
+    provider: "custom",
+    command: `${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)}`,
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    intervalSeconds: 60,
+    trigger: DEFAULT_AGENT_TRIGGER,
+    log() {},
+  });
+
+  try {
+    worker.start();
+    await delay(100);
+    writeFileSync(commentsPath, renderCommentsMarkdown({
+      sourcePath: siteDir,
+      comments: [comment({ id: "c_watch", body: "Make this watched comment actionable.", pagePath: "/" })],
+    }));
+    await waitUntil(() => existsSync(callsPath) && readFileSync(callsPath, "utf8") === "1", 3000);
+    assert.equal(loadAgentState(statePath).comments.c_watch.status, "resolved");
+  } finally {
+    await worker.stop();
+    delete process.env.TUNELITO_TEST_CALLS;
+  }
 });
 
 test("buildAgentPrompt appends host instructions while preserving runtime context", () => {
@@ -726,6 +829,19 @@ test("codex provider command uses supported non-interactive exec flags", async (
   assert.equal(calls[0].args.includes("-a"), false);
   assert.equal(calls[0].args.at(-1), "-");
 });
+
+async function waitUntil(predicate, timeout = 1500) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    if (predicate()) return;
+    await delay(25);
+  }
+  throw new Error("Timed out waiting for condition");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function comment(overrides = {}) {
   return {

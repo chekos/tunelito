@@ -6,13 +6,16 @@ import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import {
+  AGENT_POLICIES,
   DEFAULT_AGENT_INTERVAL_SECONDS,
   DEFAULT_AGENT_MAX_ATTEMPTS,
   DEFAULT_AGENT_MAX_PASSES,
+  DEFAULT_AGENT_POLICY,
   DEFAULT_AGENT_TRIGGER,
   defaultAgentLogPath,
   createAgentWorker,
   defaultAgentStatePath,
+  normalizeAgentPolicy,
 } from "../src/agent-worker.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
@@ -34,8 +37,9 @@ Options:
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
-  --agent-interval <s>  Agent polling interval in seconds (default: ${DEFAULT_AGENT_INTERVAL_SECONDS})
-  --agent-trigger <txt> Agent only handles comments containing txt, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
+  --agent-interval <s>  Agent fallback polling interval in seconds (default: ${DEFAULT_AGENT_INTERVAL_SECONDS})
+  --agent-policy <mode> Which comments the agent handles: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
+  --agent-trigger <txt> Marker for mention policies, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
   --agent-instructions-file <path>
@@ -64,6 +68,7 @@ export function parseArgs(argv) {
     auth: true,
     open: false,
     agentIntervalSeconds: DEFAULT_AGENT_INTERVAL_SECONDS,
+    agentPolicy: DEFAULT_AGENT_POLICY,
     agentTrigger: DEFAULT_AGENT_TRIGGER,
     agentMaxAttempts: DEFAULT_AGENT_MAX_ATTEMPTS,
     agentMaxPasses: DEFAULT_AGENT_MAX_PASSES,
@@ -90,6 +95,8 @@ export function parseArgs(argv) {
     } else if (arg === "--agent-interval") {
       const value = argv[++i];
       opts.agentIntervalSeconds = parseIntegerValue(value, "--agent-interval", { min: 1 });
+    } else if (arg === "--agent-policy") {
+      opts.agentPolicy = normalizeAgentPolicy(requiredValue(argv[++i], "--agent-policy"));
     } else if (arg === "--agent-trigger") {
       opts.agentTrigger = requiredValue(argv[++i], "--agent-trigger");
     } else if (arg === "--agent-instructions") {
@@ -147,6 +154,12 @@ export function parseArgs(argv) {
   if ((opts.agentInstructions || opts.agentInstructionsPath || opts.agentPrompt || opts.agentPromptPath) && !opts.agent) {
     throw new Error("--agent prompt options require --agent or --agent-command");
   }
+  if (opts.agentPolicy !== DEFAULT_AGENT_POLICY && !opts.agent) {
+    throw new Error("--agent-policy requires --agent or --agent-command");
+  }
+  if (["mention", "owner-or-mention"].includes(opts.agentPolicy) && isAllAgentTrigger(opts.agentTrigger)) {
+    throw new Error(`--agent-policy ${opts.agentPolicy} requires --agent-trigger with a marker such as @agent`);
+  }
   if (opts.agentInstructions && opts.agentInstructionsPath) {
     throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");
   }
@@ -182,6 +195,10 @@ function parseIntegerValue(value, option, { min, max } = {}) {
 
 function cleanName(value) {
   return String(value || "").replace(/\u0000/g, "").trim().slice(0, 80);
+}
+
+function isAllAgentTrigger(value) {
+  return !value || String(value).trim().toLowerCase() === "all";
 }
 
 async function main() {
@@ -243,6 +260,7 @@ async function main() {
       targetPath: opts.filePath,
       statePath: agentStatePath,
       intervalSeconds: opts.agentIntervalSeconds,
+      policy: opts.agentPolicy,
       trigger: opts.agentTrigger,
       maxAttempts: opts.agentMaxAttempts,
       maxPasses: opts.agentMaxPasses,
