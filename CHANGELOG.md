@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-06-08
+
 - Adds `--agent-policy` for deterministic local-agent comment gating by all comments, trigger mentions, owner comments, or owner-or-mention sessions.
 - Wakes the local agent worker when the persistent comments markdown changes, while keeping interval polling as a fallback.
 
