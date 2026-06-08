@@ -167,6 +167,17 @@ test("parseArgs accepts an explicit comments path", () => {
   assert.equal(opts.tunnel, false);
 });
 
+test("parseArgs accepts an owner name", () => {
+  const opts = parseArgs(["page.html", "--owner", "  Chekos  "]);
+  assert.equal(opts.ownerName, "Chekos");
+});
+
+test("parseArgs rejects missing owner names", () => {
+  assert.throws(() => parseArgs(["page.html", "--owner"]), /--owner requires a name/);
+  assert.throws(() => parseArgs(["page.html", "--owner", "--no-tunnel"]), /--owner requires a name/);
+  assert.throws(() => parseArgs(["page.html", "--owner", "   "]), /--owner requires a name/);
+});
+
 test("generateAccessKey creates URL-safe entropy for shared links", () => {
   const key = generateAccessKey(() => Buffer.from("abcdefghijklmnopqr"));
   assert.equal(key, "YWJjZGVmZ2hpamtsbW5vcHFy");

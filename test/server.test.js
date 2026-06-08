@@ -5,7 +5,7 @@ import { connect } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
+import { OWNER_KEY_PARAM, createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
 import { CLIENT_ROUTE } from "../src/inject.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
@@ -548,6 +548,107 @@ test("server can require a review access key", async () => {
     assert.equal(clientAllowed.status, 200);
     assert.match(await clientAllowed.text(), /WebSocket/);
   } finally {
+    await instance.close();
+  }
+});
+
+test("server assigns owner identity only to owner-key sessions", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-owner-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Owner draft</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    ownerName: "Chekos",
+    ownerKey: "owner-secret",
+    ownerSessionId: "owner-session",
+  });
+
+  const sockets = [];
+  try {
+    assert.match(instance.localUrl, /tunelito_key=review-secret/);
+    assert.match(instance.localUrl, new RegExp(`${OWNER_KEY_PARAM}=owner-secret`));
+
+    const ownerHtmlResponse = await fetch(instance.localUrl);
+    const ownerHtml = await ownerHtmlResponse.text();
+    assert.match(ownerHtml, /data-default-author="Chekos"/);
+    assert.match(ownerHtml, /data-viewer-role="owner"/);
+    assert.match(ownerHtml, /data-owner-session="owner-session"/);
+    assert.match(ownerHtmlResponse.headers.get("set-cookie"), /tunelito_owner_key=owner-secret/);
+
+    const visitorUrl = new URL(instance.originUrl);
+    visitorUrl.searchParams.set("tunelito_key", "review-secret");
+    const visitorHtml = await fetch(visitorUrl).then((res) => res.text());
+    assert.doesNotMatch(visitorHtml, /data-default-author="Chekos"/);
+    assert.doesNotMatch(visitorHtml, /data-viewer-role="owner"/);
+
+    const ownerSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    ownerSocketUrl.searchParams.set("tunelito_key", "review-secret");
+    ownerSocketUrl.searchParams.set(OWNER_KEY_PARAM, "owner-secret");
+    const owner = openJsonSocket(ownerSocketUrl);
+    sockets.push(owner.socket);
+    await waitFor(owner.socket, "open");
+    await waitUntil(() => owner.messages.some((message) => message.type === "hello"));
+    const ownerHello = owner.messages.find((message) => message.type === "hello");
+    assert.equal(ownerHello.authorRole, "owner");
+    assert.equal(ownerHello.defaultAuthor, "Chekos");
+    assert.equal(ownerHello.ownerSession, "owner-session");
+
+    owner.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Edited Owner",
+        authorRole: "visitor",
+        quote: "Owner draft",
+        body: "Only the server can mark this as owner-authored.",
+        textStart: 0,
+        textEnd: 11,
+      },
+    }));
+
+    await waitUntil(() => owner.messages.some((message) => message.type === "comment"));
+    const ownerComment = owner.messages.find((message) => message.type === "comment").comment;
+    assert.equal(ownerComment.author, "Edited Owner");
+    assert.equal(ownerComment.authorRole, "owner");
+
+    const visitorSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
+    visitorSocketUrl.searchParams.set("tunelito_key", "review-secret");
+    const visitor = openJsonSocket(visitorSocketUrl);
+    sockets.push(visitor.socket);
+    await waitFor(visitor.socket, "open");
+    await waitUntil(() => visitor.messages.some((message) => message.type === "hello"));
+    const visitorHello = visitor.messages.find((message) => message.type === "hello");
+    assert.equal(visitorHello.authorRole, "visitor");
+    assert.equal(visitorHello.defaultAuthor, "");
+    assert.equal(visitorHello.ownerSession, "");
+
+    visitor.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Visitor",
+        authorRole: "owner",
+        quote: "Owner draft",
+        body: "A visitor cannot self-mark owner.",
+        textStart: 0,
+        textEnd: 11,
+      },
+    }));
+
+    await waitUntil(() => visitor.messages.some((message) => message.type === "comment" && message.comment.body === "A visitor cannot self-mark owner."));
+    const visitorComment = visitor.messages.find((message) => message.type === "comment" && message.comment.body === "A visitor cannot self-mark owner.").comment;
+    assert.equal(visitorComment.authorRole, "visitor");
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /## Edited Owner \(owner\) at /);
+    assert.match(markdown, /author role: `owner`/);
+    assert.match(markdown, /## Visitor at /);
+  } finally {
+    for (const socket of sockets) socket.close();
     await instance.close();
   }
 });

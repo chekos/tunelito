@@ -5,6 +5,8 @@ description: "How Tunelito stores reviewer comments and restores live session st
 
 Reviewers can select text and leave anchored comments from the injected Tunelito panel. They can also add unanchored page notes or site-wide notes without selecting text. Comments sync live to connected browsers and are written to Markdown immediately.
 
+Each browser gets a random editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt.
+
 On mobile, Tunelito keeps the always-visible control small: a compact speech-bubble button with a count badge sits above common bottom navigation. Tap it to open the comments sheet.
 
 Use `--live` when comments should be ephemeral and disappear with the local server instead of being written to disk.
@@ -54,6 +56,18 @@ The comment file is designed to be readable:
 This sentence needs a clearer verb.
 
 _Context: scope: `page` · page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
+```
+
+Owner comments include an owner marker:
+
+```markdown
+## Chekos (owner) at 2026-05-22 18:02:00 UTC
+
+> selected text
+
+Ship this version after the headline change.
+
+_Context: author role: `owner` · scope: `page` · page: `/` · path: `body > main > h1` · text offset: 0 · id: `c_...`_
 ```
 
 Unanchored notes do not include a quote block:

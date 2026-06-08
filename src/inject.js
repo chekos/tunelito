@@ -2,9 +2,12 @@ export const CLIENT_ROUTE = "/__tunelito/client.js";
 export const COMMENTS_ROUTE = "/__tunelito/comments.md";
 export const WS_ROUTE = "/__tunelito/ws";
 
-export function injectTunelitoClient(html, { sourceName, liveMode = false } = {}) {
+export function injectTunelitoClient(html, { sourceName, liveMode = false, defaultAuthor = "", viewerRole = "", ownerSession = "" } = {}) {
   const liveAttribute = liveMode ? ` data-live-mode="true"` : "";
-  const script = `<script src="${CLIENT_ROUTE}" data-source-name="${escapeAttribute(sourceName || "HTML page")}"${liveAttribute}></script>`;
+  const authorAttribute = defaultAuthor ? ` data-default-author="${escapeAttribute(defaultAuthor)}"` : "";
+  const roleAttribute = viewerRole ? ` data-viewer-role="${escapeAttribute(viewerRole)}"` : "";
+  const ownerSessionAttribute = ownerSession ? ` data-owner-session="${escapeAttribute(ownerSession)}"` : "";
+  const script = `<script src="${CLIENT_ROUTE}" data-source-name="${escapeAttribute(sourceName || "HTML page")}"${liveAttribute}${authorAttribute}${roleAttribute}${ownerSessionAttribute}></script>`;
   let output = stripMetaCsp(String(html));
 
   if (hasTunelitoClientScript(output)) return output;

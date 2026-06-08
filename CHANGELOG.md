@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds random editable reviewer names and `--owner <name>` so local owner comments are labeled for humans and local agent prompts.
+
 ## 0.6.3 - 2026-06-05
 
 - Prevents visible reviewer text that looks like Tunelito metadata from being restored as an extra hidden comment.

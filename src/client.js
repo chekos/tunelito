@@ -2,8 +2,13 @@
   const script = document.currentScript;
   const sourceName = script?.dataset?.sourceName || document.title || "HTML page";
   const configuredLiveMode = script?.dataset?.liveMode === "true";
+  const configuredDefaultAuthor = script?.dataset?.defaultAuthor || "";
+  const configuredViewerRole = script?.dataset?.viewerRole === "owner" ? "owner" : "visitor";
+  const configuredOwnerSession = script?.dataset?.ownerSession || "";
   const endpointBase = "/__tunelito";
-  const accessKey = new URLSearchParams(location.search).get("tunelito_key") || "";
+  const locationParams = new URLSearchParams(location.search);
+  const accessKey = locationParams.get("tunelito_key") || "";
+  const ownerKey = locationParams.get("tunelito_owner_key") || "";
   const pagePath = script?.dataset?.pagePath || location.pathname || "/";
   const state = {
     socket: null,
@@ -18,7 +23,9 @@
     peerCursors: new Map(),
     peerSelections: new Map(),
     viewerCount: null,
-    author: localStorage.getItem("tunelito:author") || "",
+    viewerRole: configuredViewerRole,
+    ownerSession: configuredOwnerSession,
+    author: initialAuthor(configuredDefaultAuthor, configuredViewerRole, configuredOwnerSession),
     comments: [],
     pendingSelection: null,
     highlights: [],
@@ -29,6 +36,7 @@
   };
 
   addDocumentHighlightStyle();
+  persistIdentity();
   const ui = mountUi();
   connect();
   bindSelection();
@@ -37,6 +45,7 @@
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const socketUrl = new URL(`${protocol}//${location.host}${endpointBase}/ws`);
     if (accessKey) socketUrl.searchParams.set("tunelito_key", accessKey);
+    if (ownerKey) socketUrl.searchParams.set("tunelito_owner_key", ownerKey);
     socketUrl.searchParams.set("tunelito_page", state.pagePath);
     const socket = new WebSocket(socketUrl);
     state.socket = socket;
@@ -57,6 +66,13 @@
         state.liveMode = Boolean(message.liveMode);
         state.pagePath = message.pagePath || state.pagePath;
         state.peerId = message.peerId || "";
+        state.viewerRole = message.authorRole === "owner" ? "owner" : state.viewerRole;
+        state.ownerSession = message.ownerSession || state.ownerSession;
+        if (state.viewerRole === "owner" && message.defaultAuthor && !state.author) {
+          state.author = message.defaultAuthor;
+          ui.name.value = state.author;
+          persistIdentity();
+        }
         state.viewerCount = message.viewerCount;
         state.comments = message.comments || [];
         state.peers = new Map((message.peers || []).map((peer) => [peer.id, peer]));
@@ -519,7 +535,7 @@
     shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
     name.addEventListener("input", () => {
       state.author = name.value.trim();
-      localStorage.setItem("tunelito:author", state.author);
+      persistIdentity();
     });
     selection.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -717,15 +733,16 @@
       renderStatus("Still connecting; try again in a moment.");
       return;
     }
-    const author = state.author || ui.name.value.trim() || "Anonymous";
+    const author = currentAuthor("Anonymous");
     state.author = author;
-    localStorage.setItem("tunelito:author", author);
+    persistIdentity();
     const comment = {
       ...(state.liveMode ? { id: createEventId("c"), created: new Date().toISOString() } : {}),
       ...state.pendingSelection,
       scope: normalizeScope(state.pendingSelection.scope),
       body,
       author,
+      authorRole: state.viewerRole,
       pagePath: state.pagePath,
     };
     if (state.liveMode) {
@@ -772,7 +789,7 @@
       const scope = normalizeScope(comment.scope);
       const quote = item.querySelector(".quote");
       const hasQuote = Boolean(String(comment.quote || "").trim());
-      item.querySelector(".meta").textContent = `${comment.author} · ${scope} · ${formatTime(comment.created)}`;
+      item.querySelector(".meta").textContent = `${comment.author}${comment.authorRole === "owner" ? " (owner)" : ""} · ${scope} · ${formatTime(comment.created)}`;
       quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
       quote.classList.toggle("note", !hasQuote);
       item.querySelector(".body").textContent = comment.body;
@@ -943,7 +960,7 @@
     state.pendingCursor = {
       x: event.pageX,
       y: event.pageY,
-      author: state.author || ui.name.value.trim() || "Guest",
+      author: currentAuthor("Guest"),
     };
     if (state.cursorTimer) return;
     state.cursorTimer = setTimeout(() => {
@@ -965,7 +982,7 @@
         textStart: selection.textStart,
         textEnd: selection.textEnd,
         path: selection.path,
-        author: state.author || ui.name.value.trim() || "Guest",
+        author: currentAuthor("Guest"),
       },
     });
   }
@@ -1236,6 +1253,55 @@
   function compact(value, length) {
     const text = String(value || "").replace(/\s+/g, " ").trim();
     return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+  }
+
+  function initialAuthor(defaultAuthor, viewerRole, ownerSession) {
+    const storedAuthor = storedValue("tunelito:author");
+    const storedRole = storedValue("tunelito:authorRole");
+    const storedOwnerSession = storedValue("tunelito:ownerSession");
+    if (viewerRole === "owner") {
+      return storedRole === "owner" && storedOwnerSession === ownerSession && storedAuthor
+        ? storedAuthor
+        : (defaultAuthor || randomVisitorName());
+    }
+    return storedRole !== "owner" && storedAuthor ? storedAuthor : randomVisitorName();
+  }
+
+  function currentAuthor(fallback) {
+    return state.author || ui.name.value.trim() || fallback;
+  }
+
+  function persistIdentity() {
+    storeValue("tunelito:author", state.author);
+    storeValue("tunelito:authorRole", state.viewerRole);
+    storeValue("tunelito:ownerSession", state.ownerSession);
+  }
+
+  function storedValue(key) {
+    try {
+      return localStorage.getItem(key) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function storeValue(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Keep the review UI usable when browser storage is disabled.
+    }
+  }
+
+  function randomVisitorName() {
+    const bytes = new Uint8Array(3);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+    }
+    const code = Array.from(bytes, (byte) => byte.toString(36).padStart(2, "0")).join("").toUpperCase();
+    return `Guest ${code}`;
   }
 
   function normalizeScope(scope) {

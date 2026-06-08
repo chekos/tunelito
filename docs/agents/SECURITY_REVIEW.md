@@ -13,6 +13,7 @@ Expected behavior:
 - WebSocket upgrades require the key or cookie.
 - Live-mode signaling and fallback relay messages stay behind the same WebSocket auth gate.
 - `--no-auth` is explicit and documented.
+- `--owner` uses a separate owner key as an identity label only; do not treat owner labels as access control.
 
 Tests should cover both allowed and denied paths.
 
