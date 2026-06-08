@@ -52,9 +52,11 @@ After publishing:
 
 ```bash
 npx --yes tunelito --version
+npm install -g tunelito@0.1.2
+tunelito --version
 ```
 
-If this fails, fix it before telling the user the release is ready.
+Use the exact released version for the global install command. This keeps the maintainer's local `tunelito` binary current after every release. If either install path fails, fix it before telling the user the release is ready.
 
 ## npm Publishing
 
