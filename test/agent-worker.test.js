@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { renderCommentsMarkdown } from "../src/comments.js";
@@ -703,8 +703,8 @@ console.log(JSON.stringify({
       sourcePath: siteDir,
       comments: [comment({ id: "c_watch", body: "Make this watched comment actionable.", pagePath: "/" })],
     }));
-    await waitUntil(() => existsSync(callsPath) && readFileSync(callsPath, "utf8") === "1", 3000);
-    assert.equal(loadAgentState(statePath).comments.c_watch.status, "resolved");
+    await waitUntil(() => loadAgentState(statePath).comments.c_watch?.status === "resolved", 3000);
+    assert.equal(readFileSync(callsPath, "utf8"), "1");
   } finally {
     await worker.stop();
     delete process.env.TUNELITO_TEST_CALLS;
