@@ -35,13 +35,14 @@ export function createAgentWorker({
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
   promptAppend = "",
   promptOverride = "",
   spawnFn = spawn,
   now = () => new Date(),
   log = console.log,
 } = {}) {
-  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, maxPasses, promptAppend, promptOverride });
+  const config = normalizeAgentConfig({ provider, command, commentsPath, targetPath, statePath, intervalSeconds, trigger, maxAttempts, maxPasses, ownerName, promptAppend, promptOverride });
   let timer = null;
   let running = false;
   let stopped = false;
@@ -122,6 +123,7 @@ export async function runAgentPass({
   trigger,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
   promptAppend,
   promptOverride,
   reason = "manual",
@@ -179,6 +181,7 @@ export async function runAgentPass({
     trigger,
     maxAttempts,
     maxPasses,
+    ownerName,
     commentStates: priorStatesById,
     promptAppend,
     promptOverride,
@@ -192,6 +195,7 @@ export async function runAgentPass({
       workspaceRoot,
       commentsPath,
       statePath,
+      ownerName,
       prompt,
       spawnFn,
     });
@@ -288,6 +292,7 @@ export function normalizeAgentConfig({
   trigger = DEFAULT_AGENT_TRIGGER,
   maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
   maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
   promptAppend = "",
   promptOverride = "",
 } = {}) {
@@ -318,6 +323,7 @@ export function normalizeAgentConfig({
     trigger: trigger || DEFAULT_AGENT_TRIGGER,
     maxAttempts,
     maxPasses,
+    ownerName: cleanOwnerName(ownerName),
     promptAppend: normalizePromptText(promptAppend),
     promptOverride: normalizePromptText(promptOverride),
   };
@@ -421,9 +427,10 @@ export function commentMatchesTrigger(comment, trigger = DEFAULT_AGENT_TRIGGER) 
   return text.toLowerCase().includes(String(trigger).toLowerCase());
 }
 
-export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, commentStates = {}, promptAppend = "", promptOverride = "" }) {
+export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, statePath, trigger, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, ownerName = "", commentStates = {}, promptAppend = "", promptOverride = "" }) {
   const behavior = normalizePromptText(promptOverride) || defaultAgentBehaviorPrompt();
   const hostInstructions = normalizePromptText(promptAppend);
+  const owner = cleanOwnerName(ownerName);
   const sections = [
     behavior,
     hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
@@ -434,7 +441,7 @@ export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, stateP
 - Resolution ledger: ${statePath}
 - Trigger: ${trigger}
 - Max retry attempts per comment: ${maxAttempts}
-- Max passes per comment: ${maxPasses}`,
+- Max passes per comment: ${maxPasses}${owner ? `\n- Owner: ${owner}` : ""}`,
     `## Output Contract
 
 Return only JSON as your final response. Do not wrap it in Markdown. Use this shape:
@@ -459,13 +466,14 @@ ${JSON.stringify(comments.map((comment) => formatCommentForPrompt(comment, comme
   return `${sections.join("\n\n")}\n`;
 }
 
-export async function runAgentCommand({ provider, command, workspaceRoot, commentsPath, statePath, prompt, spawnFn = spawn }) {
+export async function runAgentCommand({ provider, command, workspaceRoot, commentsPath, statePath, ownerName = "", prompt, spawnFn = spawn }) {
   const env = {
     ...process.env,
     TUNELITO_AGENT: provider,
     TUNELITO_AGENT_COMMENTS: commentsPath,
     TUNELITO_AGENT_STATE: statePath,
     TUNELITO_AGENT_ROOT: workspaceRoot,
+    TUNELITO_OWNER_NAME: cleanOwnerName(ownerName),
   };
   const tempDir = mkdtempSync(join(tmpdir(), "tunelito-agent-"));
   try {
@@ -565,7 +573,8 @@ export function describeAgentConfig(config) {
   const trigger = config.trigger === "all" ? "all comments" : `comments containing "${config.trigger}"`;
   const provider = config.provider === "custom" ? `custom command (${config.command})` : config.provider;
   const prompt = config.promptOverride ? "; custom prompt" : config.promptAppend ? "; extra instructions" : "";
-  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s; max ${config.maxPasses} passes${prompt}; state ${config.statePath}`;
+  const owner = config.ownerName ? `; owner ${config.ownerName}` : "";
+  return `${provider}; checks ${trigger} every ${config.intervalSeconds}s; max ${config.maxPasses} passes${owner}${prompt}; state ${config.statePath}`;
 }
 
 export function defaultAgentBehaviorPrompt() {
@@ -576,6 +585,7 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 ## Core Behavior
 
 - Treat each listed comment as reviewer feedback from a trusted local review session.
+- If the workspace lists an Owner, comments may include authorRole "owner" or "visitor"; use that role when host instructions ask you to prefer, ignore, or wait for owner feedback.
 - Use judgment: some comments ask for edits, some are questions, some are observations, and some may already be satisfied.
 - Make focused HTML/CSS/asset edits when the requested change is clear and safe.
 - Return status "ignored" when a comment does not ask for a file change.
@@ -775,6 +785,7 @@ function formatCommentForPrompt(comment, existing, { maxPasses } = {}) {
   const formatted = {
     id: comment.id,
     author: comment.author,
+    authorRole: comment.authorRole === "owner" ? "owner" : "visitor",
     scope: comment.scope || "page",
     pagePath: comment.pagePath || "/",
     quote: comment.quote,
@@ -855,4 +866,8 @@ function normalizeStringList(value) {
 
 function normalizePromptText(value) {
   return String(value || "").trim();
+}
+
+function cleanOwnerName(value) {
+  return String(value || "").replace(/\u0000/g, "").trim().slice(0, 80);
 }

@@ -11,8 +11,10 @@ import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
 export const ACCESS_KEY_PARAM = "tunelito_key";
+export const OWNER_KEY_PARAM = "tunelito_owner_key";
 export const PAGE_PARAM = "tunelito_page";
 const ACCESS_KEY_COOKIE = "tunelito_key";
+const OWNER_KEY_COOKIE = "tunelito_owner_key";
 
 export async function createTunelitoServer(options) {
   const targetPath = resolve(options.filePath);
@@ -33,6 +35,9 @@ export async function createTunelitoServer(options) {
   const hub = new WebSocketHub();
   const peers = new Map();
   const accessKey = options.accessKey ? String(options.accessKey) : "";
+  const ownerName = cleanOwnerName(options.ownerName);
+  const ownerKey = ownerName ? String(options.ownerKey || randomBytes(18).toString("base64url")) : "";
+  const ownerSessionId = ownerName ? String(options.ownerSessionId || randomBytes(9).toString("base64url")) : "";
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -49,6 +54,9 @@ export async function createTunelitoServer(options) {
       blockedPaths,
       liveMode,
       accessKey,
+      ownerName,
+      ownerKey,
+      ownerSessionId,
     });
   });
 
@@ -72,6 +80,7 @@ export async function createTunelitoServer(options) {
       rejectUpgrade(socket, 401, "Unauthorized");
       return;
     }
+    req.tunelitoAuthorRole = authorizeOwnerRequest(req, url, ownerKey).ok ? "owner" : "visitor";
     req.tunelitoPagePath = normalizePagePath(url.searchParams.get(PAGE_PARAM));
     hub.handleUpgrade(req, socket);
   });
@@ -120,6 +129,7 @@ export async function createTunelitoServer(options) {
       id: createPeerId(),
       connectedAt: new Date().toISOString(),
       pagePath,
+      authorRole: req?.tunelitoAuthorRole === "owner" ? "owner" : "visitor",
     };
     peers.set(client, peer);
     client.send({
@@ -133,6 +143,9 @@ export async function createTunelitoServer(options) {
       comments: commentsForPage(pagePath),
       commentsUrl: liveMode ? null : COMMENTS_ROUTE,
       viewerCount: hub.size,
+      authorRole: peer.authorRole,
+      defaultAuthor: peer.authorRole === "owner" ? ownerName : "",
+      ownerSession: peer.authorRole === "owner" ? ownerSessionId : "",
     });
     if (liveMode) {
       broadcastToPage(pagePath, { type: "peer-joined", peer }, { except: client });
@@ -160,7 +173,15 @@ export async function createTunelitoServer(options) {
 
     if (event.type === "create-comment") {
       try {
-        const comment = comments.add({ ...(event.comment || {}), pagePath: peer?.pagePath || normalizePagePath(event.comment?.pagePath) });
+        const input = {
+          ...(event.comment || {}),
+          authorRole: peer?.authorRole === "owner" ? "owner" : "visitor",
+          pagePath: peer?.pagePath || normalizePagePath(event.comment?.pagePath),
+        };
+        if (input.authorRole === "owner" && ownerName && !String(input.author || "").trim()) {
+          input.author = ownerName;
+        }
+        const comment = comments.add(input);
         events.emit("comment", comment);
         broadcastComment(comment);
       } catch (error) {
@@ -191,7 +212,7 @@ export async function createTunelitoServer(options) {
   const requestedPort = options.port ?? 4317;
   const { port } = await listenOnFirstAvailable(server, host, requestedPort);
   const originUrl = `http://${host}:${port}/`;
-  const localUrl = withAccessKey(originUrl, accessKey);
+  const localUrl = withSessionKeys(originUrl, { accessKey, ownerKey });
 
   return {
     server,
@@ -203,6 +224,8 @@ export async function createTunelitoServer(options) {
     liveMode,
     originUrl,
     localUrl,
+    ownerName,
+    ownerSessionId,
     async close() {
       clearTimeout(watchTimer);
       watcher.close();
@@ -214,7 +237,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, blockedPaths, liveMode, accessKey }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -229,66 +252,74 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     sendText(res, 401, "Tunelito review link is missing or invalid.", "text/plain; charset=utf-8", req.method);
     return;
   }
+  const owner = authorizeOwnerRequest(req, url, ownerKey);
+  const responseHeaders = mergeHeaders(auth.headers, owner.headers);
+  const injectOptions = {
+    liveMode,
+    defaultAuthor: owner.ok ? ownerName : "",
+    viewerRole: owner.ok ? "owner" : "",
+    ownerSession: owner.ok ? ownerSessionId : "",
+  };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
-    sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, auth.headers);
+    sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
   if (pathname === CLIENT_ROUTE) {
-    sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method, auth.headers);
+    sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
   if (pathname === COMMENTS_ROUTE) {
     if (liveMode) {
-      sendText(res, 404, "Tunelito live mode comments are ephemeral and are not written to markdown.", "text/plain; charset=utf-8", req.method, auth.headers);
+      sendText(res, 404, "Tunelito live mode comments are ephemeral and are not written to markdown.", "text/plain; charset=utf-8", req.method, responseHeaders);
       return;
     }
-    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: targetPath }), "text/markdown; charset=utf-8", req.method, auth.headers);
+    sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: targetPath }), "text/markdown; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
   if (directoryMode) {
     const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, { blockedPaths });
     if (!asset) {
-      sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
+      sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, responseHeaders);
       return;
     }
 
     if (asset.redirectPath) {
-      sendRedirect(res, asset.redirectPath, auth.headers);
+      sendRedirect(res, asset.redirectPath, responseHeaders);
       return;
     }
 
     if (asset.generatedHtml) {
-      sendText(res, 200, injectTunelitoClient(asset.generatedHtml, { sourceName: asset.sourceName, liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
+      sendText(res, 200, injectTunelitoClient(asset.generatedHtml, { sourceName: asset.sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
       return;
     }
 
     if (isHtmlPath(asset.path)) {
       const html = readFileSync(asset.realPath, "utf8");
-      sendText(res, 200, injectTunelitoClient(html, { sourceName: relativeSourceName(rootDir, asset.path), liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
+      sendText(res, 200, injectTunelitoClient(html, { sourceName: relativeSourceName(rootDir, asset.path), ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
       return;
     }
 
-    sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, auth.headers);
+    sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, responseHeaders);
     return;
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
     const html = readFileSync(filePath, "utf8");
-    sendText(res, 200, injectTunelitoClient(html, { sourceName, liveMode }), "text/html; charset=utf-8", req.method, auth.headers);
+    sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
   const asset = resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths });
   if (!asset) {
-    sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, auth.headers);
+    sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
-  sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, auth.headers);
+  sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, responseHeaders);
 }
 
 function resolveDirectoryRequest(rootDir, rootRealDir, pathname, options = {}) {
@@ -444,9 +475,37 @@ function authorizeRequest(req, url, accessKey) {
   return { ok: false, headers: {} };
 }
 
+function authorizeOwnerRequest(req, url, ownerKey) {
+  if (!ownerKey) return { ok: false, headers: {} };
+
+  const queryKey = url.searchParams.get(OWNER_KEY_PARAM);
+  if (sameSecret(queryKey, ownerKey)) {
+    return {
+      ok: true,
+      headers: {
+        "set-cookie": ownerCookie(ownerKey, req),
+      },
+    };
+  }
+
+  if (sameSecret(readCookie(req.headers.cookie, OWNER_KEY_COOKIE), ownerKey)) {
+    return { ok: true, headers: {} };
+  }
+
+  return { ok: false, headers: {} };
+}
+
 function accessCookie(accessKey, req) {
+  return sessionCookie(ACCESS_KEY_COOKIE, accessKey, req);
+}
+
+function ownerCookie(ownerKey, req) {
+  return sessionCookie(OWNER_KEY_COOKIE, ownerKey, req);
+}
+
+function sessionCookie(name, value, req) {
   const parts = [
-    `${ACCESS_KEY_COOKIE}=${encodeURIComponent(accessKey)}`,
+    `${name}=${encodeURIComponent(value)}`,
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
@@ -456,6 +515,20 @@ function accessCookie(accessKey, req) {
     parts.push("Secure");
   }
   return parts.join("; ");
+}
+
+function mergeHeaders(...headersList) {
+  const merged = {};
+  for (const headers of headersList) {
+    for (const [name, value] of Object.entries(headers || {})) {
+      if (name.toLowerCase() === "set-cookie" && merged[name]) {
+        merged[name] = [merged[name]].flat().concat(value);
+      } else {
+        merged[name] = value;
+      }
+    }
+  }
+  return merged;
 }
 
 function readCookie(cookieHeader, name) {
@@ -552,6 +625,10 @@ function normalizePagePath(value) {
   return prefixed.replace(/\/{2,}/g, "/");
 }
 
+function cleanOwnerName(value) {
+  return String(value || "").replace(/\u0000/g, "").trim().slice(0, 80);
+}
+
 function hasHiddenPathSegment(pathname) {
   return String(pathname)
     .split("/")
@@ -591,9 +668,10 @@ function isBlockedPath(realPath, blockedPaths) {
   return false;
 }
 
-function withAccessKey(url, accessKey) {
+function withSessionKeys(url, { accessKey, ownerKey } = {}) {
   const parsed = new URL(url);
   if (accessKey) parsed.searchParams.set(ACCESS_KEY_PARAM, accessKey);
+  if (ownerKey) parsed.searchParams.set(OWNER_KEY_PARAM, ownerKey);
   return parsed.toString();
 }
 

@@ -4,7 +4,7 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.6.2
+Tunelito 0.6.3
 
 Usage: tunelito <page.html|folder> [options]
 
@@ -12,6 +12,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --owner <name>        Assign this editable owner name to the local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
@@ -67,6 +68,12 @@ Choose the comments file:
 
 ```bash
 tunelito ./page.html --out ./notes/review.md
+```
+
+Label your own comments as the owner:
+
+```bash
+tunelito ./page.html --owner "Chekos"
 ```
 
 Run an ephemeral in-meeting session:

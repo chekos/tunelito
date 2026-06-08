@@ -304,6 +304,29 @@ test("comment store supports unanchored page and site notes", () => {
   assert.equal(restored[0].body, "Make the daily summary easier to scan across the site.");
 });
 
+test("comment markdown marks and restores owner-authored comments", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-owner-comments-"));
+  const commentsPath = join(dir, "page.comments.md");
+  const sourcePath = join(dir, "page.html");
+  const store = createCommentStore({ commentsPath, sourcePath });
+
+  const comment = store.add({
+    author: "Chekos",
+    authorRole: "owner",
+    quote: "the selected sentence",
+    body: "Owner-approved change.",
+  });
+
+  const markdown = readFileSync(commentsPath, "utf8");
+  assert.match(markdown, /## Chekos \(owner\) at /);
+  assert.match(markdown, /author role: `owner`/);
+
+  const restored = loadCommentsFromMarkdown(commentsPath);
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].id, comment.id);
+  assert.equal(restored[0].authorRole, "owner");
+});
+
 test("renderCommentsMarkdown handles an empty comment list", () => {
   const markdown = renderCommentsMarkdown({ comments: [], sourcePath: "/tmp/example.html" });
   assert.match(markdown, /_No comments yet\._/);

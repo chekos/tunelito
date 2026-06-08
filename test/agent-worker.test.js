@@ -579,6 +579,23 @@ test("agent fingerprint and prompt include comment scope and pass limits", () =>
   assert.match(prompt, /Max passes per comment/);
 });
 
+test("agent prompt includes owner context and comment author roles", () => {
+  const prompt = buildAgentPrompt({
+    comments: [comment({ id: "c_owner", author: "Chekos", authorRole: "owner", body: "Only run this after owner approval." })],
+    commentsPath: "/tmp/site.comments.md",
+    workspaceRoot: "/tmp/site",
+    statePath: "/tmp/site/.tunelito/agent/state.json",
+    trigger: DEFAULT_AGENT_TRIGGER,
+    maxAttempts: 2,
+    maxPasses: DEFAULT_AGENT_MAX_PASSES,
+    ownerName: "Chekos",
+  });
+
+  assert.match(prompt, /Owner: Chekos/);
+  assert.match(prompt, /"authorRole": "owner"/);
+  assert.match(prompt, /prefer, ignore, or wait for owner feedback/);
+});
+
 test("agent trigger defaults to all comments and supports explicit mention filters", () => {
   const unmentioned = comment({ id: "c_2", body: "Make this shorter." });
   const mentioned = comment({ id: "c_3", body: "@Agent Make this shorter." });

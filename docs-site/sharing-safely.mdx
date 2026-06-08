@@ -17,6 +17,12 @@ The key is bearer access. Anyone with the full URL can view the page and leave c
 
 The first valid request sets a short-lived HTTP-only cookie so page assets and WebSocket sync keep working.
 
+## Owner labels
+
+`--owner <name>` adds a separate owner key to the printed `Local:` URL. Comments from that owner session are marked as owner-authored, while public tunnel URLs still only carry the review key.
+
+The owner key is a collaboration label, not stronger authentication. Anyone with the full owner URL can comment as the owner, so do not share the `Local:` owner URL when owner-only agent instructions matter.
+
 ## Public tunnels
 
 When tunneling is enabled, Tunelito exposes your local server through Cloudflare Tunnel. Use this only for material you are comfortable sharing with anyone who has the full link.

@@ -11,6 +11,7 @@ The CLI owns process orchestration:
 - accept either a single HTML file or a folder target
 - choose persistent or ephemeral live mode
 - choose optional local agent worker settings
+- choose optional owner display identity
 - generate the review key
 - start the local server
 - start the local agent worker when requested
@@ -23,6 +24,7 @@ The server owns local IO and transport:
 - serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
+- mark owner-key sessions so owner comments can carry `authorRole: owner`
 - accept WebSocket comment events
 - write/read markdown comments or keep live-mode comments in memory
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
@@ -48,6 +50,7 @@ The browser client owns reviewer interaction:
 - submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
 - render peer cursors and live selection highlights in `--live`
+- assign editable random visitor names, or seed the owner name for owner-key sessions
 - reconnect/reload when the server says to
 
 ## Invariants
@@ -59,6 +62,7 @@ The browser client owns reviewer interaction:
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep `--live` comments ephemeral; do not write them to markdown.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
+- Treat owner identity as comment metadata, not authentication; the review key remains the access gate.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.

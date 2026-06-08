@@ -25,6 +25,12 @@ Comments: /path/to/page.comments.md
 
 Reviewers select text in the browser, click `Comment`, and Tunelito writes the note to that Markdown file. They can also use `Page note` for unanchored feedback on the current page or `Site note` for feedback that should appear on every page in a folder review.
 
+Each reviewer gets a random editable name. To seed your local viewer as the owner:
+
+```bash
+npx --yes tunelito ./page.html --owner "Chekos"
+```
+
 To review a folder-backed mini-site, pass the folder instead:
 
 ```bash

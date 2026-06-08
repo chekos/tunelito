@@ -59,6 +59,14 @@ Public:  https://example.trycloudflare.com/?tunelito_key=...
 
 Share the `Public:` URL with the person on your call. Open the `Local:` URL yourself if you want to watch the same session.
 
+To label your own comments as the session owner:
+
+```bash
+tunelito ./page.html --owner "Chekos"
+```
+
+Tunelito assigns everyone else a random editable display name, so comments from multiple reviewers are easy to tell apart.
+
 For local-only work:
 
 ```bash
@@ -77,6 +85,7 @@ tunelito ./page.html --live
 - Tap `Comment` and leave a note on the selected text.
 - Add a `Page note` without selecting text.
 - Add a `Site note` that appears on every page in a folder review.
+- Keep or edit their assigned display name before commenting.
 - See other comments appear live.
 - In `--live`, see peer cursors and live selection highlights when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
@@ -100,6 +109,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --owner <name>        Assign this editable owner name to the local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
@@ -145,6 +155,8 @@ Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback pac
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
 
+When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and the local agent worker receives the owner name and each comment's author role. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner.
+
 Use `--no-auth` only for local demos or trusted networks. For sensitive material, prefer `--no-tunnel` or avoid sharing the session link.
 
 ## Comment Files
@@ -177,6 +189,18 @@ This sentence needs a clearer verb.
 _Context: scope: `page` · page: `/about.html` · path: `body > main > p` · text offset: 42 · id: `c_...`_
 ```
 
+Owner comments add an owner marker:
+
+```markdown
+## Chekos (owner) at 2026-05-22 18:02:00 UTC
+
+> selected text
+
+Ship this version after the headline change.
+
+_Context: author role: `owner` · scope: `page` · page: `/` · path: `body > main > h1` · text offset: 0 · id: `c_...`_
+```
+
 Unanchored notes are stored without a selected quote:
 
 ```markdown
@@ -197,7 +221,7 @@ In `--live`, comments are not written to markdown and are not restored after res
 
 ## Agent Comment Loop
 
-The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context.
+The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name and each comment's `authorRole`, so host instructions can ask the agent to prefer owner comments or wait for owner approval.
 
 Tunelito can run the local agent worker for you:
 

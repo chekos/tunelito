@@ -11,6 +11,7 @@ export function defaultCommentsPath(filePath) {
 export function normalizeComment(input, now = new Date()) {
   const id = input.id || `c_${now.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const author = cleanText(input.author || "Anonymous", 80) || "Anonymous";
+  const authorRole = normalizeAuthorRole(input.authorRole || input.role);
   const scope = normalizeCommentScope(input.scope);
   const quote = cleanText(input.quote || "", 4000);
   const body = cleanText(input.body || input.comment || "", 8000);
@@ -20,6 +21,7 @@ export function normalizeComment(input, now = new Date()) {
   return {
     id,
     author,
+    authorRole,
     scope,
     quote,
     body,
@@ -35,6 +37,10 @@ export function normalizeComment(input, now = new Date()) {
 
 export function normalizeCommentScope(scope) {
   return String(scope || "").trim().toLowerCase() === "site" ? "site" : "page";
+}
+
+export function normalizeAuthorRole(role) {
+  return String(role || "").trim().toLowerCase() === "owner" ? "owner" : "visitor";
 }
 
 export function isSiteComment(comment) {
@@ -161,11 +167,13 @@ function renderCommentMarkdownLines(comment, options = {}) {
 }
 
 function renderCommentHeading(comment, options = {}) {
-  return `## ${visibleMarkdownText(comment.author, options)} at ${visibleMarkdownText(formatDate(comment.created), options)}`;
+  const role = normalizeAuthorRole(comment.authorRole) === "owner" ? " (owner)" : "";
+  return `## ${visibleMarkdownText(comment.author, options)}${role} at ${visibleMarkdownText(formatDate(comment.created), options)}`;
 }
 
 function renderCommentContextLine(comment, options = {}) {
   const context = [];
+  if (normalizeAuthorRole(comment.authorRole) === "owner") context.push("author role: `owner`");
   context.push(`scope: \`${normalizeCommentScope(comment.scope)}\``);
   if (comment.pagePath) context.push(`page: \`${visibleMarkdownText(comment.pagePath, options)}\``);
   if (comment.path) context.push(`path: \`${visibleMarkdownText(comment.path, options)}\``);

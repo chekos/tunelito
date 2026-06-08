@@ -29,6 +29,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --owner <name>        Assign this editable owner name to the local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
@@ -122,6 +123,8 @@ export function parseArgs(argv) {
     } else if (arg === "--out") {
       const value = requiredValue(argv[++i], "--out");
       opts.commentsPath = resolve(value);
+    } else if (arg === "--owner" || arg === "--owner-name") {
+      opts.ownerName = requiredName(argv[++i], arg);
     } else if (arg.startsWith("--")) {
       throw new Error(`Unknown option: ${arg}`);
     } else {
@@ -162,6 +165,12 @@ function requiredValue(value, option, detail = "value") {
   return value;
 }
 
+function requiredName(value, option) {
+  const name = cleanName(requiredValue(value, option, "name"));
+  if (!name) throw new Error(`${option} requires a name`);
+  return name;
+}
+
 function parseIntegerValue(value, option, { min, max } = {}) {
   if (!/^\d+$/.test(String(value || ""))) throw new Error(`Invalid ${option} value: ${value}`);
   const number = Number(value);
@@ -169,6 +178,10 @@ function parseIntegerValue(value, option, { min, max } = {}) {
     throw new Error(`Invalid ${option} value: ${value}`);
   }
   return number;
+}
+
+function cleanName(value) {
+  return String(value || "").replace(/\u0000/g, "").trim().slice(0, 80);
 }
 
 async function main() {
@@ -218,6 +231,7 @@ async function main() {
     host: opts.host,
     port: opts.port,
     accessKey,
+    ownerName: opts.ownerName,
     liveMode: opts.live,
     blockedPaths: agentStatePath ? agentBlockedPaths(agentStatePath) : [],
   });
@@ -232,6 +246,7 @@ async function main() {
       trigger: opts.agentTrigger,
       maxAttempts: opts.agentMaxAttempts,
       maxPasses: opts.agentMaxPasses,
+      ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
       promptOverride: agentPromptOptions.override,
     })
@@ -254,6 +269,9 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
+  if (opts.ownerName) {
+    console.log(`Owner:   ${opts.ownerName}`);
+  }
   if (agentWorker) {
     console.log(`Agent:   ${agentWorker.description}`);
     agentWorker.start();

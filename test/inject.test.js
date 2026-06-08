@@ -18,6 +18,20 @@ test("injectTunelitoClient marks live-mode responses", () => {
   assert.match(injected, /data-live-mode="true"/);
 });
 
+test("injectTunelitoClient can seed an owner identity", () => {
+  const html = "<!doctype html><html><body><main>Hello</main></body></html>";
+  const injected = injectTunelitoClient(html, {
+    sourceName: "demo.html",
+    defaultAuthor: "Chekos & Co",
+    viewerRole: "owner",
+    ownerSession: "owner-session",
+  });
+
+  assert.match(injected, /data-default-author="Chekos &amp; Co"/);
+  assert.match(injected, /data-viewer-role="owner"/);
+  assert.match(injected, /data-owner-session="owner-session"/);
+});
+
 test("injectTunelitoClient strips CSP meta tags and avoids duplicate injection", () => {
   const html = `
     <html>
