@@ -2,9 +2,10 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-06-09
+
 - Adds `tunelito skill show`, which prints the distributable Tunelito agent skill (SKILL.md) so a coding agent can install it (for example `tunelito skill show > .claude/skills/tunelito/SKILL.md`).
-- Generates a `skills/tunelito/SKILL.md` copy (so `npx skills add chekos/tunelito --skill tunelito` installs it) and a `docs-site/.well-known/agent-skills/index.json` discovery manifest from `docs-site/skill.md` via `npm run skill:dist`, kept in sync by `npm run docs:check`.
-- Rewrites the distributable agent skill (`docs-site/skill.md`) into a start → share → process → wrap-up guide covering the comment Markdown schema, the `--agent` worker, and applying a `*.comments.md` inbox by hand.
+- Rewrites the distributable agent skill into a start → share → process → wrap-up guide covering the comment Markdown schema, the `--agent` worker, and applying a `*.comments.md` inbox by hand.
 - Documents that `--no-auth` does not disable the tunnel (a tunneled `--no-auth` session is a public, ungated URL) and that `--live` changes persistence, not exposure.
 
 ## 0.8.1 - 2026-06-08

@@ -2,7 +2,6 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { distSkillPath, manifestJson, manifestPath, skillPath } from "../../scripts/build-skill-dist.mjs";
 
 const root = process.cwd();
 const docsRoot = join(root, "docs-site");
@@ -43,7 +42,6 @@ for (const required of [
 }
 
 validateSkill("docs-site/skill.md");
-validateSkillDist();
 
 if (errors.length) {
   for (const error of errors) console.error(`mintlify docs: ${error}`);
@@ -85,24 +83,6 @@ function validateSkill(file) {
     if (!new RegExp(`^${field}:\\s*\\S`, "m").test(frontmatter[1])) {
       errors.push(`${file}: missing frontmatter field ${field}`);
     }
-  }
-}
-
-function validateSkillDist() {
-  let expectedManifest;
-  let expectedSkill;
-  try {
-    expectedManifest = manifestJson();
-    expectedSkill = readFileSync(skillPath, "utf8");
-  } catch (error) {
-    errors.push(`skill dist: ${error.message}`);
-    return;
-  }
-  if (!existsSync(manifestPath) || readFileSync(manifestPath, "utf8") !== expectedManifest) {
-    errors.push("docs-site/.well-known/agent-skills/index.json is missing or stale (run npm run skill:dist)");
-  }
-  if (!existsSync(distSkillPath) || readFileSync(distSkillPath, "utf8") !== expectedSkill) {
-    errors.push("skills/tunelito/SKILL.md is missing or stale (run npm run skill:dist)");
   }
 }
 

@@ -101,7 +101,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.8.1
+Tunelito 0.9.0
 
 Usage: tunelito <page.html|folder> [options]
        tunelito skill show
@@ -145,10 +145,10 @@ Commands:
 
 Tunelito ships an agent skill that teaches a coding agent (Claude Code, Codex, Cursor, and others) how to drive Tunelito: starting and sharing a review session safely, keeping sensitive pages local, and applying the comments from a `*.comments.md` inbox.
 
-Print it and let your agent install it however it prefers:
+The stable installation path is to have your agent print the bundled skill and install that output however the agent expects:
 
 ```bash
-tunelito skill show
+npx --yes tunelito skill show
 ```
 
 For Claude Code, for example:
@@ -157,15 +157,7 @@ For Claude Code, for example:
 tunelito skill show > .claude/skills/tunelito/SKILL.md
 ```
 
-Or install it with the cross-agent `skills` CLI:
-
-```bash
-npx skills add chekos/tunelito --skill tunelito
-```
-
-`--skill tunelito` selects just this skill (the repo also holds internal maintainer skills). Or tell your agent: "run `tunelito skill show` and install the skill it prints."
-
-The skill is single-sourced at `docs-site/skill.md`. The npx-discoverable copy at `skills/tunelito/SKILL.md` and the RFC discovery manifest at `docs-site/.well-known/agent-skills/index.json` are generated from it by `npm run skill:dist` and kept in sync by `npm run docs:check`.
+Or tell your agent: "run `npx --yes tunelito skill show` and install the skill it prints."
 
 ## How It Works
 

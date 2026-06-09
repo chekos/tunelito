@@ -407,10 +407,7 @@ Commands:
 Install it for your coding agent, for example with Claude Code:
   tunelito skill show > .claude/skills/tunelito/SKILL.md
 
-Or with the cross-agent skills CLI:
-  npx skills add chekos/tunelito --skill tunelito
-
-Or just ask your agent: "run 'tunelito skill show' and install the skill it prints."
+Or just ask your agent: "run 'npx --yes tunelito skill show' and install the skill it prints."
 `;
 }
 
