@@ -157,7 +157,15 @@ For Claude Code, for example:
 tunelito skill show > .claude/skills/tunelito/SKILL.md
 ```
 
-Or just tell your agent: "run `tunelito skill show` and install the skill it prints." The same skill is published at `docs-site/skill.md` and described by `docs-site/.well-known/agent-skills/index.json` for `npx skills`-style discovery.
+Or install it with the cross-agent `skills` CLI:
+
+```bash
+npx skills add chekos/tunelito --skill tunelito
+```
+
+`--skill tunelito` selects just this skill (the repo also holds internal maintainer skills). Or tell your agent: "run `tunelito skill show` and install the skill it prints."
+
+The skill is single-sourced at `docs-site/skill.md`. The npx-discoverable copy at `skills/tunelito/SKILL.md` and the RFC discovery manifest at `docs-site/.well-known/agent-skills/index.json` are generated from it by `npm run skill:dist` and kept in sync by `npm run docs:check`.
 
 ## How It Works
 

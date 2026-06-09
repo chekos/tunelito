@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { manifestJson, manifestPath } from "../../scripts/build-skill-manifest.mjs";
+import { distSkillPath, manifestJson, manifestPath, skillPath } from "../../scripts/build-skill-dist.mjs";
 
 const root = process.cwd();
 const docsRoot = join(root, "docs-site");
@@ -43,7 +43,7 @@ for (const required of [
 }
 
 validateSkill("docs-site/skill.md");
-validateSkillManifest();
+validateSkillDist();
 
 if (errors.length) {
   for (const error of errors) console.error(`mintlify docs: ${error}`);
@@ -88,20 +88,21 @@ function validateSkill(file) {
   }
 }
 
-function validateSkillManifest() {
-  let expected;
+function validateSkillDist() {
+  let expectedManifest;
+  let expectedSkill;
   try {
-    expected = manifestJson();
+    expectedManifest = manifestJson();
+    expectedSkill = readFileSync(skillPath, "utf8");
   } catch (error) {
-    errors.push(`agent-skills manifest: ${error.message}`);
+    errors.push(`skill dist: ${error.message}`);
     return;
   }
-  if (!existsSync(manifestPath)) {
-    errors.push("missing docs-site/.well-known/agent-skills/index.json (run npm run skill:manifest)");
-    return;
+  if (!existsSync(manifestPath) || readFileSync(manifestPath, "utf8") !== expectedManifest) {
+    errors.push("docs-site/.well-known/agent-skills/index.json is missing or stale (run npm run skill:dist)");
   }
-  if (readFileSync(manifestPath, "utf8") !== expected) {
-    errors.push("docs-site/.well-known/agent-skills/index.json is stale (run npm run skill:manifest)");
+  if (!existsSync(distSkillPath) || readFileSync(distSkillPath, "utf8") !== expectedSkill) {
+    errors.push("skills/tunelito/SKILL.md is missing or stale (run npm run skill:dist)");
   }
 }
 

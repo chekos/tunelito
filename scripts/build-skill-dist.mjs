@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 
-// Generates docs-site/.well-known/agent-skills/index.json from docs-site/skill.md.
+// Builds the distributable Tunelito agent skill artifacts from docs-site/skill.md
+// (the single source of truth). It writes two generated, committed copies:
 //
-// The manifest lets an agent or the `npx skills` installer discover the Tunelito
-// skill from a base URL (RFC 8615 well-known path), the same pattern Stripe,
-// Supabase, and Cloudflare use. The skill content stays single-sourced in
-// docs-site/skill.md; this script derives the name, description, and a content
-// digest from it so the manifest cannot silently drift. The Mintlify docs
-// validator recomputes this and fails docs:check when the committed manifest is
-// stale, so run `npm run skill:manifest` whenever docs-site/skill.md changes.
+//   - skills/tunelito/SKILL.md
+//       The ecosystem-standard location the `skills` CLI discovers, so
+//       `npx skills add chekos/tunelito --skill tunelito` installs this skill.
+//   - docs-site/.well-known/agent-skills/index.json
+//       An RFC 8615 base-URL discovery manifest (the agentskills.io / Cloudflare
+//       RFC format) with a sha256 digest of the skill.
+//
+// docs-site/skill.md stays canonical: it is the Mintlify doc and what
+// `tunelito skill show` prints. Both artifacts are derived; `npm run docs:check`
+// fails if either drifts, so run `npm run skill:dist` whenever skill.md changes.
 
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -17,10 +21,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 export const skillPath = join(repoRoot, "docs-site", "skill.md");
+export const distSkillPath = join(repoRoot, "skills", "tunelito", "SKILL.md");
 export const manifestPath = join(repoRoot, "docs-site", ".well-known", "agent-skills", "index.json");
 
 // Where an agent can fetch the raw skill once it reads the manifest.
 const SKILL_URL = "https://raw.githubusercontent.com/chekos/tunelito/main/docs-site/skill.md";
+
+export function readSkill() {
+  return readFileSync(skillPath, "utf8");
+}
 
 export function parseSkillFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -59,7 +68,7 @@ export function computeDigest(content) {
 }
 
 export function buildManifest() {
-  const content = readFileSync(skillPath, "utf8");
+  const content = readSkill();
   const fields = parseSkillFrontmatter(content);
   if (!fields.name) throw new Error("docs-site/skill.md frontmatter is missing name");
   if (!fields.description) throw new Error("docs-site/skill.md frontmatter is missing description");
@@ -82,8 +91,11 @@ export function manifestJson() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
-  const json = manifestJson();
+  const skill = readSkill();
+  mkdirSync(dirname(distSkillPath), { recursive: true });
+  writeFileSync(distSkillPath, skill);
   mkdirSync(dirname(manifestPath), { recursive: true });
-  writeFileSync(manifestPath, json);
+  writeFileSync(manifestPath, manifestJson());
+  console.log(`Wrote ${distSkillPath}`);
   console.log(`Wrote ${manifestPath}`);
 }

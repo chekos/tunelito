@@ -30,7 +30,7 @@
     "release:check": "node scripts/release-check.mjs",
     "smoke:check": "node scripts/smoke-check.mjs",
     "pack:check": "node scripts/package-smoke-check.mjs",
-    "skill:manifest": "node scripts/build-skill-manifest.mjs"
+    "skill:dist": "node scripts/build-skill-dist.mjs"
   },
   "engines": {
     "node": ">=22"

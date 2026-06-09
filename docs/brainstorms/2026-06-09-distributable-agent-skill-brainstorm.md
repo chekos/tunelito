@@ -257,9 +257,11 @@ synthesized winner and applied 2 medium + 4 low safety clarifications.
 - **`tunelito skill show`** prints the bundled skill from `docs-site/skill.md` (offline,
   version-matched). `tunelito skill` / `skill help` explains how to install; unknown
   subcommands exit non-zero. Prior art: `gh skill preview`, Laravel Boost's `boost:install`.
-- **`.well-known/agent-skills/index.json`** generated from the skill by
-  `scripts/build-skill-manifest.mjs` (`npm run skill:manifest`) with a sha256 digest;
-  `npm run docs:check` fails if it drifts, so it cannot silently rot.
+- **Generated distribution copies**, single-sourced from `docs-site/skill.md` by
+  `scripts/build-skill-dist.mjs` (`npm run skill:dist`) and sync-enforced by
+  `npm run docs:check`: `skills/tunelito/SKILL.md` so `npx skills add chekos/tunelito --skill
+  tunelito` installs it, plus `docs-site/.well-known/agent-skills/index.json` (RFC 8615
+  base-URL discovery, sha256 digest).
 - **Folded the two safety subtleties** (`--no-auth` is not local; `--live` is not private)
   into `README.md` (Access Model) and `docs-site/sharing-safely.mdx`.
 - **Tests:** `test/skill.test.js` (frontmatter, manifest sync, digest) plus skill-command
@@ -277,7 +279,8 @@ queries" guidance, the description ships as the tournament produced it.
 
 ### Follow-ups (not in this branch)
 
-- Serving the `.well-known` manifest depends on where the Mintlify docs deploy; the file is
-  committed at the canonical path and points its `url` at the GitHub raw skill so `npx skills`
-  can fetch it today.
+- `npx skills add chekos/tunelito --skill tunelito` works today via the generated
+  `skills/tunelito/SKILL.md` (the `skills` CLI discovers repo `SKILL.md` files; it does **not**
+  read the `.well-known` manifest). The `.well-known/agent-skills/index.json` is the separate
+  RFC base-URL discovery format; whether it is *served* depends on where the Mintlify docs deploy.
 - Parallel `.cursor-plugin` / `gemini-extension.json` manifests for multi-agent reach.

@@ -4,11 +4,12 @@ import { readFileSync } from "node:fs";
 import {
   buildManifest,
   computeDigest,
+  distSkillPath,
   manifestJson,
   manifestPath,
   parseSkillFrontmatter,
   skillPath,
-} from "../scripts/build-skill-manifest.mjs";
+} from "../scripts/build-skill-dist.mjs";
 
 test("distributable skill carries the required SKILL.md frontmatter", () => {
   const fields = parseSkillFrontmatter(readFileSync(skillPath, "utf8"));
@@ -31,4 +32,8 @@ test("manifest entry matches the skill name, type, and content digest", () => {
   assert.equal(entry.type, "skill-md");
   assert.equal(entry.digest, computeDigest(readFileSync(skillPath, "utf8")));
   assert.match(entry.url, /^https:\/\/raw\.githubusercontent\.com\/chekos\/tunelito\//);
+});
+
+test("skills/tunelito/SKILL.md mirrors the canonical docs-site/skill.md", () => {
+  assert.equal(readFileSync(distSkillPath, "utf8"), readFileSync(skillPath, "utf8"));
 });
