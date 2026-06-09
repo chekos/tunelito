@@ -27,6 +27,7 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito skill show
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -57,6 +58,10 @@ Options:
   --open                Open the local URL in your default browser
   -v, --version         Show version
   -h, --help            Show this help
+
+Commands:
+  skill show            Print the distributable Tunelito agent skill (SKILL.md)
+                        for a coding agent to install
 `;
 }
 
@@ -202,9 +207,14 @@ function isAllAgentTrigger(value) {
 }
 
 async function main() {
+  const argv = process.argv.slice(2);
+  if (argv[0] === "skill") {
+    process.exitCode = runSkillCommand(argv.slice(1));
+    return;
+  }
   let opts;
   try {
-    opts = parseArgs(process.argv.slice(2));
+    opts = parseArgs(argv);
   } catch (error) {
     console.error(error.message);
     console.error("");
@@ -379,6 +389,48 @@ export function loadAgentPromptOptions(opts) {
     append: opts.agentInstructionsPath ? readFileSync(opts.agentInstructionsPath, "utf8") : opts.agentInstructions || "",
     override: opts.agentPromptPath ? readFileSync(opts.agentPromptPath, "utf8") : opts.agentPrompt || "",
   };
+}
+
+export function readBundledSkill() {
+  return readFileSync(new URL("../docs-site/skill.md", import.meta.url), "utf8");
+}
+
+function skillUsage() {
+  return `Tunelito skill -- the distributable agent skill for coding agents.
+
+Usage: tunelito skill <command>
+
+Commands:
+  show        Print the Tunelito agent skill (SKILL.md) to stdout
+  help        Show this message
+
+Install it for your coding agent, for example with Claude Code:
+  tunelito skill show > .claude/skills/tunelito/SKILL.md
+
+Or just ask your agent: "run 'tunelito skill show' and install the skill it prints."
+`;
+}
+
+export function runSkillCommand(args, { stdout = process.stdout, stderr = process.stderr, readSkill = readBundledSkill } = {}) {
+  const sub = args[0];
+  if (!sub || sub === "help" || sub === "-h" || sub === "--help") {
+    stdout.write(skillUsage());
+    return 0;
+  }
+  if (sub === "show") {
+    let content;
+    try {
+      content = readSkill();
+    } catch (error) {
+      stderr.write(`Could not read the bundled Tunelito skill: ${error.message}\n`);
+      return 1;
+    }
+    stdout.write(content.endsWith("\n") ? content : `${content}\n`);
+    return 0;
+  }
+  stderr.write(`Unknown skill command: ${sub}\n\n`);
+  stderr.write(skillUsage());
+  return 1;
 }
 
 if (isCliEntry(import.meta.url)) {

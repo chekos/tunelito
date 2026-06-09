@@ -104,6 +104,7 @@ tunelito ./page.html --live
 Tunelito 0.8.1
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito skill show
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -134,7 +135,29 @@ Options:
   --open                Open the local URL in your default browser
   -v, --version         Show version
   -h, --help            Show this help
+
+Commands:
+  skill show            Print the distributable Tunelito agent skill (SKILL.md)
+                        for a coding agent to install
 ```
+
+## Agent Skill
+
+Tunelito ships an agent skill that teaches a coding agent (Claude Code, Codex, Cursor, and others) how to drive Tunelito: starting and sharing a review session safely, keeping sensitive pages local, and applying the comments from a `*.comments.md` inbox.
+
+Print it and let your agent install it however it prefers:
+
+```bash
+tunelito skill show
+```
+
+For Claude Code, for example:
+
+```bash
+tunelito skill show > .claude/skills/tunelito/SKILL.md
+```
+
+Or just tell your agent: "run `tunelito skill show` and install the skill it prints." The same skill is published at `docs-site/skill.md` and described by `docs-site/.well-known/agent-skills/index.json` for `npx skills`-style discovery.
 
 ## How It Works
 
@@ -158,7 +181,9 @@ Shared sessions include a generated `tunelito_key` in the printed URLs by defaul
 
 When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and the local agent worker receives the owner name and each comment's author role. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner.
 
-Use `--no-auth` only for local demos or trusted networks. For sensitive material, prefer `--no-tunnel` or avoid sharing the session link.
+`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
+
+`--live` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--live`) or avoid sharing the session link.
 
 ## Comment Files
 

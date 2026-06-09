@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { manifestJson, manifestPath } from "../../scripts/build-skill-manifest.mjs";
 
 const root = process.cwd();
 const docsRoot = join(root, "docs-site");
@@ -42,6 +43,7 @@ for (const required of [
 }
 
 validateSkill("docs-site/skill.md");
+validateSkillManifest();
 
 if (errors.length) {
   for (const error of errors) console.error(`mintlify docs: ${error}`);
@@ -83,6 +85,23 @@ function validateSkill(file) {
     if (!new RegExp(`^${field}:\\s*\\S`, "m").test(frontmatter[1])) {
       errors.push(`${file}: missing frontmatter field ${field}`);
     }
+  }
+}
+
+function validateSkillManifest() {
+  let expected;
+  try {
+    expected = manifestJson();
+  } catch (error) {
+    errors.push(`agent-skills manifest: ${error.message}`);
+    return;
+  }
+  if (!existsSync(manifestPath)) {
+    errors.push("missing docs-site/.well-known/agent-skills/index.json (run npm run skill:manifest)");
+    return;
+  }
+  if (readFileSync(manifestPath, "utf8") !== expected) {
+    errors.push("docs-site/.well-known/agent-skills/index.json is stale (run npm run skill:manifest)");
   }
 }
 

@@ -1,0 +1,11 @@
+{
+  "skills": [
+    {
+      "name": "tunelito",
+      "type": "skill-md",
+      "description": "Run a Tunelito live review room for a local HTML file or folder, then process the comments it collects. Use whenever a user wants to share, serve, or preview a local .html page or static site/mini-site from their machine so a designer, client, teammate, or PM can leave feedback on a call; wants a temporary public link to a local page; says \"review my HTML\", \"annotate this page\", \"let people comment on my site\", \"get feedback on index.html\", \"spin up a review room\", or \"review this page locally without exposing it\"; OR points you at a `*.comments.md` / `site.comments.md` inbox and asks you to apply, process, or act on the comments inside it. Covers starting and sharing a session (Cloudflare Tunnel, keyed bearer URLs), local-only review of sensitive pages, the opt-in `--agent` worker that edits files from comments, and the comment Markdown schema (scope, page, path, id, status). Do NOT use for reviewing a pull request, IDE inline comments, reviewing source code for bugs, or writing code comments/docstrings.",
+      "url": "https://raw.githubusercontent.com/chekos/tunelito/main/docs-site/skill.md",
+      "digest": "sha256:241d96ab88b585556c7f894a716df795c384f2b78e14f6e17be9063181eede22"
+    }
+  ]
+}

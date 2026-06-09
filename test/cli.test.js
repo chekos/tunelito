@@ -5,7 +5,12 @@ import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, readBundledSkill, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+
+function streamCollector() {
+  const chunks = [];
+  return { write: (chunk) => { chunks.push(chunk); return true; }, text: () => chunks.join("") };
+}
 
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -252,4 +257,50 @@ test("openBrowser uses Windows start command on win32", () => {
 
   assert.equal(calls[0].command, "cmd");
   assert.deepEqual(calls[0].args, ["/c", "start", "", "http://127.0.0.1:4317/"]);
+});
+
+test("readBundledSkill returns the distributable Tunelito skill markdown", () => {
+  const content = readBundledSkill();
+  assert.match(content, /^---\nname: tunelito/);
+  assert.match(content, /## Agent worker reference/);
+});
+
+test("skill show prints the bundled skill to stdout", () => {
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  const code = runSkillCommand(["show"], { stdout, stderr });
+  assert.equal(code, 0);
+  assert.match(stdout.text(), /^---\nname: tunelito/);
+  assert.match(stdout.text(), /## Step 3 -- Process the comments/);
+  assert.equal(stderr.text(), "");
+});
+
+test("skill show surfaces a read failure instead of throwing", () => {
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  const code = runSkillCommand(["show"], {
+    stdout,
+    stderr,
+    readSkill() {
+      throw new Error("disk gone");
+    },
+  });
+  assert.equal(code, 1);
+  assert.equal(stdout.text(), "");
+  assert.match(stderr.text(), /Could not read the bundled Tunelito skill: disk gone/);
+});
+
+test("skill with no subcommand prints install help", () => {
+  const stdout = streamCollector();
+  const code = runSkillCommand([], { stdout, stderr: streamCollector() });
+  assert.equal(code, 0);
+  assert.match(stdout.text(), /tunelito skill show/);
+});
+
+test("skill rejects an unknown subcommand with a nonzero exit", () => {
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  const code = runSkillCommand(["bogus"], { stdout, stderr });
+  assert.equal(code, 1);
+  assert.match(stderr.text(), /Unknown skill command: bogus/);
 });
