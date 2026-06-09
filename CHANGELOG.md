@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-06-09
+
+- Adds `tunelito skill show`, which prints the distributable Tunelito agent skill (SKILL.md) so a coding agent can install it (for example `tunelito skill show > .claude/skills/tunelito/SKILL.md`).
+- Rewrites the distributable agent skill into a start → share → process → wrap-up guide covering the comment Markdown schema, the `--agent` worker, and applying a `*.comments.md` inbox by hand.
+- Documents that `--no-auth` does not disable the tunnel (a tunneled `--no-auth` session is a public, ungated URL) and that `--live` changes persistence, not exposure.
+
 ## 0.8.1 - 2026-06-08
 
 - Keeps single-file live reload working after repeated atomic-save edits by watching the parent directory and filtering for the served HTML file.

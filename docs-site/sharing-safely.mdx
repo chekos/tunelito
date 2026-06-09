@@ -29,7 +29,7 @@ When tunneling is enabled, Tunelito exposes your local server through Cloudflare
 
 ## Ephemeral live sessions
 
-`--live` keeps comments in memory only and does not write a comments file. The same bearer-link access model still applies: anyone with the full URL can view the page and participate while the local server is running.
+`--live` keeps comments in memory only and does not write a comments file. It changes persistence, not exposure: the session is still served over the same tunnel and review key, so "nothing saved" is not "nothing exposed." The same bearer-link access model still applies: anyone with the full URL can view the page and participate while the local server is running. For a sensitive page, combine `--live` with `--no-tunnel`.
 
 WebRTC data channels are encrypted by the browser when peer-to-peer connectivity is available. The WebSocket connection remains active for signaling, reloads, and fallback relay. Tunelito does not configure third-party STUN or TURN servers.
 
@@ -49,4 +49,4 @@ tunelito ./page.html --no-tunnel
 tunelito ./page.html --no-auth
 ```
 
-Use `--no-auth` only for trusted local networks or throwaway demos.
+`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key, add `--no-tunnel` so the session stays local. Use `--no-auth` only for trusted local networks or throwaway demos.

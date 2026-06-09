@@ -27,6 +27,7 @@ try {
   run(npmCommand, ["install", "-g", "--prefix", prefixDir, tarball], { cwd: execDir });
   const installedBin = process.platform === "win32" ? join(prefixDir, binName) : join(prefixDir, "bin", binName);
   assertVersion(run(installedBin, ["--version"], { cwd: execDir }), "global tarball install");
+  assertSkill(run(installedBin, ["skill", "show"], { cwd: execDir }), "global tarball install");
 
   assertVersion(
     run(npxCommand, ["--yes", "--package", tarball, "--", "tunelito", "--version"], { cwd: execDir }),
@@ -78,5 +79,11 @@ function run(command, args, { cwd }) {
 function assertVersion(output, label) {
   if (output !== pkg.version) {
     throw new Error(`${label} returned ${JSON.stringify(output)}; expected ${pkg.version}`);
+  }
+}
+
+function assertSkill(output, label) {
+  if (!output.includes("name: tunelito")) {
+    throw new Error(`${label}: "tunelito skill show" did not print the bundled SKILL.md`);
   }
 }
