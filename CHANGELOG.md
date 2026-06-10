@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1 - 2026-06-10
+
+- Simplifies shared local-agent and active-agent inbox configuration normalization without changing CLI behavior.
+- Adds direct regression coverage for agent config validation order and trigger defaults.
+
 ## 0.10.0 - 2026-06-10
 
 - Adds active-agent inbox commands: `tunelito inbox next`, `tunelito inbox watch`, and `tunelito inbox record` let the current Claude Code, Codex, or other agent session claim and resolve Tunelito comments without spawning a nested worker.
