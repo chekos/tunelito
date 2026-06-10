@@ -16,6 +16,7 @@ import {
   DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
   agentWorkspaceRoot,
   claimNextAgentComments,
+  createAgentSessionWatcher,
   defaultAgentLogPath,
   createAgentWorker,
   defaultAgentStatePath,
@@ -61,7 +62,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: ${DEFAULT_AGENT_MAX_PASSES})
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
-  --agent-session       Print active-agent inbox commands; do not spawn a worker
+  --agent-session       Watch comments for the current agent session; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -178,7 +179,7 @@ export function parseArgs(argv) {
     throw new Error("--agent-prompt is only supported with --agent or --agent-command");
   }
   if (opts.agentIntervalProvided && opts.agentSession && !opts.agent) {
-    throw new Error("--agent-interval is only supported with --agent; use --wait-interval with tunelito inbox watch");
+    throw new Error("--agent-interval is only supported with --agent; --agent-session watches automatically");
   }
   if (opts.agentPolicy !== DEFAULT_AGENT_POLICY && !opts.agent && !opts.agentSession) {
     throw new Error("--agent-policy requires --agent, --agent-command, or --agent-session");
@@ -314,6 +315,27 @@ async function main() {
       promptOverride: agentPromptOptions.override,
     })
     : null;
+  const agentSessionRecordCommand = opts.agentSession ? inboxRecordCommand({
+    targetPath: opts.filePath,
+    commentsPath: instance.commentsPath,
+    statePath: agentStatePath,
+    maxPasses: opts.agentMaxPasses,
+  }) : "";
+  const agentSessionWatcher = opts.agentSession
+    ? createAgentSessionWatcher({
+      commentsPath: instance.commentsPath,
+      targetPath: opts.filePath,
+      statePath: agentStatePath,
+      policy: opts.agentPolicy,
+      trigger: opts.agentTrigger,
+      maxAttempts: opts.agentMaxAttempts,
+      maxPasses: opts.agentMaxPasses,
+      ownerName: opts.ownerName,
+      promptAppend: agentPromptOptions.append,
+      recordCommand: agentSessionRecordCommand,
+      log: (message) => console.log(message),
+    })
+    : null;
 
   let tunnel = null;
   let shuttingDown = false;
@@ -324,6 +346,7 @@ async function main() {
   instance.events.on("comment", (comment) => {
     console.log(`Comment from ${comment.author}: ${comment.quote.slice(0, 80).replace(/\s+/g, " ")}`);
     agentWorker?.wake("comment");
+    agentSessionWatcher?.wake("comment");
   });
   instance.events.on("document-changed", () => {
     console.log("HTML changed on disk; connected browsers were asked to reload.");
@@ -351,9 +374,11 @@ async function main() {
       ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
     });
-    console.log(`Agent session: active-agent inbox; state ${agentStatePath}`);
-    console.log(`Agent session: ${inboxWatchCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger, maxAttempts: opts.agentMaxAttempts, maxPasses: opts.agentMaxPasses })}`);
+    console.log(`Agent session: ${agentSessionWatcher.description}`);
+    console.log(`Agent session: watching comments in this process`);
+    console.log(`Agent session: record template ${agentSessionRecordCommand}`);
     console.log(`Agent session: metadata ${sessionPath}`);
+    agentSessionWatcher.start();
   }
   if (opts.live) {
     console.log("Live:    WebRTC peer-to-peer when available; WebSocket relay fallback enabled");
@@ -389,6 +414,7 @@ async function main() {
     console.log("\nShutting down Tunelito...");
     if (tunnel) tunnel.stop();
     await agentWorker?.stop();
+    await agentSessionWatcher?.stop();
     await instance.close();
     process.exit(0);
   }

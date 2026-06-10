@@ -43,10 +43,9 @@ If you are already inside Claude Code, Codex, or another agent session, use agen
 
 ```bash
 npx --yes tunelito ./site --agent-session --no-tunnel --open
-tunelito inbox watch ./site
 ```
 
-`inbox watch` waits for the next actionable comment, claims it in the shared ledger, prints a prompt for the current agent, and exits. After editing, record the result with `tunelito inbox record`.
+The same Tunelito process serves the review room, watches the comments inbox, claims the next actionable comment, and prints a prompt for the current agent. After editing, record the result with the `tunelito inbox record --claim ...` command from the prompt.
 
 From a clone:
 
@@ -140,7 +139,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
-  --agent-session       Print active-agent inbox commands; do not spawn a worker
+  --agent-session       Watch comments for the current agent session; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -269,19 +268,13 @@ If you are already inside an agent session, let the current agent own the loop:
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-Tunelito prints an `Agent session:` command and writes `.tunelito/session.json` beside the served root. In the active agent session, run:
-
-```bash
-tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
-```
-
-`inbox watch` waits for the comments markdown to change, keeps interval polling as a fallback, claims the next actionable comment in `.tunelito/agent/state.json`, prints a bounded prompt for the current agent, and exits. After editing the source files, record the outcome with the claim id from the printed command:
+Tunelito serves the review room, writes `.tunelito/session.json` beside the served root, watches the comments markdown in the same process, and prints a bounded prompt whenever it claims an actionable comment for the current agent. It does not spawn a nested worker. After editing the source files, record the outcome with the claim id from the printed command:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated the hero copy." --file index.html
 ```
 
-Use `tunelito inbox next ./site` for a non-waiting check. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to inbox mode and the spawned worker.
+Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
 
 Tunelito can run the local agent worker for you:
 

@@ -164,7 +164,7 @@ test("parseArgs rejects agent session conflicts", () => {
   assert.throws(() => parseArgs(["site", "--live", "--agent-session"]), /--agent-session requires persistent comments/);
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-session"]), /Use either --agent or --agent-session/);
   assert.throws(() => parseArgs(["site", "--agent-session", "--agent-prompt", "A"]), /--agent-prompt is only supported/);
-  assert.throws(() => parseArgs(["site", "--agent-session", "--agent-interval", "30"]), /--agent-interval is only supported/);
+  assert.throws(() => parseArgs(["site", "--agent-session", "--agent-interval", "30"]), /--agent-session watches automatically/);
 });
 
 test("parseArgs rejects prompt options without an agent", () => {

@@ -13,6 +13,7 @@ import {
   claimNextAgentComments,
   commentMatchesAgentPolicy,
   commentMatchesTrigger,
+  createAgentSessionWatcher,
   createAgentWorker,
   defaultAgentBehaviorPrompt,
   fingerprintComment,
@@ -878,6 +879,62 @@ test("agent inbox reclaims comments after claim ttl expires", () => {
   assert.equal(expired.comments.length, 1);
   assert.equal(expired.comments[0].id, "c_ttl");
   assert.notEqual(expired.claim.id, first.claim.id);
+});
+
+test("agent session watcher claims one comment and waits for recording before claiming another", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-session-watch-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  const logs = [];
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [
+      comment({ id: "c_session_one", body: "Handle the first active-session comment.", pagePath: "/" }),
+      comment({ id: "c_session_two", body: "Handle the second active-session comment.", pagePath: "/" }),
+    ],
+  }));
+
+  const watcher = createAgentSessionWatcher({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimOwner: "codex-session",
+    claimSeconds: 60,
+    recordCommand: `tunelito inbox record ${JSON.stringify(siteDir)} --id <comment-id> --status <status> --summary "<short summary>"`,
+    log: (message) => logs.push(message),
+  });
+
+  const first = await watcher.runOnce("manual");
+  assert.equal(first.comments.length, 1);
+  assert.equal(first.comments[0].id, "c_session_one");
+  assert.match(logs.join("\n"), /Agent inbox: claimed c_session_one/);
+  assert.match(logs.join("\n"), new RegExp(`--claim ${first.claim.id}`));
+
+  const secondWhileClaimed = await watcher.runOnce("manual");
+  assert.equal(secondWhileClaimed.reason, "active-claim");
+  assert.equal(loadAgentState(statePath).comments.c_session_two, undefined);
+
+  recordAgentSessionResult({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimId: first.claim.id,
+    result: {
+      id: "c_session_one",
+      status: "resolved",
+      summary: "Handled the first comment.",
+      filesChanged: ["index.html"],
+    },
+  });
+
+  const second = await watcher.runOnce("manual");
+  assert.equal(second.comments.length, 1);
+  assert.equal(second.comments[0].id, "c_session_two");
+  assert.equal(loadAgentState(statePath).comments.c_session_two.status, "claimed");
+  await watcher.stop();
 });
 
 test("agent inbox watch waits for comments markdown changes", async () => {
