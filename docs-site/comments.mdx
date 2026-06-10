@@ -88,14 +88,13 @@ Tunelito also stores hidden metadata comments. Do not delete that metadata if yo
 
 The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to inspect the comments file, edit the matching source HTML for page comments, apply clearly relevant changes across the folder for site comments, and report which visible comment IDs were addressed.
 
-If you are already inside an agent session, use the active-agent inbox commands:
+If you are already inside an agent session, use active-agent mode:
 
 ```bash
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
-tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-`inbox watch` blocks until an actionable comment appears, claims it in `.tunelito/agent/state.json`, prints a prompt with the matching claim id, and exits. After editing, record the result:
+The same Tunelito process blocks until an actionable comment appears, claims it in `.tunelito/agent/state.json`, and prints a prompt with the matching claim id. After editing, record the result:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated heading rhythm." --file index.html

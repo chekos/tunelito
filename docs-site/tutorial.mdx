@@ -127,13 +127,7 @@ If a selected-text comment, page note, or site note needs more than one pass, th
 
 Resolved comments are skipped on future worker passes. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
 
-When you use `--agent-session`, the current agent runs the loop explicitly:
-
-```bash
-npx --yes tunelito inbox watch ./review-site --agent-policy owner-or-mention --agent-trigger "@agent"
-```
-
-The command waits for an actionable comment, claims it, prints a prompt for the current agent, and exits. After editing, record the result with the claim id from the printed command:
+When you use `--agent-session`, the Tunelito server process is the active-agent loop. It waits for actionable comments, claims one for the current agent session, prints the prompt, and pauses further claims until that claim is recorded or expires. After editing, record the result with the claim id from the printed command:
 
 ```bash
 npx --yes tunelito inbox record ./review-site --id c_... --claim claim_... --status resolved --summary "Updated the about page copy." --file about.html

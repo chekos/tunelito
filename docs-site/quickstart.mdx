@@ -66,10 +66,9 @@ If you are already inside Claude Code, Codex, or another coding-agent session, u
 
 ```bash
 npx --yes tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
-npx --yes tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-After editing, record the result with the claim id from the printed command:
+That one process serves the room, watches comments, claims actionable feedback, and prints the prompt for the current agent. After editing, record the result with the claim id from the printed command:
 
 ```bash
 npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated copy." --file index.html

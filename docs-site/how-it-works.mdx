@@ -38,7 +38,7 @@ When `--agent` is enabled, a separate worker handles:
 - recording status in `.tunelito/agent/state.json`
 - writing a readable `.tunelito/agent/log.md`
 
-When `--agent-session` is enabled, Tunelito does not invoke another CLI. It writes `.tunelito/session.json` and prints inbox commands so the current coding-agent session can claim comments with `tunelito inbox watch` and record results with `tunelito inbox record`.
+When `--agent-session` is enabled, Tunelito does not invoke another CLI. The server process writes `.tunelito/session.json`, watches the comments inbox, claims actionable comments for the current coding-agent session, prints bounded prompts, and records results through `tunelito inbox record`.
 
 ## Source HTML is not modified
 

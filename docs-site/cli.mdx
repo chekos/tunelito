@@ -34,7 +34,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
-  --agent-session       Print active-agent inbox commands; do not spawn a worker
+  --agent-session       Watch comments for the current agent session; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -103,10 +103,9 @@ Use the current agent session instead of spawning a child agent:
 
 ```bash
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
-tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-Record the current agent's result with the claim id from the printed command:
+The same process serves the room, watches comments, claims actionable feedback, and prints a prompt for the current agent. Record the current agent's result with the claim id from the printed command:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html

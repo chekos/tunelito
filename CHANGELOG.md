@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Makes `--agent-session` watch and claim comments from the serving process, so current-agent review sessions start with one command instead of a separate `inbox watch` step.
+
 ## 0.10.1 - 2026-06-10
 
 - Simplifies shared local-agent and active-agent inbox configuration normalization without changing CLI behavior.

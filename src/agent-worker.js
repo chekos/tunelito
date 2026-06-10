@@ -621,6 +621,133 @@ export function claimNextAgentComments({
   };
 }
 
+export function createAgentSessionWatcher({
+  commentsPath,
+  targetPath,
+  statePath,
+  trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
+  maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
+  promptAppend = "",
+  claimOwner = "agent-session",
+  claimSeconds = DEFAULT_INBOX_CLAIM_SECONDS,
+  waitIntervalSeconds = DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
+  limit = 1,
+  recordCommand = "",
+  now = () => new Date(),
+  log = console.log,
+} = {}) {
+  const config = normalizeAgentInboxConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    trigger,
+    policy,
+    maxAttempts,
+    maxPasses,
+    ownerName,
+    promptAppend,
+    claimOwner,
+    claimSeconds,
+  });
+  if (!Number.isInteger(waitIntervalSeconds) || waitIntervalSeconds < 1) throw new Error("--wait-interval must be a positive integer");
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer");
+
+  let timer = null;
+  let running = false;
+  let stopped = false;
+  let commentsWatcher = null;
+
+  async function runOnce(reason = "manual") {
+    if (running || stopped) return { skipped: true, reason: running ? "running" : "stopped" };
+    running = true;
+    try {
+      if (hasActiveClaimForOwner({
+        commentsPath: config.commentsPath,
+        statePath: config.statePath,
+        claimOwner: config.claimOwner,
+        now: now(),
+      })) {
+        return { ...config, comments: [], prompt: "", reason: "active-claim" };
+      }
+
+      const result = claimNextAgentComments({
+        ...config,
+        limit,
+        recordCommand,
+        now,
+      });
+      if (result.comments.length) log(formatAgentSessionClaim(result));
+      return result;
+    } catch (error) {
+      log(`Agent inbox: ${error.message}`);
+      return { ...config, comments: [], prompt: "", reason: "error", error };
+    } finally {
+      running = false;
+    }
+  }
+
+  function schedule(delayMs) {
+    if (stopped || timer) return;
+    timer = setTimeout(async () => {
+      timer = null;
+      await runOnce("interval");
+      schedule(waitIntervalSeconds * 1000);
+    }, delayMs);
+    timer.unref?.();
+  }
+
+  function wake(reason = "comment") {
+    if (stopped) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    timer = setTimeout(async () => {
+      timer = null;
+      await runOnce(reason);
+      schedule(waitIntervalSeconds * 1000);
+    }, 500);
+    timer.unref?.();
+  }
+
+  function startCommentsWatcher() {
+    if (commentsWatcher || stopped || !config.commentsPath) return;
+    try {
+      commentsWatcher = watch(dirname(config.commentsPath), { persistent: true }, (_eventType, filename) => {
+        if (isWatchedCommentsFilename(filename, config.commentsPath)) wake("comments-file");
+      });
+      commentsWatcher.unref?.();
+    } catch (error) {
+      log(`Agent inbox: comments file watch unavailable (${error.message}); using interval fallback`);
+    }
+  }
+
+  return {
+    ...config,
+    description: describeAgentSessionConfig(config),
+    start() {
+      startCommentsWatcher();
+      schedule(0);
+    },
+    wake,
+    async runOnce(reason) {
+      return runOnce(reason);
+    },
+    async stop() {
+      stopped = true;
+      commentsWatcher?.close();
+      commentsWatcher = null;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    },
+  };
+}
+
 export async function waitForAgentInboxComments({
   waitIntervalSeconds = DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
   timeoutSeconds = 0,
@@ -968,6 +1095,19 @@ export function describeAgentConfig(config) {
   return `${provider}; handles ${filter}; checks every ${config.intervalSeconds}s; max ${config.maxPasses} passes${owner}${prompt}; state ${config.statePath}`;
 }
 
+export function describeAgentSessionConfig(config) {
+  const filter = describeAgentFilter(config.policy, config.trigger);
+  const prompt = config.promptAppend ? "; extra instructions" : "";
+  const owner = config.ownerName ? `; owner ${config.ownerName}` : "";
+  return `active-agent inbox; handles ${filter}; max ${config.maxPasses} passes${owner}${prompt}; state ${config.statePath}`;
+}
+
+function formatAgentSessionClaim(result) {
+  const ids = result.comments.map((comment) => comment.id).join(", ");
+  const claim = result.claim ? `; claim ${result.claim.id}` : "";
+  return `\nAgent inbox: claimed ${ids}${claim}\n\n${result.prompt}`;
+}
+
 export function defaultAgentBehaviorPrompt() {
   return `# Tunelito Local Agent Worker
 
@@ -1246,6 +1386,18 @@ function hasActiveClaim(existing, now) {
   const expiresAt = new Date(existing.claim.expiresAt).getTime();
   if (!Number.isFinite(expiresAt)) return false;
   return expiresAt > now.getTime();
+}
+
+function hasActiveClaimForOwner({ commentsPath, statePath, claimOwner, now }) {
+  if (!existsSync(statePath)) return false;
+  const state = loadAgentState(statePath);
+  const visibleCommentIds = existsSync(commentsPath)
+    ? new Set(loadCommentsFromMarkdown(commentsPath).map((comment) => comment.id).filter(Boolean))
+    : null;
+  return Object.entries(state.comments || {}).some(([id, existing]) => {
+    if (visibleCommentIds && !visibleCommentIds.has(id)) return false;
+    return existing?.claim?.owner === claimOwner && hasActiveClaim(existing, now);
+  });
 }
 
 function failureAttempts(existing) {
