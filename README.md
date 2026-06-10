@@ -109,7 +109,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.10.1
+Tunelito 0.11.0
 
 Usage: tunelito <page.html|folder> [options]
        tunelito inbox <next|watch|record> <page.html|folder> [options]
