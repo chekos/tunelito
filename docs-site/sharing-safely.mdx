@@ -37,6 +37,8 @@ WebRTC data channels are encrypted by the browser when peer-to-peer connectivity
 
 The agent worker is explicit opt-in. When `--agent` is enabled, reviewer comments become input to a local CLI that can edit files in the served folder. Use it for trusted review sessions, add `--agent-trigger "@agent"` so only marked comments are actionable, or combine owner identity with `--agent-policy owner-or-mention --agent-trigger "@agent"` for owner-led sessions. Tunelito blocks the agent state file, temp file, and derived log file from static serving even if a custom `--agent-state` path is inside the served folder.
 
+`--agent-session` has the same trust boundary but does not spawn a child process. It prints `tunelito inbox watch` / `tunelito inbox record` commands for the current agent session and writes `.tunelito/session.json`. Reviewer comments still become instructions to whatever local agent is running those inbox commands, so use the same owner or mention policies for shared calls.
+
 ## Disable public tunnels
 
 ```bash

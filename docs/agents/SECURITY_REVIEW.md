@@ -50,10 +50,13 @@ Expected behavior:
 Product-level local agent worker behavior:
 
 - `--agent` is explicit opt-in and rejected with `--live`.
+- `--agent-session` is explicit opt-in, rejected with `--live`, and must not spawn a child agent.
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
 - Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
+- Active-agent inbox commands (`tunelito inbox next/watch/record`) use the same trust boundary: selected reviewer comments become instructions to the current local agent session.
 - `--agent-trigger "<marker>"` is the stricter opt-in marker mode for less trusted sessions.
 - Resolution state belongs in `.tunelito/agent/state.json`, not the comments markdown that the server rewrites.
+- Inbox claims must expire so a crashed or abandoned active-agent session does not permanently hide a pending comment.
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.
 - Agent output must be structured by comment ID so handled comments are not retried indefinitely.

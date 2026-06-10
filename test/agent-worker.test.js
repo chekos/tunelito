@@ -10,6 +10,7 @@ import {
   DEFAULT_AGENT_POLICY,
   DEFAULT_AGENT_TRIGGER,
   buildAgentPrompt,
+  claimNextAgentComments,
   commentMatchesAgentPolicy,
   commentMatchesTrigger,
   createAgentWorker,
@@ -19,8 +20,10 @@ import {
   loadAgentState,
   parseAgentResult,
   prepareAgentQueue,
+  recordAgentSessionResult,
   runAgentCommand,
   runAgentPass,
+  waitForAgentInboxComments,
 } from "../src/agent-worker.js";
 
 test("agent worker runs a custom command once and records resolved comments", async () => {
@@ -709,6 +712,180 @@ console.log(JSON.stringify({
     await worker.stop();
     delete process.env.TUNELITO_TEST_CALLS;
   }
+});
+
+test("agent inbox claims and records comments without spawning a worker", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-inbox-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [comment({ id: "c_active", body: "Make this active-agent ready.", pagePath: "/" })],
+  }));
+
+  const claimed = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimOwner: "codex-session",
+    claimSeconds: 60,
+  });
+
+  assert.equal(claimed.comments.length, 1);
+  assert.equal(claimed.comments[0].id, "c_active");
+  assert.match(claimed.prompt, /Tunelito Agent Session Inbox/);
+  assert.match(claimed.prompt, /tunelito inbox record/);
+  assert.equal(loadAgentState(statePath).comments.c_active.status, "claimed");
+  const claim = loadAgentState(statePath).comments.c_active.claim;
+  assert.equal(claim.owner, "codex-session");
+  assert.match(claimed.prompt, new RegExp(`--claim ${claim.id}`));
+
+  const second = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+  });
+  assert.equal(second.comments.length, 0);
+  assert.equal(second.reason, "no-pending-comments");
+
+  assert.throws(
+    () => recordAgentSessionResult({
+      commentsPath,
+      targetPath: siteDir,
+      statePath,
+      result: {
+        id: "c_active",
+        status: "resolved",
+        summary: "Made the active-agent workflow clear.",
+      },
+    }),
+    /claimed by codex-session/,
+  );
+  assert.throws(
+    () => recordAgentSessionResult({
+      commentsPath,
+      targetPath: siteDir,
+      statePath,
+      claimId: "claim_wrong",
+      result: {
+        id: "c_active",
+        status: "resolved",
+        summary: "Made the active-agent workflow clear.",
+      },
+    }),
+    /not claimed by claim_wrong/,
+  );
+
+  const recorded = recordAgentSessionResult({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimId: claim.id,
+    result: {
+      id: "c_active",
+      status: "resolved",
+      summary: "Made the active-agent workflow clear.",
+      filesChanged: ["index.html"],
+      completedTasks: ["Updated copy"],
+    },
+  });
+
+  assert.equal(recorded.state.status, "resolved");
+  assert.equal(recorded.state.claim, undefined);
+  assert.deepEqual(recorded.state.filesChanged, ["index.html"]);
+  assert.match(readFileSync(join(siteDir, ".tunelito", "agent", "log.md"), "utf8"), /c_active: resolved/);
+});
+
+test("agent inbox reclaims comments after claim ttl expires", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-inbox-ttl-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [comment({ id: "c_ttl", body: "Retry me after the lease expires.", pagePath: "/" })],
+  }));
+
+  const first = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimSeconds: 1,
+    now: () => new Date("2026-06-10T00:00:00.000Z"),
+  });
+  assert.equal(first.comments.length, 1);
+
+  const active = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    now: () => new Date("2026-06-10T00:00:00.500Z"),
+  });
+  assert.equal(active.comments.length, 0);
+  assert.equal(active.reason, "no-pending-comments");
+
+  const expired = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    now: () => new Date("2026-06-10T00:00:02.000Z"),
+  });
+  assert.equal(expired.comments.length, 1);
+  assert.equal(expired.comments[0].id, "c_ttl");
+  assert.notEqual(expired.claim.id, first.claim.id);
+});
+
+test("agent inbox watch waits for comments markdown changes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-inbox-watch-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+
+  const waiting = waitForAgentInboxComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    waitIntervalSeconds: 1,
+    timeoutSeconds: 3,
+  });
+
+  await delay(100);
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [comment({ id: "c_wait", body: "Handle this when it appears.", pagePath: "/" })],
+  }));
+
+  const result = await waiting;
+  assert.equal(result.comments.length, 1);
+  assert.equal(result.comments[0].id, "c_wait");
+  assert.equal(loadAgentState(statePath).comments.c_wait.status, "claimed");
+});
+
+test("agent inbox watch returns timeout when no actionable comments arrive", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-inbox-timeout-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+
+  const result = await waitForAgentInboxComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    waitIntervalSeconds: 1,
+    timeoutSeconds: 1,
+  });
+
+  assert.equal(result.comments.length, 0);
+  assert.equal(result.reason, "timeout");
 });
 
 test("buildAgentPrompt appends host instructions while preserving runtime context", () => {

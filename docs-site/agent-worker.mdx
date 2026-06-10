@@ -7,6 +7,21 @@ Tunelito can run an opt-in local worker that turns persistent comments into codi
 
 The worker does not use model API keys directly. It starts your installed local CLI, such as Codex or Claude Code, so those tools keep using their own local authentication and subscription state.
 
+If you are already inside Claude Code, Codex, or another coding-agent session, use active-agent inbox commands instead of spawning a nested worker.
+
+```bash
+npx --yes tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
+npx --yes tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+`inbox watch` waits for the next actionable comment, claims it in `.tunelito/agent/state.json`, prints a prompt for the current agent, and exits. After editing, record the result with the claim id from the printed command:
+
+```bash
+npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
+```
+
+Use `inbox next` for a non-waiting check. The inbox commands use the same comment parser, policy filters, max-pass continuation state, and resolution ledger as the spawned worker.
+
 ## Start with Codex
 
 ```bash
@@ -194,6 +209,6 @@ Codex and Claude Code are prompted to return this shape. Custom commands should 
 
 ## Guardrails
 
-The worker only runs when you pass `--agent` or `--agent-command`. It is not available in `--live` mode because live comments are ephemeral and no markdown inbox exists.
+The spawned worker only runs when you pass `--agent` or `--agent-command`. Active-agent inbox mode only prints commands and prompts; the current agent still decides and edits through its normal tools. Neither mode is available in `--live` mode because live comments are ephemeral and no markdown inbox exists.
 
-Treat `--agent` as local code execution prompted by reviewer comments. Use it only for trusted review sessions or source folders you are comfortable letting your local agent edit.
+Treat both `--agent` and active-agent inbox mode as local code execution prompted by reviewer comments. Use them only for trusted review sessions or source folders you are comfortable letting your local agent edit.

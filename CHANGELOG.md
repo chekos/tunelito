@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adds active-agent inbox commands: `tunelito inbox next`, `tunelito inbox watch`, and `tunelito inbox record` let the current Claude Code, Codex, or other agent session claim and resolve Tunelito comments without spawning a nested worker.
+- Guards active-agent recordings with claim ids, so `inbox watch` prints the exact `inbox record --claim ...` command for the current lease.
+- Adds `--agent-session`, which prints inbox commands and writes `.tunelito/session.json` for current-agent comment watching while preserving the existing `--agent` worker path for unattended auto-apply sessions.
+
 ## 0.9.0 - 2026-06-09
 
 - Adds `tunelito skill show`, which prints the distributable Tunelito agent skill (SKILL.md) so a coding agent can install it (for example `tunelito skill show > .claude/skills/tunelito/SKILL.md`).

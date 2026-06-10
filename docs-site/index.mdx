@@ -17,7 +17,7 @@ Tunelito gives you that loop:
 - reviewers can comment but cannot edit the files
 - comments sync live, with WebRTC peer-to-peer support in `--live`
 - folder reviews share one Markdown inbox with page and site comment scopes
-- an opt-in local agent worker can call Codex, Claude Code, or another CLI to handle comments, including larger comments across bounded follow-up passes
+- an opt-in local agent worker can call Codex, Claude Code, or another CLI to handle comments, or the current agent session can claim comments with inbox commands
 - public sharing uses a temporary Cloudflare Tunnel
 - shared links require a generated review key by default
 
@@ -41,6 +41,13 @@ For unattended comment follow-up:
 
 ```bash
 npx --yes tunelito ./site --agent codex
+```
+
+From inside an existing agent session:
+
+```bash
+npx --yes tunelito ./site --agent-session
+npx --yes tunelito inbox watch ./site
 ```
 
 ## What you share

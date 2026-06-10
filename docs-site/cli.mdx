@@ -7,6 +7,7 @@ description: "Tunelito command-line options and examples."
 Tunelito 0.9.0
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito inbox <next|watch|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -33,6 +34,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
+  --agent-session       Print active-agent inbox commands; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -40,6 +42,9 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  inbox next            Claim the next pending comment and print an agent prompt
+  inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
 ```
@@ -92,6 +97,19 @@ Run Codex against review comments:
 
 ```bash
 tunelito ./site --agent codex
+```
+
+Use the current agent session instead of spawning a child agent:
+
+```bash
+tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
+tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+Record the current agent's result with the claim id from the printed command:
+
+```bash
+tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
 
 Allow broad comments to continue for up to five passes:

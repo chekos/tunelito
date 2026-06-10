@@ -38,6 +38,8 @@ When `--agent` is enabled, a separate worker handles:
 - recording status in `.tunelito/agent/state.json`
 - writing a readable `.tunelito/agent/log.md`
 
+When `--agent-session` is enabled, Tunelito does not invoke another CLI. It writes `.tunelito/session.json` and prints inbox commands so the current coding-agent session can claim comments with `tunelito inbox watch` and record results with `tunelito inbox record`.
+
 ## Source HTML is not modified
 
 The injection happens only in the HTTP response. Your source HTML files remain untouched.
@@ -60,7 +62,7 @@ site.comments.md
 
 The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML file and treat site feedback as applying across the folder.
 
-The local agent worker does not edit this Markdown file. It treats comments as an append-only inbox and writes resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices. It also stores continuation state for comments that need multiple bounded passes, so the next agent prompt can continue from saved remaining tasks instead of redoing completed work.
+The local agent worker and active-agent inbox commands do not edit this Markdown file. They treat comments as an append-only inbox and write resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices. It also stores continuation state for comments that need multiple bounded passes, so the next agent prompt can continue from saved remaining tasks instead of redoing completed work.
 
 ## Live mode
 
