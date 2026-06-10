@@ -183,9 +183,7 @@ export function parseArgs(argv) {
   if (opts.agentPolicy !== DEFAULT_AGENT_POLICY && !opts.agent && !opts.agentSession) {
     throw new Error("--agent-policy requires --agent, --agent-command, or --agent-session");
   }
-  if (["mention", "owner-or-mention"].includes(opts.agentPolicy) && isAllAgentTrigger(opts.agentTrigger)) {
-    throw new Error(`--agent-policy ${opts.agentPolicy} requires --agent-trigger with a marker such as @agent`);
-  }
+  validateMentionAgentPolicy(opts.agentPolicy, opts.agentTrigger);
   if (opts.agentInstructions && opts.agentInstructionsPath) {
     throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");
   }
@@ -231,6 +229,12 @@ function cleanName(value) {
 
 function isAllAgentTrigger(value) {
   return !value || String(value).trim().toLowerCase() === "all";
+}
+
+function validateMentionAgentPolicy(policy, trigger) {
+  if (["mention", "owner-or-mention"].includes(policy) && isAllAgentTrigger(trigger)) {
+    throw new Error(`--agent-policy ${policy} requires --agent-trigger with a marker such as @agent`);
+  }
 }
 
 async function main() {
@@ -532,9 +536,7 @@ export function parseInboxArgs(argv) {
   if (opts.agentInstructions && opts.agentInstructionsPath) {
     throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");
   }
-  if (["mention", "owner-or-mention"].includes(opts.agentPolicy) && isAllAgentTrigger(opts.agentTrigger)) {
-    throw new Error(`--agent-policy ${opts.agentPolicy} requires --agent-trigger with a marker such as @agent`);
-  }
+  validateMentionAgentPolicy(opts.agentPolicy, opts.agentTrigger);
   if (command === "record" && !opts.help) {
     if (!opts.id) throw new Error("inbox record requires --id");
     if (!opts.status) throw new Error("inbox record requires --status");

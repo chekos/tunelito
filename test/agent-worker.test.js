@@ -18,6 +18,8 @@ import {
   fingerprintComment,
   isWatchedCommentsFilename,
   loadAgentState,
+  normalizeAgentConfig,
+  normalizeAgentInboxConfig,
   parseAgentResult,
   prepareAgentQueue,
   recordAgentSessionResult,
@@ -649,6 +651,44 @@ test("mention-based agent policies require a marker trigger", () => {
       targetPath: dir,
       policy: "mention",
       trigger: DEFAULT_AGENT_TRIGGER,
+    }),
+    /requires --agent-trigger/,
+  );
+});
+
+test("agent config normalizers keep validation order and trigger defaults", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-config-"));
+  const commentsPath = join(dir, "site.comments.md");
+
+  assert.throws(
+    () => normalizeAgentInboxConfig({ claimSeconds: 0 }),
+    /inbox commands requires persistent comments/,
+  );
+  assert.throws(
+    () => normalizeAgentInboxConfig({ commentsPath, claimSeconds: 0 }),
+    /inbox commands requires a target HTML file or folder/,
+  );
+  assert.throws(
+    () => normalizeAgentInboxConfig({ commentsPath, targetPath: dir, claimSeconds: 0 }),
+    /--claim-ttl must be a positive integer/,
+  );
+
+  const config = normalizeAgentConfig({
+    provider: "custom",
+    command: "true",
+    commentsPath,
+    targetPath: dir,
+    trigger: "",
+  });
+  assert.equal(config.trigger, DEFAULT_AGENT_TRIGGER);
+  assert.throws(
+    () => normalizeAgentConfig({
+      provider: "custom",
+      command: "true",
+      commentsPath,
+      targetPath: dir,
+      policy: "mention",
+      trigger: "all",
     }),
     /requires --agent-trigger/,
   );
