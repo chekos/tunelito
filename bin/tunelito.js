@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import {
@@ -12,11 +12,18 @@ import {
   DEFAULT_AGENT_MAX_PASSES,
   DEFAULT_AGENT_POLICY,
   DEFAULT_AGENT_TRIGGER,
+  DEFAULT_INBOX_CLAIM_SECONDS,
+  DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
+  agentWorkspaceRoot,
+  claimNextAgentComments,
   defaultAgentLogPath,
   createAgentWorker,
   defaultAgentStatePath,
   normalizeAgentPolicy,
+  recordAgentSessionResult,
+  waitForAgentInboxComments,
 } from "../src/agent-worker.js";
+import { defaultCommentsPath } from "../src/comments.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
@@ -27,6 +34,7 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito inbox <next|watch|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -53,6 +61,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: ${DEFAULT_AGENT_MAX_PASSES})
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
+  --agent-session       Print active-agent inbox commands; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -60,6 +69,9 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  inbox next            Claim the next pending comment and print an agent prompt
+  inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
 `;
@@ -93,6 +105,8 @@ export function parseArgs(argv) {
     } else if (arg === "--agent") {
       const value = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom");
       opts.agent = value.toLowerCase();
+    } else if (arg === "--agent-session") {
+      opts.agentSession = true;
     } else if (arg === "--agent-command") {
       const value = requiredValue(argv[++i], "--agent-command");
       opts.agentCommand = value;
@@ -100,6 +114,7 @@ export function parseArgs(argv) {
     } else if (arg === "--agent-interval") {
       const value = argv[++i];
       opts.agentIntervalSeconds = parseIntegerValue(value, "--agent-interval", { min: 1 });
+      opts.agentIntervalProvided = true;
     } else if (arg === "--agent-policy") {
       opts.agentPolicy = normalizeAgentPolicy(requiredValue(argv[++i], "--agent-policy"));
     } else if (arg === "--agent-trigger") {
@@ -156,11 +171,17 @@ export function parseArgs(argv) {
   if (opts.agentCommand && opts.agent !== "custom") {
     throw new Error("--agent-command can only be used with --agent custom");
   }
-  if ((opts.agentInstructions || opts.agentInstructionsPath || opts.agentPrompt || opts.agentPromptPath) && !opts.agent) {
-    throw new Error("--agent prompt options require --agent or --agent-command");
+  if ((opts.agentInstructions || opts.agentInstructionsPath || opts.agentPrompt || opts.agentPromptPath) && !opts.agent && !opts.agentSession) {
+    throw new Error("--agent prompt options require --agent, --agent-command, or --agent-session");
   }
-  if (opts.agentPolicy !== DEFAULT_AGENT_POLICY && !opts.agent) {
-    throw new Error("--agent-policy requires --agent or --agent-command");
+  if ((opts.agentPrompt || opts.agentPromptPath) && opts.agentSession && !opts.agent) {
+    throw new Error("--agent-prompt is only supported with --agent or --agent-command");
+  }
+  if (opts.agentIntervalProvided && opts.agentSession && !opts.agent) {
+    throw new Error("--agent-interval is only supported with --agent; use --wait-interval with tunelito inbox watch");
+  }
+  if (opts.agentPolicy !== DEFAULT_AGENT_POLICY && !opts.agent && !opts.agentSession) {
+    throw new Error("--agent-policy requires --agent, --agent-command, or --agent-session");
   }
   if (["mention", "owner-or-mention"].includes(opts.agentPolicy) && isAllAgentTrigger(opts.agentTrigger)) {
     throw new Error(`--agent-policy ${opts.agentPolicy} requires --agent-trigger with a marker such as @agent`);
@@ -173,6 +194,12 @@ export function parseArgs(argv) {
   }
   if (opts.live && opts.agent) {
     throw new Error("--agent requires persistent comments; remove --live");
+  }
+  if (opts.live && opts.agentSession) {
+    throw new Error("--agent-session requires persistent comments; remove --live");
+  }
+  if (opts.agent && opts.agentSession) {
+    throw new Error("Use either --agent or --agent-session, not both");
   }
   if (positional[0]) opts.filePath = resolve(positional[0]);
   return opts;
@@ -208,6 +235,10 @@ function isAllAgentTrigger(value) {
 
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv[0] === "inbox") {
+    process.exitCode = await runInboxCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "skill") {
     process.exitCode = runSkillCommand(argv.slice(1));
     return;
@@ -250,8 +281,8 @@ async function main() {
   }
 
   const accessKey = opts.auth ? generateAccessKey() : null;
-  const agentStatePath = opts.agent ? (opts.agentStatePath || defaultAgentStatePath(opts.filePath)) : null;
-  const agentPromptOptions = opts.agent ? loadAgentPromptOptions(opts) : {};
+  const agentStatePath = (opts.agent || opts.agentSession) ? (opts.agentStatePath || defaultAgentStatePath(opts.filePath)) : null;
+  const agentPromptOptions = (opts.agent || opts.agentSession) ? loadAgentPromptOptions(opts) : {};
   const instance = await createTunelitoServer({
     filePath: opts.filePath,
     commentsPath: opts.commentsPath,
@@ -304,6 +335,22 @@ async function main() {
     console.log(`Agent:   ${agentWorker.description}`);
     agentWorker.start();
   }
+  if (opts.agentSession) {
+    const sessionPath = writeAgentSessionFile({
+      targetPath: opts.filePath,
+      commentsPath: instance.commentsPath,
+      statePath: agentStatePath,
+      policy: opts.agentPolicy,
+      trigger: opts.agentTrigger,
+      maxAttempts: opts.agentMaxAttempts,
+      maxPasses: opts.agentMaxPasses,
+      ownerName: opts.ownerName,
+      promptAppend: agentPromptOptions.append,
+    });
+    console.log(`Agent session: active-agent inbox; state ${agentStatePath}`);
+    console.log(`Agent session: ${inboxWatchCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger, maxAttempts: opts.agentMaxAttempts, maxPasses: opts.agentMaxPasses })}`);
+    console.log(`Agent session: metadata ${sessionPath}`);
+  }
   if (opts.live) {
     console.log("Live:    WebRTC peer-to-peer when available; WebSocket relay fallback enabled");
   }
@@ -344,6 +391,352 @@ async function main() {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function inboxUsage() {
+  return `Tunelito inbox -- active-agent comment inbox commands.
+
+Usage:
+  tunelito inbox next <page.html|folder> [options]
+  tunelito inbox watch <page.html|folder> [options]
+  tunelito inbox record <page.html|folder> --id <id> --status <status> [options]
+
+Commands:
+  next        Claim pending comments and print a prompt for the current agent
+  watch       Wait for the next pending comment, claim it, then print a prompt
+  record      Record the current agent's result in .tunelito/agent/state.json
+  help        Show this message
+
+Options for next/watch:
+  --out <path>              Markdown comments file (default: <page-or-folder>.comments.md)
+  --agent-state <path>      Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
+  --agent-policy <mode>     Which comments are actionable: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
+  --agent-trigger <txt>     Marker for mention policies, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
+  --agent-instructions <txt>
+                            Append host instructions to the active-agent prompt
+  --agent-instructions-file <path>
+                            Append host instructions from a file
+  --agent-max-attempts <n>  Stop retrying a comment after n attempts (default: ${DEFAULT_AGENT_MAX_ATTEMPTS})
+  --agent-max-passes <n>    Stop continuing a multi-pass comment after n passes (default: ${DEFAULT_AGENT_MAX_PASSES})
+  --limit <n>               Number of comments to claim at once (default: 1)
+  --claim-owner <name>      Label for the active agent claim (default: agent-session)
+  --claim-ttl <s>           Claim lease in seconds (default: ${DEFAULT_INBOX_CLAIM_SECONDS})
+  --wait                    Wait until an actionable comment exists
+  --wait-interval <s>       Fallback polling interval while waiting (default: ${DEFAULT_INBOX_WAIT_INTERVAL_SECONDS})
+  --timeout <s>             Stop waiting after this many seconds (default: 0, no timeout)
+  --format <prompt|json|ids>
+                            Output format for next/watch (default: prompt)
+
+Options for record:
+  --out <path>              Markdown comments file (default: <page-or-folder>.comments.md)
+  --agent-state <path>      Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
+  --id <id>                 Comment id to record
+  --claim <id>              Active claim id from inbox next/watch
+  --status <status>         resolved|no-op|blocked|stale|ignored|partial|needs_followup
+  --summary <txt>           Short result summary
+  --file <path>             Changed file; repeat for multiple files
+  --completed <txt>         Completed task; repeat for multiple tasks
+  --remaining <txt>         Remaining task; repeat for needs_followup
+  --agent-max-passes <n>    Pass limit used for needs_followup records (default: ${DEFAULT_AGENT_MAX_PASSES})
+  --format <text|json>      Output format for record (default: text)
+`;
+}
+
+export function parseInboxArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (!["next", "watch", "record"].includes(command)) {
+    throw new Error(`Unknown inbox command: ${command}`);
+  }
+
+  const opts = {
+    command,
+    wait: command === "watch",
+    agentPolicy: DEFAULT_AGENT_POLICY,
+    agentTrigger: DEFAULT_AGENT_TRIGGER,
+    agentMaxAttempts: DEFAULT_AGENT_MAX_ATTEMPTS,
+    agentMaxPasses: DEFAULT_AGENT_MAX_PASSES,
+    limit: 1,
+    claimOwner: "agent-session",
+    claimTtlSeconds: DEFAULT_INBOX_CLAIM_SECONDS,
+    waitIntervalSeconds: DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
+    timeoutSeconds: 0,
+    format: command === "record" ? "text" : "prompt",
+    filesChanged: [],
+    completedTasks: [],
+    remainingTasks: [],
+  };
+  const positional = [];
+
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--out") {
+      opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--agent-state") {
+      opts.agentStatePath = resolve(requiredValue(argv[++i], "--agent-state"));
+    } else if (arg === "--agent-policy") {
+      opts.agentPolicy = normalizeAgentPolicy(requiredValue(argv[++i], "--agent-policy"));
+    } else if (arg === "--agent-trigger") {
+      opts.agentTrigger = requiredValue(argv[++i], "--agent-trigger");
+    } else if (arg === "--agent-instructions") {
+      opts.agentInstructions = requiredValue(argv[++i], "--agent-instructions");
+    } else if (arg === "--agent-instructions-file") {
+      opts.agentInstructionsPath = resolve(requiredValue(argv[++i], "--agent-instructions-file"));
+    } else if (arg === "--agent-max-attempts") {
+      opts.agentMaxAttempts = parseIntegerValue(argv[++i], "--agent-max-attempts", { min: 1 });
+    } else if (arg === "--agent-max-passes") {
+      opts.agentMaxPasses = parseIntegerValue(argv[++i], "--agent-max-passes", { min: 1 });
+    } else if (arg === "--limit") {
+      opts.limit = parseIntegerValue(argv[++i], "--limit", { min: 1 });
+    } else if (arg === "--claim-owner") {
+      opts.claimOwner = requiredName(argv[++i], "--claim-owner");
+    } else if (arg === "--claim-ttl") {
+      opts.claimTtlSeconds = parseIntegerValue(argv[++i], "--claim-ttl", { min: 1 });
+    } else if (arg === "--wait") {
+      opts.wait = true;
+    } else if (arg === "--wait-interval") {
+      opts.waitIntervalSeconds = parseIntegerValue(argv[++i], "--wait-interval", { min: 1 });
+    } else if (arg === "--timeout") {
+      opts.timeoutSeconds = parseIntegerValue(argv[++i], "--timeout", { min: 0 });
+    } else if (arg === "--format") {
+      opts.format = requiredValue(argv[++i], "--format");
+    } else if (arg === "--id") {
+      opts.id = requiredValue(argv[++i], "--id");
+    } else if (arg === "--claim") {
+      if (command !== "record") throw new Error("--claim is only supported by inbox record");
+      opts.claimId = requiredValue(argv[++i], "--claim");
+    } else if (arg === "--status") {
+      opts.status = requiredValue(argv[++i], "--status");
+    } else if (arg === "--summary") {
+      opts.summary = requiredValue(argv[++i], "--summary");
+    } else if (arg === "--file") {
+      opts.filesChanged.push(requiredValue(argv[++i], "--file"));
+    } else if (arg === "--completed") {
+      opts.completedTasks.push(requiredValue(argv[++i], "--completed"));
+    } else if (arg === "--remaining") {
+      opts.remainingTasks.push(requiredValue(argv[++i], "--remaining"));
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown inbox option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length !== 1 && !opts.help) {
+    throw new Error(`Expected one HTML file or folder, got ${positional.length}`);
+  }
+  if (opts.agentInstructions && opts.agentInstructionsPath) {
+    throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");
+  }
+  if (["mention", "owner-or-mention"].includes(opts.agentPolicy) && isAllAgentTrigger(opts.agentTrigger)) {
+    throw new Error(`--agent-policy ${opts.agentPolicy} requires --agent-trigger with a marker such as @agent`);
+  }
+  if (command === "record" && !opts.help) {
+    if (!opts.id) throw new Error("inbox record requires --id");
+    if (!opts.status) throw new Error("inbox record requires --status");
+    if (!["text", "json"].includes(opts.format)) throw new Error("Unsupported --format for inbox record: use text or json");
+  } else if (!opts.help) {
+    if (!["prompt", "json", "ids"].includes(opts.format)) throw new Error("Unsupported --format for inbox next/watch: use prompt, json, or ids");
+  }
+  if (positional[0]) opts.filePath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runInboxCommand(args, { stdout = process.stdout, stderr = process.stderr, now = () => new Date(), log = console.log } = {}) {
+  let opts;
+  try {
+    opts = parseInboxArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${inboxUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(inboxUsage());
+    return 0;
+  }
+
+  try {
+    const paths = resolveInboxPaths(opts);
+    if (opts.command === "record") {
+      const recorded = recordAgentSessionResult({
+        commentsPath: paths.commentsPath,
+        targetPath: paths.filePath,
+        statePath: paths.statePath,
+        maxPasses: opts.agentMaxPasses,
+        claimId: opts.claimId || "",
+        now,
+        result: {
+          id: opts.id,
+          status: opts.status,
+          summary: opts.summary || "",
+          filesChanged: opts.filesChanged,
+          completedTasks: opts.completedTasks,
+          remainingTasks: opts.remainingTasks,
+        },
+      });
+      stdout.write(formatInboxRecordResult(recorded, opts.format));
+      return 0;
+    }
+
+    const promptAppend = opts.agentInstructionsPath ? readFileSync(opts.agentInstructionsPath, "utf8") : opts.agentInstructions || "";
+    const recordCommand = inboxRecordCommand({
+      targetPath: paths.filePath,
+      commentsPath: paths.commentsPath,
+      statePath: paths.statePath,
+      maxPasses: opts.agentMaxPasses,
+    });
+    const claimOptions = {
+      commentsPath: paths.commentsPath,
+      targetPath: paths.filePath,
+      statePath: paths.statePath,
+      trigger: opts.agentTrigger,
+      policy: opts.agentPolicy,
+      maxAttempts: opts.agentMaxAttempts,
+      maxPasses: opts.agentMaxPasses,
+      promptAppend,
+      claimOwner: opts.claimOwner,
+      claimSeconds: opts.claimTtlSeconds,
+      limit: opts.limit,
+      recordCommand,
+      now,
+    };
+    const result = opts.wait
+      ? await waitForAgentInboxComments({
+        ...claimOptions,
+        waitIntervalSeconds: opts.waitIntervalSeconds,
+        timeoutSeconds: opts.timeoutSeconds,
+        log,
+      })
+      : claimNextAgentComments(claimOptions);
+    stdout.write(formatInboxClaimResult(result, opts.format));
+    return 0;
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+}
+
+function resolveInboxPaths(opts) {
+  if (!existsSync(opts.filePath)) throw new Error(`File not found: ${opts.filePath}`);
+  const targetStat = statSync(opts.filePath);
+  if (!targetStat.isFile() && !targetStat.isDirectory()) throw new Error(`Not a file or folder: ${opts.filePath}`);
+  const commentsPath = resolve(opts.commentsPath || defaultCommentsPath(opts.filePath));
+  const statePath = resolve(opts.agentStatePath || defaultAgentStatePath(opts.filePath));
+  return {
+    filePath: opts.filePath,
+    commentsPath,
+    statePath,
+  };
+}
+
+function formatInboxClaimResult(result, format) {
+  if (format === "json") {
+    return `${JSON.stringify({
+      status: result.comments.length ? "claimed" : "empty",
+      reason: result.reason,
+      commentsPath: result.commentsPath,
+      statePath: result.statePath,
+      workspaceRoot: result.workspaceRoot,
+      claim: result.claim || null,
+      comments: result.comments,
+      prompt: result.prompt,
+    }, null, 2)}\n`;
+  }
+  if (format === "ids") {
+    return result.comments.length ? `${result.comments.map((comment) => comment.id).join("\n")}\n` : "";
+  }
+  return result.comments.length ? result.prompt : `No pending Tunelito comments (${result.reason}).\n`;
+}
+
+function formatInboxRecordResult(recorded, format) {
+  if (format === "json") {
+    return `${JSON.stringify({
+      id: recorded.comment.id,
+      status: recorded.state.status,
+      summary: recorded.state.summary || "",
+      filesChanged: recorded.state.filesChanged || [],
+      completedTasks: recorded.state.completedTasks || [],
+      remainingTasks: recorded.state.remainingTasks || [],
+      statePath: recorded.statePath,
+    }, null, 2)}\n`;
+  }
+  return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n`;
+}
+
+function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend }) {
+  const workspaceRoot = agentWorkspaceRoot(targetPath);
+  const sessionPath = join(workspaceRoot, ".tunelito", "session.json");
+  mkdirSync(dirname(sessionPath), { recursive: true });
+  const session = {
+    version: 1,
+    mode: "agent-session",
+    targetPath,
+    workspaceRoot,
+    commentsPath,
+    statePath,
+    policy,
+    trigger,
+    maxAttempts,
+    maxPasses,
+    ownerName: ownerName || "",
+    hasInstructions: Boolean(promptAppend),
+    nextCommand: inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }),
+    recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }),
+    createdAt: new Date().toISOString(),
+  };
+  writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+  return sessionPath;
+}
+
+function inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }) {
+  return [
+    "tunelito",
+    "inbox",
+    "watch",
+    shellQuote(targetPath),
+    "--out",
+    shellQuote(commentsPath),
+    "--agent-state",
+    shellQuote(statePath),
+    "--agent-policy",
+    shellQuote(policy),
+    "--agent-trigger",
+    shellQuote(trigger),
+    "--agent-max-attempts",
+    String(maxAttempts),
+    "--agent-max-passes",
+    String(maxPasses),
+  ].join(" ");
+}
+
+function inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }) {
+  return [
+    "tunelito",
+    "inbox",
+    "record",
+    shellQuote(targetPath),
+    "--out",
+    shellQuote(commentsPath),
+    "--agent-state",
+    shellQuote(statePath),
+    "--agent-max-passes",
+    String(maxPasses),
+    "--id <comment-id>",
+    "--status <status>",
+    "--summary \"<short summary>\"",
+    "--file <relative/path.html>",
+  ].join(" ");
+}
+
+function shellQuote(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
 }
 
 export function openBrowser(url, { platform = process.platform, spawnFn = spawn, log = console.log } = {}) {

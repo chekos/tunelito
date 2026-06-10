@@ -22,6 +22,8 @@ export const DEFAULT_AGENT_POLICY = "all";
 export const AGENT_POLICIES = ["all", "mention", "owner", "owner-or-mention"];
 export const DEFAULT_AGENT_MAX_ATTEMPTS = 2;
 export const DEFAULT_AGENT_MAX_PASSES = 3;
+export const DEFAULT_INBOX_CLAIM_SECONDS = 900;
+export const DEFAULT_INBOX_WAIT_INTERVAL_SECONDS = 5;
 
 const STATE_VERSION = 1;
 const AGENT_POLICY_SET = new Set(AGENT_POLICIES);
@@ -360,6 +362,48 @@ export function normalizeAgentConfig({
   };
 }
 
+export function normalizeAgentInboxConfig({
+  commentsPath,
+  targetPath,
+  statePath,
+  trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
+  maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
+  promptAppend = "",
+  claimOwner = "agent-session",
+  claimSeconds = DEFAULT_INBOX_CLAIM_SECONDS,
+} = {}) {
+  if (!commentsPath) throw new Error("inbox commands require persistent comments; remove --live");
+  if (!targetPath) throw new Error("inbox commands require a target HTML file or folder");
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
+  if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
+  if (!Number.isInteger(claimSeconds) || claimSeconds < 1) throw new Error("--claim-ttl must be a positive integer");
+  const normalizedPolicy = normalizeAgentPolicy(policy);
+  if (requiresMentionTrigger(normalizedPolicy) && isAllTrigger(trigger)) {
+    throw new Error(`--agent-policy ${normalizedPolicy} requires --agent-trigger with a marker such as @agent`);
+  }
+
+  const workspaceRoot = agentWorkspaceRoot(targetPath);
+  const resolvedStatePath = resolve(statePath || defaultAgentStatePath(targetPath));
+  return {
+    commentsPath: resolve(commentsPath),
+    targetPath: resolve(targetPath),
+    workspaceRoot,
+    statePath: resolvedStatePath,
+    logPath: defaultAgentLogPath(resolvedStatePath),
+    trigger: trigger || DEFAULT_AGENT_TRIGGER,
+    policy: normalizedPolicy,
+    maxAttempts,
+    maxPasses,
+    ownerName: cleanOwnerName(ownerName),
+    promptAppend: normalizePromptText(promptAppend),
+    claimOwner: cleanClaimOwner(claimOwner),
+    claimSeconds,
+  };
+}
+
 export function agentWorkspaceRoot(targetPath) {
   const resolved = resolve(targetPath);
   const stats = statSync(resolved);
@@ -400,6 +444,7 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
   const pending = [];
   let changed = false;
   const normalizedPolicy = normalizeAgentPolicy(policy);
+  const checkedAt = now();
   for (const comment of comments) {
     if (!comment?.id) continue;
     const fingerprint = fingerprintComment(comment);
@@ -411,8 +456,9 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
           ...existing,
           fingerprint,
           status: "changed_needs_review",
-          changedAt: now().toISOString(),
-          updatedAt: now().toISOString(),
+          claim: undefined,
+          changedAt: checkedAt.toISOString(),
+          updatedAt: checkedAt.toISOString(),
         };
         changed = true;
         continue;
@@ -420,9 +466,10 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
     }
 
     if (isTerminalStatus(existing?.status)) continue;
+    if (hasActiveClaim(existing, checkedAt)) continue;
     if (existing?.status === "needs_followup" && Number(existing?.passes || 0) >= maxPasses) {
       markPassLimitPartial(state, comment, fingerprint, {
-        now: now().toISOString(),
+        now: checkedAt.toISOString(),
         maxPasses,
       });
       changed = true;
@@ -430,7 +477,7 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
     }
     if (failureAttempts(existing) >= maxAttempts) {
       markBlocked(state, comment, fingerprint, {
-        now: now().toISOString(),
+        now: checkedAt.toISOString(),
         error: `Attempt limit reached (${maxAttempts}).`,
       });
       changed = true;
@@ -440,6 +487,226 @@ export function prepareAgentQueue(comments, state, { trigger = DEFAULT_AGENT_TRI
     pending.push({ comment, fingerprint });
   }
   return { pending, changed };
+}
+
+export function claimNextAgentComments({
+  commentsPath,
+  targetPath,
+  statePath,
+  trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
+  maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
+  promptAppend = "",
+  claimOwner = "agent-session",
+  claimSeconds = DEFAULT_INBOX_CLAIM_SECONDS,
+  limit = 1,
+  recordCommand = "",
+  now = () => new Date(),
+} = {}) {
+  const config = normalizeAgentInboxConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    trigger,
+    policy,
+    maxAttempts,
+    maxPasses,
+    ownerName,
+    promptAppend,
+    claimOwner,
+    claimSeconds,
+  });
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer");
+  if (!existsSync(config.commentsPath)) return { ...config, comments: [], prompt: "", reason: "no-comments-file" };
+
+  const state = loadAgentState(config.statePath);
+  const comments = loadCommentsFromMarkdown(config.commentsPath);
+  const prepared = prepareAgentQueue(comments, state, {
+    trigger: config.trigger,
+    policy: config.policy,
+    maxAttempts: config.maxAttempts,
+    maxPasses: config.maxPasses,
+    now,
+  });
+  if (prepared.changed) saveAgentState(config.statePath, state, now);
+  if (!prepared.pending.length) return { ...config, comments: [], prompt: "", reason: "no-pending-comments" };
+
+  const claimedAt = now();
+  const expiresAt = new Date(claimedAt.getTime() + config.claimSeconds * 1000);
+  const claimId = `claim_${claimedAt.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const claimed = prepared.pending.slice(0, limit);
+  const priorStatesById = Object.fromEntries(claimed.map((item) => [item.comment.id, state.comments[item.comment.id] || null]));
+
+  for (const item of claimed) {
+    const existing = state.comments[item.comment.id] || {};
+    state.comments[item.comment.id] = {
+      ...existing,
+      id: item.comment.id,
+      fingerprint: item.fingerprint,
+      status: "claimed",
+      previousStatus: existing.status || null,
+      pagePath: item.comment.pagePath || "",
+      quote: preview(item.comment.quote),
+      body: preview(item.comment.body),
+      claim: {
+        id: claimId,
+        owner: config.claimOwner,
+        claimedAt: claimedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      },
+      updatedAt: claimedAt.toISOString(),
+    };
+  }
+  saveAgentState(config.statePath, state, now);
+
+  const claimedComments = claimed.map((item) => item.comment);
+  const prompt = buildAgentSessionPrompt({
+    comments: claimedComments,
+    commentsPath: config.commentsPath,
+    targetPath: config.targetPath,
+    workspaceRoot: config.workspaceRoot,
+    statePath: config.statePath,
+    trigger: config.trigger,
+    policy: config.policy,
+    maxAttempts: config.maxAttempts,
+    maxPasses: config.maxPasses,
+    ownerName: config.ownerName,
+    commentStates: priorStatesById,
+    promptAppend: config.promptAppend,
+    recordCommand,
+    claim: {
+      id: claimId,
+      owner: config.claimOwner,
+      claimedAt: claimedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    },
+  });
+
+  return {
+    ...config,
+    comments: claimedComments,
+    prompt,
+    reason: "claimed",
+    claim: {
+      id: claimId,
+      owner: config.claimOwner,
+      claimedAt: claimedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
+export async function waitForAgentInboxComments({
+  waitIntervalSeconds = DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
+  timeoutSeconds = 0,
+  log = () => {},
+  ...options
+} = {}) {
+  if (!Number.isInteger(waitIntervalSeconds) || waitIntervalSeconds < 1) throw new Error("--wait-interval must be a positive integer");
+  if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 0) throw new Error("--timeout must be a non-negative integer");
+
+  let first = claimNextAgentComments(options);
+  if (first.comments.length) return first;
+
+  return await new Promise((resolveWait) => {
+    let settled = false;
+    let commentsWatcher = null;
+    let fallbackTimer = null;
+    let timeoutTimer = null;
+
+    function cleanup() {
+      if (settled) return false;
+      settled = true;
+      commentsWatcher?.close();
+      if (fallbackTimer) clearInterval(fallbackTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      return true;
+    }
+
+    function finish(result) {
+      if (!cleanup()) return;
+      resolveWait(result);
+    }
+
+    function check() {
+      if (settled) return;
+      const result = claimNextAgentComments(options);
+      if (result.comments.length) finish(result);
+      first = result;
+    }
+
+    try {
+      commentsWatcher = watch(dirname(first.commentsPath), { persistent: true }, (_eventType, filename) => {
+        if (isWatchedCommentsFilename(filename, first.commentsPath)) check();
+      });
+    } catch (error) {
+      log(`Inbox:   comments file watch unavailable (${error.message}); using interval fallback`);
+    }
+
+    fallbackTimer = setInterval(check, waitIntervalSeconds * 1000);
+    if (timeoutSeconds > 0) {
+      timeoutTimer = setTimeout(() => finish({ ...first, comments: [], prompt: "", reason: "timeout" }), timeoutSeconds * 1000);
+    }
+  });
+}
+
+export function recordAgentSessionResult({
+  commentsPath,
+  targetPath,
+  statePath,
+  result,
+  claimId = "",
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  now = () => new Date(),
+  provider = "agent-session",
+} = {}) {
+  const config = normalizeAgentInboxConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    maxPasses,
+  });
+  if (!existsSync(config.commentsPath)) throw new Error(`Comments file not found: ${config.commentsPath}`);
+  const state = loadAgentState(config.statePath);
+  const comments = loadCommentsFromMarkdown(config.commentsPath);
+  const normalized = normalizeResultPayload({ comments: [result] });
+  const normalizedResult = normalized.comments[0];
+  if (!normalizedResult) throw new Error("No valid result to record");
+
+  const comment = comments.find((item) => item.id === normalizedResult.id);
+  if (!comment) throw new Error(`Comment not found: ${normalizedResult.id}`);
+
+  const finishedAtDate = now();
+  const existing = state.comments[comment.id] || {};
+  if (existing.claim && hasActiveClaim(existing, finishedAtDate) && !claimId) {
+    throw new Error(`Comment ${comment.id} is claimed by ${existing.claim.owner}; rerun inbox watch or pass --claim ${existing.claim.id}`);
+  }
+  if (claimId && existing.claim?.id !== claimId) {
+    throw new Error(`Comment ${comment.id} is not claimed by ${claimId}`);
+  }
+
+  const finishedAt = finishedAtDate.toISOString();
+  const fingerprint = fingerprintComment(comment);
+  markResult(state, comment, fingerprint, normalizedResult, { now: finishedAt, maxPasses: config.maxPasses });
+  saveAgentState(config.statePath, state, now);
+  appendAgentLog(config.logPath, {
+    runId: `record_${now().getTime().toString(36)}`,
+    provider,
+    reason: "record",
+    startedAt: finishedAt,
+    finishedAt,
+    comments: [comment],
+    results: [normalizedResult],
+  });
+
+  return {
+    ...config,
+    comment,
+    result: normalizedResult,
+    state: state.comments[comment.id],
+  };
 }
 
 export function fingerprintComment(comment) {
@@ -517,6 +784,48 @@ Return only JSON as your final response. Do not wrap it in Markdown. Use this sh
     }
   ]
 }`,
+    `## Comments To Address
+
+${JSON.stringify(comments.map((comment) => formatCommentForPrompt(comment, commentStates[comment.id], { maxPasses })), null, 2)}`,
+  ].filter(Boolean);
+
+  return `${sections.join("\n\n")}\n`;
+}
+
+export function buildAgentSessionPrompt({ comments, commentsPath, targetPath, workspaceRoot, statePath, trigger, policy = DEFAULT_AGENT_POLICY, maxAttempts, maxPasses = DEFAULT_AGENT_MAX_PASSES, ownerName = "", commentStates = {}, promptAppend = "", recordCommand = "", claim = null }) {
+  const hostInstructions = normalizePromptText(promptAppend);
+  const owner = cleanOwnerName(ownerName);
+  const normalizedPolicy = normalizeAgentPolicy(policy);
+  let command = normalizePromptText(recordCommand) || `tunelito inbox record ${JSON.stringify(targetPath)} --id <comment-id> --status <status> --summary "<short summary>" --file <relative/path.html>`;
+  if (claim && !/\s--claim(?:\s|$)/.test(command)) command = `${command} --claim ${claim.id}`;
+  const sections = [
+    `# Tunelito Agent Session Inbox
+
+You are the active coding agent for a Tunelito review session. Tunelito has claimed the comments below for this session; edit the served source files directly, then record the outcome with \`tunelito inbox record\`.`,
+    hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
+    `## Workspace
+
+- HTML root: ${workspaceRoot}
+- Target: ${targetPath}
+- Comments inbox: ${commentsPath}
+- Resolution ledger: ${statePath}
+- Policy: ${normalizedPolicy}
+- Trigger: ${trigger}
+- Max retry attempts per comment: ${maxAttempts}
+- Max passes per comment: ${maxPasses}${owner ? `\n- Owner: ${owner}` : ""}${claim ? `\n- Claim: ${claim.id} for ${claim.owner}, expires ${claim.expiresAt}` : ""}`,
+    `## Workflow
+
+1. Read each comment's scope, pagePath, quote, body, and continuation context.
+2. Edit only the local source files needed to satisfy the comment.
+3. Do not edit the comments inbox or the resolution ledger directly.
+4. After handling each comment, run:
+
+\`\`\`bash
+${command}
+\`\`\`
+
+Allowed statuses: resolved, no-op, blocked, stale, ignored, partial, needs_followup.
+Use repeated \`--file\`, \`--completed\`, and \`--remaining\` flags when useful. Use \`needs_followup\` only when you made concrete progress and can name the remaining tasks.`,
     `## Comments To Address
 
 ${JSON.stringify(comments.map((comment) => formatCommentForPrompt(comment, commentStates[comment.id], { maxPasses })), null, 2)}`,
@@ -758,6 +1067,7 @@ function markResult(state, comment, fingerprint, result, { now, maxPasses }) {
     lastPassAt: now,
     completedAt,
     previousStatus: undefined,
+    claim: undefined,
     updatedAt: now,
     lastError,
   };
@@ -774,6 +1084,7 @@ function markRetryOrBlocked(state, comment, fingerprint, { now, maxAttempts, err
     id: comment.id,
     fingerprint,
     status: "pending",
+    claim: undefined,
     lastError: error,
     failures,
     updatedAt: now,
@@ -786,6 +1097,7 @@ function markBlocked(state, comment, fingerprint, { now, error, failures }) {
     id: comment.id,
     fingerprint,
     status: "blocked",
+    claim: undefined,
     lastError: error,
     failures: typeof failures === "number" ? failures : state.comments[comment.id]?.failures,
     completedAt: now,
@@ -799,6 +1111,7 @@ function markPassLimitPartial(state, comment, fingerprint, { now, maxPasses }) {
     id: comment.id,
     fingerprint,
     status: "partial",
+    claim: undefined,
     lastError: `Pass limit reached (${maxPasses}).`,
     completedAt: now,
     updatedAt: now,
@@ -905,6 +1218,13 @@ function isTerminalStatus(status) {
   return TERMINAL_STATUSES.has(String(status || ""));
 }
 
+function hasActiveClaim(existing, now) {
+  if (!existing?.claim?.expiresAt) return false;
+  const expiresAt = new Date(existing.claim.expiresAt).getTime();
+  if (!Number.isFinite(expiresAt)) return false;
+  return expiresAt > now.getTime();
+}
+
 function failureAttempts(existing) {
   if (!existing) return 0;
   if (Number.isInteger(Number(existing.failures))) return Number(existing.failures);
@@ -950,4 +1270,8 @@ function normalizePromptText(value) {
 
 function cleanOwnerName(value) {
   return String(value || "").replace(/\u0000/g, "").trim().slice(0, 80);
+}
+
+function cleanClaimOwner(value) {
+  return String(value || "agent-session").replace(/\u0000/g, "").trim().slice(0, 80) || "agent-session";
 }

@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, readBundledSkill, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseInboxArgs, readBundledSkill, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { loadAgentState } from "../src/agent-worker.js";
+import { renderCommentsMarkdown } from "../src/comments.js";
 
 function streamCollector() {
   const chunks = [];
@@ -67,6 +69,24 @@ test("parseArgs supports local agent worker options", () => {
   assert.equal(opts.agentMaxAttempts, 3);
   assert.equal(opts.agentMaxPasses, 5);
   assert.equal(opts.agentStatePath, resolve("agent-state.json"));
+});
+
+test("parseArgs supports active agent session options", () => {
+  const opts = parseArgs([
+    "site",
+    "--agent-session",
+    "--agent-policy",
+    "owner-or-mention",
+    "--agent-trigger",
+    "@agent",
+    "--agent-instructions",
+    "Preserve layout.",
+  ]);
+
+  assert.equal(opts.agentSession, true);
+  assert.equal(opts.agentPolicy, "owner-or-mention");
+  assert.equal(opts.agentTrigger, "@agent");
+  assert.equal(opts.agentInstructions, "Preserve layout.");
 });
 
 test("parseArgs rejects invalid agent max passes values", () => {
@@ -140,11 +160,124 @@ test("parseArgs rejects agent mode with live comments", () => {
   assert.throws(() => parseArgs(["site", "--live", "--agent", "codex"]), /--agent requires persistent comments/);
 });
 
+test("parseArgs rejects agent session conflicts", () => {
+  assert.throws(() => parseArgs(["site", "--live", "--agent-session"]), /--agent-session requires persistent comments/);
+  assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-session"]), /Use either --agent or --agent-session/);
+  assert.throws(() => parseArgs(["site", "--agent-session", "--agent-prompt", "A"]), /--agent-prompt is only supported/);
+  assert.throws(() => parseArgs(["site", "--agent-session", "--agent-interval", "30"]), /--agent-interval is only supported/);
+});
+
 test("parseArgs rejects prompt options without an agent", () => {
   assert.throws(
     () => parseArgs(["site", "--agent-instructions", "Use short copy."]),
     /--agent prompt options require --agent/,
   );
+});
+
+test("parseInboxArgs supports watch and record options", () => {
+  const watch = parseInboxArgs([
+    "watch",
+    "site",
+    "--agent-policy",
+    "owner-or-mention",
+    "--agent-trigger",
+    "@agent",
+    "--limit",
+    "2",
+    "--claim-owner",
+    "codex",
+    "--timeout",
+    "5",
+    "--format",
+    "json",
+  ]);
+  assert.equal(watch.command, "watch");
+  assert.equal(watch.wait, true);
+  assert.equal(watch.agentPolicy, "owner-or-mention");
+  assert.equal(watch.limit, 2);
+  assert.equal(watch.claimOwner, "codex");
+  assert.equal(watch.timeoutSeconds, 5);
+
+  const record = parseInboxArgs([
+    "record",
+    "site",
+    "--id",
+    "c_1",
+    "--claim",
+    "claim_123",
+    "--status",
+    "needs_followup",
+    "--summary",
+    "Started",
+    "--file",
+    "index.html",
+    "--completed",
+    "Updated hero",
+    "--remaining",
+    "Update footer",
+  ]);
+  assert.equal(record.command, "record");
+  assert.equal(record.id, "c_1");
+  assert.equal(record.claimId, "claim_123");
+  assert.equal(record.status, "needs_followup");
+  assert.deepEqual(record.filesChanged, ["index.html"]);
+  assert.deepEqual(record.completedTasks, ["Updated hero"]);
+  assert.deepEqual(record.remainingTasks, ["Update footer"]);
+  assert.throws(() => parseInboxArgs(["next", "site", "--claim", "claim_123"]), /--claim is only supported/);
+});
+
+test("runInboxCommand claims and records a comment", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-inbox-cli-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [{ id: "c_cli", author: "Dana", authorRole: "visitor", scope: "page", quote: "", body: "Make this concise.", prefix: "", suffix: "", path: "", pagePath: "/", textStart: null, textEnd: null, created: "2026-06-10T00:00:00.000Z" }],
+  }));
+
+  const nextOut = streamCollector();
+  const nextCode = await runInboxCommand([
+    "next",
+    siteDir,
+    "--out",
+    commentsPath,
+    "--agent-state",
+    statePath,
+    "--format",
+    "ids",
+  ], { stdout: nextOut });
+
+  assert.equal(nextCode, 0);
+  assert.equal(nextOut.text(), "c_cli\n");
+  assert.equal(loadAgentState(statePath).comments.c_cli.status, "claimed");
+  const claimId = loadAgentState(statePath).comments.c_cli.claim.id;
+
+  const recordOut = streamCollector();
+  const recordCode = await runInboxCommand([
+    "record",
+    siteDir,
+    "--out",
+    commentsPath,
+    "--agent-state",
+    statePath,
+    "--id",
+    "c_cli",
+    "--claim",
+    claimId,
+    "--status",
+    "resolved",
+    "--summary",
+    "Made the copy concise.",
+    "--file",
+    "index.html",
+  ], { stdout: recordOut });
+
+  assert.equal(recordCode, 0);
+  assert.match(recordOut.text(), /Recorded c_cli as resolved/);
+  assert.equal(loadAgentState(statePath).comments.c_cli.status, "resolved");
 });
 
 test("parseArgs rejects conflicting prompt option sources", () => {

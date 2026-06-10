@@ -42,6 +42,15 @@ The local agent worker owns comment follow-up when `--agent` is enabled:
 - skip comments already marked `resolved`, `no-op`, `blocked`, `stale`, `ignored`, `partial`, or `changed_needs_review`
 - stop continuation when `--agent-max-passes` is reached or a follow-up pass reports no observable progress
 
+The active-agent inbox owns comment handoff when `--agent-session` or `tunelito inbox` is used:
+
+- keep the current Claude Code, Codex, or other agent session as the process that edits files
+- claim pending comments in `.tunelito/agent/state.json` with a short lease so another worker or session does not duplicate the edit
+- reuse the same comment parser, owner/mention policies, continuation state, and terminal statuses as the local agent worker
+- print bounded prompts through `tunelito inbox next` or `tunelito inbox watch`
+- record outcomes through `tunelito inbox record` rather than direct ledger edits
+- write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, and commands
+
 The browser client owns reviewer interaction:
 
 - capture text selections
@@ -64,6 +73,7 @@ The browser client owns reviewer interaction:
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as comment metadata, not authentication; the review key remains the access gate.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
+- Never spawn a local agent worker for `--agent-session`; active-agent mode only prints inbox commands and writes session metadata.
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.

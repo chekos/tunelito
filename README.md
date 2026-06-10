@@ -39,6 +39,15 @@ npx --yes tunelito ./site --agent codex
 
 Use `--agent claude` for Claude Code, or `--agent-command "<your command>"` for another local CLI. Tunelito sends prompts to that command on stdin and tracks handled comment IDs in `.tunelito/agent/state.json`.
 
+If you are already inside Claude Code, Codex, or another agent session, use agent-session mode instead of spawning a child agent:
+
+```bash
+npx --yes tunelito ./site --agent-session --no-tunnel --open
+tunelito inbox watch ./site
+```
+
+`inbox watch` waits for the next actionable comment, claims it in the shared ledger, prints a prompt for the current agent, and exits. After editing, record the result with `tunelito inbox record`.
+
 From a clone:
 
 ```bash
@@ -104,6 +113,7 @@ tunelito ./page.html --live
 Tunelito 0.9.0
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito inbox <next|watch|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -130,6 +140,7 @@ Options:
   --agent-max-passes <n>
                         Stop continuing a multi-pass comment after n agent passes (default: 3)
   --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
+  --agent-session       Print active-agent inbox commands; do not spawn a worker
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
@@ -137,6 +148,9 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  inbox next            Claim the next pending comment and print an agent prompt
+  inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
 ```
@@ -249,6 +263,26 @@ In `--live`, comments are not written to markdown and are not restored after res
 
 The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name and each comment's `authorRole`, so host instructions can ask the agent to prefer owner comments or wait for owner approval.
 
+If you are already inside an agent session, let the current agent own the loop:
+
+```bash
+tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+Tunelito prints an `Agent session:` command and writes `.tunelito/session.json` beside the served root. In the active agent session, run:
+
+```bash
+tunelito inbox watch ./site --agent-policy owner-or-mention --agent-trigger "@agent"
+```
+
+`inbox watch` waits for the comments markdown to change, keeps interval polling as a fallback, claims the next actionable comment in `.tunelito/agent/state.json`, prints a bounded prompt for the current agent, and exits. After editing the source files, record the outcome with the claim id from the printed command:
+
+```bash
+tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated the hero copy." --file index.html
+```
+
+Use `tunelito inbox next ./site` for a non-waiting check. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to inbox mode and the spawned worker.
+
 Tunelito can run the local agent worker for you:
 
 Example:
@@ -303,7 +337,7 @@ Handled comments are recorded in `.tunelito/agent/state.json` with statuses like
 
 Treat `--agent` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
 
-Manual agent prompt:
+Manual agent prompt for older builds:
 
 ```text
 Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file, then summarize the comment id and change made.
