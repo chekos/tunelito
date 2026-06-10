@@ -331,33 +331,24 @@ export function normalizeAgentConfig({
   }
   if (command && normalizedProvider !== "custom") throw new Error("--agent-command can only be used with --agent custom");
   if (normalizedProvider === "custom" && !command) throw new Error("--agent custom requires --agent-command");
-  if (!commentsPath) throw new Error("--agent requires persistent comments; remove --live");
-  if (!targetPath) throw new Error("--agent requires a target HTML file or folder");
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 1) throw new Error("--agent-interval must be a positive number of seconds");
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
-  if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
-  const normalizedPolicy = normalizeAgentPolicy(policy);
-  if (requiresMentionTrigger(normalizedPolicy) && isAllTrigger(trigger)) {
-    throw new Error(`--agent-policy ${normalizedPolicy} requires --agent-trigger with a marker such as @agent`);
-  }
-
-  const workspaceRoot = agentWorkspaceRoot(targetPath);
-  const resolvedStatePath = resolve(statePath || defaultAgentStatePath(targetPath));
+  const shared = normalizeAgentWorkspaceConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    trigger,
+    policy,
+    maxAttempts,
+    maxPasses,
+    ownerName,
+    promptAppend,
+    usage: "--agent",
+  });
   return {
     provider: normalizedProvider,
     command: command || "",
-    commentsPath: resolve(commentsPath),
-    targetPath: resolve(targetPath),
-    workspaceRoot,
-    statePath: resolvedStatePath,
-    logPath: defaultAgentLogPath(resolvedStatePath),
+    ...shared,
     intervalSeconds,
-    trigger: trigger || DEFAULT_AGENT_TRIGGER,
-    policy: normalizedPolicy,
-    maxAttempts,
-    maxPasses,
-    ownerName: cleanOwnerName(ownerName),
-    promptAppend: normalizePromptText(promptAppend),
     promptOverride: normalizePromptText(promptOverride),
   };
 }
@@ -375,13 +366,47 @@ export function normalizeAgentInboxConfig({
   claimOwner = "agent-session",
   claimSeconds = DEFAULT_INBOX_CLAIM_SECONDS,
 } = {}) {
-  if (!commentsPath) throw new Error("inbox commands require persistent comments; remove --live");
-  if (!targetPath) throw new Error("inbox commands require a target HTML file or folder");
+  const shared = normalizeAgentWorkspaceConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    trigger,
+    policy,
+    maxAttempts,
+    maxPasses,
+    ownerName,
+    promptAppend,
+    claimSeconds,
+    usage: "inbox commands",
+  });
+  return {
+    ...shared,
+    claimOwner: cleanClaimOwner(claimOwner),
+    claimSeconds,
+  };
+}
+
+function normalizeAgentWorkspaceConfig({
+  commentsPath,
+  targetPath,
+  statePath,
+  trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
+  maxAttempts = DEFAULT_AGENT_MAX_ATTEMPTS,
+  maxPasses = DEFAULT_AGENT_MAX_PASSES,
+  ownerName = "",
+  promptAppend = "",
+  claimSeconds = null,
+  usage = "agent config",
+} = {}) {
+  if (!commentsPath) throw new Error(`${usage} requires persistent comments; remove --live`);
+  if (!targetPath) throw new Error(`${usage} requires a target HTML file or folder`);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
   if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
-  if (!Number.isInteger(claimSeconds) || claimSeconds < 1) throw new Error("--claim-ttl must be a positive integer");
+  if (claimSeconds !== null && (!Number.isInteger(claimSeconds) || claimSeconds < 1)) throw new Error("--claim-ttl must be a positive integer");
   const normalizedPolicy = normalizeAgentPolicy(policy);
-  if (requiresMentionTrigger(normalizedPolicy) && isAllTrigger(trigger)) {
+  const normalizedTrigger = trigger || DEFAULT_AGENT_TRIGGER;
+  if (requiresMentionTrigger(normalizedPolicy) && isAllTrigger(normalizedTrigger)) {
     throw new Error(`--agent-policy ${normalizedPolicy} requires --agent-trigger with a marker such as @agent`);
   }
 
@@ -393,14 +418,12 @@ export function normalizeAgentInboxConfig({
     workspaceRoot,
     statePath: resolvedStatePath,
     logPath: defaultAgentLogPath(resolvedStatePath),
-    trigger: trigger || DEFAULT_AGENT_TRIGGER,
+    trigger: normalizedTrigger,
     policy: normalizedPolicy,
     maxAttempts,
     maxPasses,
     ownerName: cleanOwnerName(ownerName),
     promptAppend: normalizePromptText(promptAppend),
-    claimOwner: cleanClaimOwner(claimOwner),
-    claimSeconds,
   };
 }
 
