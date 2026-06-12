@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 - 2026-06-12
 
 - Adds browser-visible agent work status on comment cards, plus `tunelito inbox status` as the matching terminal tracker. Reviewers can see queued, in-progress, follow-up, and integrated feedback directly in the Tunelito panel.
 
