@@ -36,6 +36,7 @@ npm run ci
 - `docs/agents/IDEA_TO_RELEASE.md`: end-to-end lifecycle from idea through PR, release, and publish verification.
 - `docs/agents/WORKFLOW.md`: standard autonomous development loop.
 - `docs/agents/QUALITY_GATES.md`: checks required by change type.
+- `docs/agents/EXAMPLE_FIXTURES.md`: repo-local example taxonomy for UI, screenshot, accessibility, and browser regression checks.
 - `docs/agents/ARCHITECTURE.md`: system boundaries and invariants.
 - `docs/agents/SECURITY_REVIEW.md`: tunnel, file-serving, and hook security checklist.
 - `docs/agents/RELEASE_PLAYBOOK.md`: beta/release process.

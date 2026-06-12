@@ -47,8 +47,9 @@ Required:
 - `npm test`
 - inspect injected `/__tunelito/client.js`
 - run a local page and verify the injected script appears
+- choose relevant fixtures from `docs/agents/EXAMPLE_FIXTURES.md` and verify them in a real browser when available
 
-For mobile or visual changes, use a real browser/device when available.
+For mobile, visual, accessibility, screenshot, overlay, or text-selection changes, run the relevant fixture regression set from `docs/agents/EXAMPLE_FIXTURES.md`. Include desktop and mobile viewport checks when layout or overlay placement can change.
 
 ## Packaging Changes
 

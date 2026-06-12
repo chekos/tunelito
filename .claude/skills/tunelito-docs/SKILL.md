@@ -11,6 +11,7 @@ allowed-tools: Read, Grep, Glob, Bash
 - `SECURITY.md`: security model and reporting.
 - `docs/RELEASING.md`: public release process.
 - `docs/agents/`: agent operating playbooks.
+- `docs/agents/EXAMPLE_FIXTURES.md`: agent-facing example taxonomy and UI regression fixture guidance.
 - `examples/README.md`: example page guidance.
 
 ## Instructions

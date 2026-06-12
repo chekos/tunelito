@@ -12,6 +12,8 @@ HTML file argument: `$ARGUMENTS`
 
 If no argument is provided, use `examples/simple-review.html`.
 
+For injected UI, visual, accessibility, screenshot, or browser-behavior work, read `docs/agents/EXAMPLE_FIXTURES.md` and choose the fixture set that matches the change. Do not rely on `simple-review.html` alone for overlay, viewport, SPA, slide, text-dense, or meeting-brief behavior.
+
 ## Workflow
 
 1. Pick an open port.

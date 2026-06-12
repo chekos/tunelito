@@ -27,6 +27,8 @@ npm run ci
 node bin/tunelito.js examples/simple-review.html --no-tunnel --port 4317
 ```
 
+For injected UI, visual, accessibility, screenshot, or browser-behavior changes, read `docs/agents/EXAMPLE_FIXTURES.md` and verify the relevant examples before handoff.
+
 ## Workflow
 
 1. Inspect: `git status -sb`, `rg --files`, and the relevant source/tests.
