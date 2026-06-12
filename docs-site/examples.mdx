@@ -1,9 +1,9 @@
 ---
 title: "Examples"
-description: "Use Tunelito's bundled example pages for smoke tests and demos."
+description: "Use Tunelito's bundled example pages for smoke tests, demos, screenshots, and UI regression checks."
 ---
 
-Tunelito includes example HTML pages in the GitHub repository.
+Tunelito includes HTML examples in the GitHub repository. They are designed as a small taxonomy of review surfaces, so future UI changes can be checked against realistic pages with distinct visual systems.
 
 ## Simple review page
 
@@ -14,3 +14,53 @@ tunelito ./examples/simple-review.html --no-tunnel --open
 ```
 
 The page contains styled DOM text and no custom review JavaScript.
+
+## Research paper
+
+Use this for text-dense documents, long selections, tables, figure captions, footnotes, and restored highlights:
+
+```bash
+tunelito ./examples/research-paper.html --no-tunnel --open
+```
+
+This fixture is intentionally closer to a research paper or policy memo than a landing page. It uses a dark scholarly vellum style, with a strong display serif, margin notes, and long-scroll density. It is useful when a change affects text anchoring, highlight placement, long-scroll pages, or dense review copy.
+
+## Slide deck
+
+Use this for slides shared live on a call:
+
+```bash
+tunelito ./examples/slide-deck.html --no-tunnel --open
+```
+
+The deck uses a fixed 16:9 stage, keyboard navigation, large type, and sparse copy. It is useful for checking whether Tunelito's controls stay usable over presentation layouts.
+
+## Dashboard SPA
+
+Use this for app prototypes, dashboards, and single-page application behavior:
+
+```bash
+tunelito ./examples/dashboard-spa.html --no-tunnel --open
+```
+
+The dashboard is one static HTML file with hash-route views for overview, pipeline, and risks. It uses a cobalt graph-paper editorial system and stresses fixed app chrome, route changes, status labels, charts, dense tables, and comments inside operational UI.
+
+## Project brief
+
+Use this for day-to-day planning documents and supervisor feedback sessions:
+
+```bash
+tunelito ./examples/project-brief.html --no-tunnel --open
+```
+
+The brief models a common review call: share a practical plan, walk through agenda items, capture supervisor or team feedback, and turn comments into follow-up tasks. Its pinned-paper style is intentionally different from the dashboard and research fixtures.
+
+## Suggested regression sets
+
+| Change area | Check these examples |
+| --- | --- |
+| Text anchoring or restored highlights | `research-paper.html`, `project-brief.html`, `simple-review.html` |
+| Overlay placement or viewport behavior | `slide-deck.html`, `dashboard-spa.html` |
+| App chrome or SPA route behavior | `dashboard-spa.html` |
+| Agent-session or follow-up workflows | `project-brief.html`, `dashboard-spa.html`, `research-paper.html` |
+| Docs screenshots | `project-brief.html`, `slide-deck.html`, `dashboard-spa.html` |
