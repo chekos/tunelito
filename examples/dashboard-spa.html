@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cobalt Dashboard SPA Review Fixture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f0ebde;
+      --paper-2: #e6e0ce;
+      --ink: #1f2be0;
+      --ink-soft: #5560e5;
+      --grid: rgba(31, 43, 224, .11);
+      --faint: rgba(31, 43, 224, .2);
+      --display: "Newsreader", Georgia, serif;
+      --body: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+      --mono: "DM Mono", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        linear-gradient(to right, var(--grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid) 1px, transparent 1px),
+        var(--paper);
+      background-size: 38px 38px;
+      color: var(--ink);
+      font-family: var(--body);
+      line-height: 1.42;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      border-left: 1.5px solid var(--ink);
+      border-right: 1.5px solid var(--ink);
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 28px;
+      padding: 28px 22px;
+      border-right: 1.5px solid var(--ink);
+      background: rgba(240, 235, 222, .86);
+    }
+
+    .brand {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mark {
+      width: 74px;
+      height: 74px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 4px;
+    }
+
+    .mark i {
+      background: var(--ink);
+    }
+
+    .brand b {
+      font-family: var(--display);
+      font-size: 38px;
+      font-weight: 400;
+      line-height: .9;
+    }
+
+    .brand span,
+    .mono {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .nav {
+      display: grid;
+      align-content: start;
+      gap: 0;
+      border-top: 1.5px solid var(--ink);
+    }
+
+    .nav-button {
+      width: 100%;
+      min-height: 62px;
+      border: 0;
+      border-bottom: 1px solid var(--faint);
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      padding: 14px 0;
+    }
+
+    .nav-button span {
+      display: block;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .nav-button b {
+      display: block;
+      margin-top: 4px;
+      font-family: var(--display);
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .nav-button:hover,
+    .nav-button.is-active {
+      background: var(--ink);
+      color: var(--paper);
+      padding-left: 12px;
+    }
+
+    .nav-button:focus-visible,
+    .toolbar button:focus-visible {
+      outline: 4px solid var(--ink);
+      outline-offset: 3px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .sidebar-note {
+      padding-top: 16px;
+      border-top: 1.5px solid var(--ink);
+      font-size: 14px;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 30px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: start;
+      padding-bottom: 20px;
+      border-bottom: 1.5px solid var(--ink);
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 820px;
+      font-family: var(--display);
+      font-size: clamp(54px, 8vw, 112px);
+      font-weight: 400;
+      line-height: .86;
+      letter-spacing: -.015em;
+    }
+
+    .summary {
+      max-width: 640px;
+      margin: 14px 0 0;
+      color: var(--ink-soft);
+      font-size: 18px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      border: 1.5px solid var(--ink);
+    }
+
+    .toolbar button {
+      min-height: 42px;
+      border: 0;
+      border-right: 1.5px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      padding: 10px 14px;
+    }
+
+    .toolbar button:last-child {
+      border-right: 0;
+    }
+
+    .toolbar button.is-active {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .route {
+      display: none;
+    }
+
+    .route.is-active {
+      display: grid;
+      gap: 24px;
+      padding-top: 24px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1.5px solid var(--ink);
+      border-left: 1.5px solid var(--ink);
+    }
+
+    .metric {
+      min-height: 148px;
+      padding: 18px;
+      border-right: 1.5px solid var(--ink);
+      border-bottom: 1.5px solid var(--ink);
+      background: rgba(240, 235, 222, .74);
+    }
+
+    .metric span {
+      display: block;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 16px;
+      font-family: var(--display);
+      font-size: 64px;
+      font-weight: 400;
+      line-height: .8;
+      letter-spacing: -.02em;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 14px;
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(310px, .75fr);
+      gap: 24px;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 20px;
+      border: 1.5px solid var(--ink);
+      background: rgba(240, 235, 222, .82);
+    }
+
+    .panel h2 {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: baseline;
+      margin: 0 0 18px;
+      padding-bottom: 12px;
+      border-bottom: 1.5px solid var(--ink);
+      font-family: var(--display);
+      font-size: 36px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .panel h2 span {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .feed {
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--faint);
+    }
+
+    .feed-item {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--faint);
+    }
+
+    .feed-item b {
+      display: block;
+      font-family: var(--display);
+      font-size: 25px;
+      font-weight: 400;
+      line-height: 1.05;
+    }
+
+    .feed-item p {
+      margin: 6px 0 0;
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 13px 10px;
+      border-bottom: 1px solid var(--faint);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      border-bottom: 1.5px solid var(--ink);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .status {
+      display: inline-flex;
+      min-width: 80px;
+      justify-content: center;
+      padding: 4px 7px;
+      border: 1.5px solid var(--ink);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .status.solid {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .detail-list {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1.5px solid var(--ink);
+    }
+
+    .detail-list li {
+      display: grid;
+      grid-template-columns: 82px minmax(0, 1fr);
+      gap: 18px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--faint);
+    }
+
+    .detail-list code {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
+    .detail-list b {
+      display: block;
+      font-family: var(--display);
+      font-size: 28px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .detail-list span {
+      display: block;
+      margin-top: 7px;
+      color: var(--ink-soft);
+      font-size: 15px;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+        border: 0;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1.5px solid var(--ink);
+      }
+
+      .nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .nav-button {
+        border-right: 1px solid var(--faint);
+      }
+
+      .topbar,
+      .metrics,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .content,
+      .sidebar {
+        padding: 18px;
+      }
+
+      .nav {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar button {
+        border-right: 0;
+        border-bottom: 1.5px solid var(--ink);
+      }
+
+      .toolbar button:last-child {
+        border-bottom: 0;
+      }
+
+      h1 {
+        font-size: 52px;
+      }
+
+      .metric strong {
+        font-size: 50px;
+      }
+
+      th,
+      td {
+        padding: 10px 7px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i>
+        </span>
+        <b>Signal Ledger</b>
+        <span>ops review / hash routed html</span>
+      </div>
+
+      <nav class="nav" aria-label="Dashboard routes">
+        <button class="nav-button is-active" type="button" data-route="overview">
+          <span>01</span><b>Overview</b>
+        </button>
+        <button class="nav-button" type="button" data-route="pipeline">
+          <span>02</span><b>Pipeline</b>
+        </button>
+        <button class="nav-button" type="button" data-route="risks">
+          <span>03</span><b>Risks</b>
+        </button>
+      </nav>
+
+      <p class="sidebar-note">A static single-file SPA fixture for checking Tunelito over app chrome, table density, route state, and chart-like surfaces.</p>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <p class="mono">weekly operating bulletin</p>
+          <h1 id="route-title">Operations review dashboard</h1>
+          <p class="summary" id="route-summary">A graph-paper dashboard for annotations across metrics, dense tables, ledger rows, and hash-route state.</p>
+        </div>
+        <div class="toolbar" aria-label="Density controls">
+          <button type="button" class="is-active" data-density="normal">Normal</button>
+          <button type="button" data-density="review">Review focus</button>
+        </div>
+      </header>
+
+      <section class="route is-active" data-view="overview">
+        <div class="metrics">
+          <section class="metric">
+            <span>Open decisions</span>
+            <strong>18</strong>
+            <small>Four need director review by Friday.</small>
+          </section>
+          <section class="metric">
+            <span>Cycle time</span>
+            <strong>6.4d</strong>
+            <small>Down from 8.1 days last sprint.</small>
+          </section>
+          <section class="metric">
+            <span>Blocked items</span>
+            <strong>07</strong>
+            <small>Three are waiting on vendor input.</small>
+          </section>
+          <section class="metric">
+            <span>Confidence</span>
+            <strong>82%</strong>
+            <small>Stable if the staffing risk closes.</small>
+          </section>
+        </div>
+
+        <div class="grid">
+          <section class="panel">
+            <h2>Throughput <span>six week index</span></h2>
+            <svg viewBox="0 0 760 300" role="img" aria-labelledby="chart-title chart-desc">
+              <title id="chart-title">Weekly throughput chart</title>
+              <desc id="chart-desc">A cobalt bar and line chart showing completed work and open decisions.</desc>
+              <rect width="760" height="300" fill="#f0ebde"></rect>
+              <g stroke="#1f2be0" stroke-width="1" opacity=".2">
+                <path d="M50 40 H720"></path>
+                <path d="M50 90 H720"></path>
+                <path d="M50 140 H720"></path>
+                <path d="M50 190 H720"></path>
+                <path d="M50 240 H720"></path>
+                <path d="M90 24 V262"></path>
+                <path d="M190 24 V262"></path>
+                <path d="M290 24 V262"></path>
+                <path d="M390 24 V262"></path>
+                <path d="M490 24 V262"></path>
+                <path d="M590 24 V262"></path>
+              </g>
+              <g fill="#1f2be0">
+                <rect x="90" y="154" width="48" height="86"></rect>
+                <rect x="190" y="114" width="48" height="126"></rect>
+                <rect x="290" y="136" width="48" height="104"></rect>
+                <rect x="390" y="86" width="48" height="154"></rect>
+                <rect x="490" y="106" width="48" height="134"></rect>
+                <rect x="590" y="72" width="48" height="168"></rect>
+              </g>
+              <polyline fill="none" stroke="#5560e5" stroke-width="5" points="114,108 214,126 314,98 414,116 514,82 614,92"></polyline>
+              <g font-family="DM Mono, monospace" font-size="13" fill="#1f2be0">
+                <text x="88" y="275">W1</text>
+                <text x="188" y="275">W2</text>
+                <text x="288" y="275">W3</text>
+                <text x="388" y="275">W4</text>
+                <text x="488" y="275">W5</text>
+                <text x="588" y="275">W6</text>
+              </g>
+            </svg>
+          </section>
+
+          <section class="panel">
+            <h2>Review feed <span>latest</span></h2>
+            <div class="feed">
+              <article class="feed-item">
+                <b>Supervisor asked for a clearer launch condition.</b>
+                <p>Current wording says "ready after approval" but does not name who approves the staffing plan.</p>
+              </article>
+              <article class="feed-item">
+                <b>Team requested one source of truth.</b>
+                <p>The risk register and dashboard should use the same item names before external sharing.</p>
+              </article>
+              <article class="feed-item">
+                <b>Operations wants fewer weekly metrics.</b>
+                <p>Keep cycle time, blocked items, and confidence. Move everything else to the appendix.</p>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="route" data-view="pipeline">
+        <section class="panel">
+          <h2>Pipeline ledger <span>owner table</span></h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th>Review note</th>
+                <th>Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Finalize onboarding copy</td>
+                <td>Product</td>
+                <td><span class="status">review</span></td>
+                <td>Needs simpler language before the customer advisory call.</td>
+                <td>Jun 17</td>
+              </tr>
+              <tr>
+                <td>Confirm support rotation</td>
+                <td>Operations</td>
+                <td><span class="status solid">blocked</span></td>
+                <td>Coverage gap remains for launch week unless contractor budget clears.</td>
+                <td>Jun 18</td>
+              </tr>
+              <tr>
+                <td>Publish metrics explainer</td>
+                <td>Data</td>
+                <td><span class="status">ready</span></td>
+                <td>One paragraph should explain why confidence moved from 78% to 82%.</td>
+                <td>Jun 20</td>
+              </tr>
+              <tr>
+                <td>Align release checklist</td>
+                <td>Engineering</td>
+                <td><span class="status">review</span></td>
+                <td>Checklist order changed after the QA walkthrough and needs sign-off.</td>
+                <td>Jun 21</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+
+      <section class="route" data-view="risks">
+        <div class="grid">
+          <section class="panel">
+            <h2>Risk register <span>decision list</span></h2>
+            <ul class="detail-list">
+              <li>
+                <code>R-01</code>
+                <div>
+                  <b>Staffing coverage remains the highest launch risk.</b>
+                  <span>The dashboard should make clear that confidence assumes two support shifts are covered by Wednesday.</span>
+                </div>
+              </li>
+              <li>
+                <code>R-02</code>
+                <div>
+                  <b>Vendor data may arrive after the review window.</b>
+                  <span>Use a page note if this should become a separate escalation instead of a dashboard annotation.</span>
+                </div>
+              </li>
+              <li>
+                <code>R-03</code>
+                <div>
+                  <b>Metrics copy is too compact for external reviewers.</b>
+                  <span>Try selecting one phrase inside this item to confirm short text comments still anchor cleanly.</span>
+                </div>
+              </li>
+            </ul>
+          </section>
+          <section class="panel">
+            <h2>Decision memo <span>draft</span></h2>
+            <p>The current recommendation is to ship the limited launch only if support coverage is confirmed and the customer-facing metrics explainer is approved. Otherwise, the launch should move one week so the team can avoid a partial release with unclear ownership.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const titles = {
+      overview: {
+        title: "Operations review dashboard",
+        summary: "A graph-paper dashboard for annotations across metrics, dense tables, ledger rows, and hash-route state.",
+      },
+      pipeline: {
+        title: "Pipeline review",
+        summary: "A table-heavy route for comments on owners, dates, statuses, and dense operational copy.",
+      },
+      risks: {
+        title: "Risk review",
+        summary: "A decision-focused route with list items and prose that should remain commentable after hash changes.",
+      },
+    };
+
+    function setRoute(route) {
+      const selected = titles[route] ? route : "overview";
+      document.querySelectorAll(".nav-button").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.route === selected);
+      });
+      document.querySelectorAll(".route").forEach((view) => {
+        const active = view.dataset.view === selected;
+        view.classList.toggle("is-active", active);
+        view.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+      document.querySelector("#route-title").textContent = titles[selected].title;
+      document.querySelector("#route-summary").textContent = titles[selected].summary;
+      if (location.hash.slice(1) !== selected) {
+        history.replaceState(null, "", "#" + selected);
+      }
+    }
+
+    document.querySelectorAll(".nav-button").forEach((button) => {
+      button.addEventListener("click", () => setRoute(button.dataset.route));
+    });
+
+    document.querySelectorAll("[data-density]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-density]").forEach((item) => item.classList.remove("is-active"));
+        button.classList.add("is-active");
+      });
+    });
+
+    window.addEventListener("hashchange", () => setRoute(location.hash.slice(1)));
+    setRoute(location.hash.slice(1) || "overview");
+  </script>
+</body>
+</html>

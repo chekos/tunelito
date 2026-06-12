@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vellum Research Review Fixture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Courier+Prime:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --navy: #2a3870;
+      --navy-deep: #1f2858;
+      --navy-mid: #34407a;
+      --yellow: #e8d85c;
+      --yellow-soft: rgba(232, 216, 92, .66);
+      --yellow-faint: rgba(232, 216, 92, .24);
+      --teal: #68aaa2;
+      --teal-dim: rgba(104, 170, 162, .7);
+      --ink-shadow: rgba(15, 22, 52, .34);
+      --display: "Cormorant Garamond", Georgia, serif;
+      --body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+      --mono: "Courier Prime", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--navy-deep);
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 10%, rgba(104, 170, 162, .13), transparent 28rem),
+        radial-gradient(circle at 88% 4%, rgba(245, 225, 104, .08), transparent 30rem),
+        var(--navy);
+      color: var(--yellow);
+      font-family: var(--body);
+      line-height: 1.66;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(232, 216, 92, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(232, 216, 92, .08) 1px, transparent 1px);
+      background-size: 96px 96px;
+      mask-image: linear-gradient(to bottom, black, transparent 78%);
+    }
+
+    .folio {
+      width: min(1180px, calc(100vw - 34px));
+      margin: 28px auto 56px;
+      border: 1px solid var(--yellow-faint);
+      background: rgba(31, 40, 88, .62);
+      box-shadow: 0 30px 90px var(--ink-shadow);
+    }
+
+    .chrome {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: center;
+      padding: 22px 28px;
+      border-bottom: 1px solid var(--yellow-faint);
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 620px;
+      display: grid;
+      align-content: center;
+      padding: 70px 8vw 92px;
+      text-align: center;
+      border-bottom: 1px solid var(--yellow-faint);
+    }
+
+    .kicker {
+      display: inline-grid;
+      justify-self: center;
+      gap: 14px;
+      margin: 0 0 26px;
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .kicker::after {
+      content: "";
+      justify-self: center;
+      width: 34px;
+      height: 1px;
+      background: var(--teal);
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 0 auto;
+      color: var(--yellow);
+      font-family: var(--display);
+      font-size: clamp(58px, 9vw, 126px);
+      font-style: italic;
+      font-weight: 400;
+      line-height: .9;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 720px;
+      margin: 34px auto 0;
+      color: var(--yellow-soft);
+      font-size: 20px;
+      line-height: 1.7;
+    }
+
+    .pin-note {
+      position: absolute;
+      left: 34px;
+      bottom: 30px;
+      max-width: 270px;
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 16px;
+      line-height: 1.45;
+      text-align: left;
+    }
+
+    .article-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 52px;
+      padding: 52px;
+    }
+
+    article {
+      min-width: 0;
+    }
+
+    .abstract {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 26px;
+      margin-bottom: 42px;
+      padding-bottom: 36px;
+      border-bottom: 1px solid var(--yellow-faint);
+    }
+
+    .abstract b {
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .abstract p {
+      margin: 0;
+      color: var(--yellow);
+      font-family: var(--display);
+      font-size: clamp(28px, 3.2vw, 46px);
+      font-style: italic;
+      line-height: 1.16;
+    }
+
+    h2 {
+      margin: 44px 0 18px;
+      color: var(--yellow);
+      font-family: var(--display);
+      font-size: clamp(38px, 4.3vw, 64px);
+      font-style: italic;
+      font-weight: 400;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 26px 0 10px;
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 14px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 0 0 18px;
+      color: var(--yellow-soft);
+      font-size: 18px;
+    }
+
+    .drop:first-letter {
+      float: left;
+      padding: 8px 12px 0 0;
+      color: var(--yellow);
+      font-family: var(--display);
+      font-size: 86px;
+      font-style: italic;
+      line-height: .75;
+    }
+
+    .quote-block {
+      margin: 36px 0;
+      padding: 34px;
+      border-top: 1px solid var(--yellow-faint);
+      border-bottom: 1px solid var(--yellow-faint);
+      color: var(--yellow);
+      font-family: var(--display);
+      font-size: clamp(34px, 4.6vw, 68px);
+      font-style: italic;
+      line-height: 1.04;
+      text-align: center;
+    }
+
+    figure {
+      margin: 36px 0;
+      padding: 18px;
+      border: 1px solid var(--yellow-faint);
+      background: rgba(31, 40, 88, .48);
+    }
+
+    figcaption {
+      margin-top: 14px;
+      color: var(--yellow-soft);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    table {
+      width: 100%;
+      margin: 30px 0;
+      border-collapse: collapse;
+      table-layout: fixed;
+      color: var(--yellow-soft);
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 13px 11px;
+      border-top: 1px solid var(--yellow-faint);
+      border-bottom: 1px solid var(--yellow-faint);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .margin {
+      position: sticky;
+      top: 22px;
+      align-self: start;
+      display: grid;
+      gap: 16px;
+    }
+
+    .margin-card {
+      padding: 18px 0 18px 18px;
+      border-left: 1px solid var(--yellow-faint);
+      color: var(--yellow-soft);
+    }
+
+    .margin-card h2 {
+      margin: 0 0 12px;
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-style: normal;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .margin-card ol,
+    .margin-card ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .margin-card li {
+      margin-bottom: 8px;
+    }
+
+    .notes {
+      margin-top: 44px;
+      padding-top: 20px;
+      border-top: 1px solid var(--yellow-faint);
+      color: var(--yellow-soft);
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .folio {
+        width: 100%;
+        margin: 0;
+        border-left: 0;
+        border-right: 0;
+      }
+
+      .chrome,
+      .article-grid,
+      .hero {
+        padding-left: 22px;
+        padding-right: 22px;
+      }
+
+      .chrome,
+      .article-grid,
+      .abstract {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: 520px;
+      }
+
+      .pin-note {
+        position: static;
+        margin: 34px auto 0;
+        text-align: center;
+      }
+
+      .margin {
+        position: static;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .article-grid {
+        gap: 28px;
+        padding-top: 36px;
+        padding-bottom: 38px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+
+      th,
+      td {
+        padding: 10px 7px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="folio">
+    <header class="page-header">
+      <div class="chrome">
+        <span>Urban Systems Lab / methods note</span>
+        <span>review copy 04</span>
+      </div>
+
+      <section class="hero" aria-labelledby="paper-title">
+        <p class="kicker">Working paper for close reading</p>
+        <h1 id="paper-title">Measuring the hidden coordination cost of neighborhood climate plans</h1>
+        <p class="lede">A deliberately text-heavy fixture for testing whether Tunelito can stay precise when comments land on long paragraphs, footnotes, figure captions, and tightly argued claims.</p>
+        <div class="pin-note">03 / vellum<br>try: table cell, figure caption, exact claim</div>
+      </section>
+    </header>
+
+    <main class="article-grid">
+      <article>
+        <section class="abstract">
+          <b>Abstract</b>
+          <p>Most climate plans describe funding gaps. Fewer documents make the cost of coordination visible while the plan is still changing.</p>
+        </section>
+
+        <h2>1. Introduction</h2>
+        <p class="drop">Local climate adaptation work is often described as an engineering problem with a community engagement layer attached. That framing misses the day-to-day negotiation required to translate a high-level resilience goal into budget lines, permit language, maintenance roles, and public-facing promises.</p>
+        <p>The result is a review process where the same paragraph is approved by one stakeholder, reopened by another, and rewritten weeks later when the funding source changes. We use coordination cost to describe the extra time, attention, and institutional risk created by those repeated alignment loops.</p>
+
+        <h2>2. Research questions</h2>
+        <p>The study asks three questions. Which plan components create the most recurring coordination work? Which documents or rituals reduce ambiguity before public review? How can planning teams make coordination cost visible without turning every update into a reporting burden?</p>
+        <p>These questions are useful for annotation testing because a single sentence can carry a claim, a caveat, and a policy implication. Anchored comments need enough context to remain actionable after the author edits the draft.</p>
+
+        <figure>
+          <svg viewBox="0 0 760 300" role="img" aria-labelledby="model-title model-desc">
+            <title id="model-title">Coordination model</title>
+            <desc id="model-desc">Three horizontal paths connect scope, roles, evidence, and handoff.</desc>
+            <rect width="760" height="300" fill="#1f2858"></rect>
+            <g stroke="#e8d85c" stroke-width="1" opacity=".22">
+              <line x1="68" y1="70" x2="694" y2="70"></line>
+              <line x1="68" y1="150" x2="694" y2="150"></line>
+              <line x1="68" y1="230" x2="694" y2="230"></line>
+            </g>
+            <g fill="none" stroke="#68aaa2" stroke-width="3">
+              <path d="M90 70 C190 32, 290 108, 392 70 S596 42, 670 90"></path>
+              <path d="M90 150 C188 200, 288 108, 390 150 S580 202, 670 142"></path>
+              <path d="M90 230 C204 204, 286 260, 392 226 S560 206, 670 232"></path>
+            </g>
+            <g fill="#2a3870" stroke="#e8d85c" stroke-width="2">
+              <circle cx="206" cy="92" r="30"></circle>
+              <circle cx="390" cy="150" r="30"></circle>
+              <circle cx="552" cy="220" r="30"></circle>
+            </g>
+            <g font-family="Courier Prime, monospace" font-size="15" fill="#e8d85c" text-anchor="middle">
+              <text x="206" y="97">scope</text>
+              <text x="390" y="155">roles</text>
+              <text x="552" y="225">handoff</text>
+            </g>
+          </svg>
+          <figcaption>Figure 1. Coordination loops appear between the public story of a plan and the operational handoff required to maintain it. Reviewers should be able to comment on this caption without the surrounding figure interfering.</figcaption>
+        </figure>
+
+        <h2>3. Data and coding</h2>
+        <p>The initial sample includes twelve neighborhood plans, twenty-four meeting agendas, and eight interview transcripts from planning staff. Each source is coded for decision owner, dependency language, deadline confidence, and evidence of unresolved disagreement.</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Definition</th>
+              <th>Review prompt</th>
+              <th>Annotation stress</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Decision owner</td>
+              <td>The person or group named as responsible for resolving an open choice.</td>
+              <td>Is the owner named clearly enough for follow-up?</td>
+              <td>Dense table text and narrow cells</td>
+            </tr>
+            <tr>
+              <td>Deadline confidence</td>
+              <td>Whether the document implies a hard date, flexible milestone, or external dependency.</td>
+              <td>Should this date be softened before public review?</td>
+              <td>Short phrase selection inside rows</td>
+            </tr>
+            <tr>
+              <td>Unresolved disagreement</td>
+              <td>Evidence that stakeholders accepted a sentence without accepting the same trade-off.</td>
+              <td>Does this paragraph hide a real disagreement?</td>
+              <td>Cross-reference between table and body copy</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>4. Preliminary finding</h2>
+        <p>Preliminary coding suggests that coordination cost spikes when a plan shifts from describing problems to assigning responsibility. General statements about heat risk, stormwater stress, or mobility access often move quickly through review. Statements that assign a maintenance role, narrow the target geography, or imply a funding source are more likely to trigger repeated edits.</p>
+        <blockquote class="quote-block">The largest review burden appears when a sentence is technically accurate but politically underspecified.</blockquote>
+        <p>This matters because many teams do not track the cost of revisiting an already approved section. The visible artifact is a cleaner paragraph, but the hidden work is a sequence of calls, rewritten slides, new caveats, and side documents that explain the change.</p>
+
+        <section class="notes">
+          <h3>Notes</h3>
+          <ol>
+            <li>The term coordination cost is narrowed here to document review and stakeholder alignment work.</li>
+            <li>Future revisions should test whether the framework applies to nonprofit-led plans as well as city-led plans.</li>
+            <li>Try comments on footnotes, table cells, figure captions, and ordinary paragraphs before treating the fixture as covered.</li>
+          </ol>
+        </section>
+      </article>
+
+      <aside class="margin" aria-label="Review guide">
+        <section class="margin-card">
+          <h2>Stressors</h2>
+          <ul>
+            <li>Long paragraph selections</li>
+            <li>Sticky marginalia beside the panel</li>
+            <li>Tables, captions, notes, and quotes</li>
+            <li>Restored highlights after reload</li>
+          </ul>
+        </section>
+        <section class="margin-card">
+          <h2>Suggested comments</h2>
+          <ol>
+            <li>Soften a claim.</li>
+            <li>Flag a table definition.</li>
+            <li>Leave a page note about structure.</li>
+          </ol>
+        </section>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>

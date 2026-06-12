@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixed Stage Slide Deck Review Fixture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Paytone+One&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f1e6cb;
+      --paper-dk: #e5d6b0;
+      --ink: #3a2516;
+      --red: #e5392a;
+      --pink: #e54489;
+      --orange: #f09131;
+      --green: #3d9f47;
+      --blue: #3f8bc4;
+      --yellow: #f0bc2a;
+      --stage-bg: #2a1a0f;
+      --display: "Paytone One", ui-sans-serif, system-ui, sans-serif;
+      --body: "Albert Sans", ui-sans-serif, system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--stage-bg);
+      color: var(--ink);
+      font-family: var(--body);
+    }
+
+    .deck-viewport {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(229, 68, 137, .22), transparent 26rem),
+        radial-gradient(circle at 78% 82%, rgba(61, 159, 71, .2), transparent 28rem),
+        var(--stage-bg);
+    }
+
+    .deck-stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      transform-origin: 0 0;
+      background: var(--paper);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(58, 37, 22, .12) 1px, transparent 1.6px) 0 0 / 4px 4px,
+        var(--paper);
+      transition: opacity .22s ease;
+    }
+
+    .slide.visible {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      z-index: 1;
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border: 28px solid var(--ink);
+      opacity: .94;
+    }
+
+    .ribbons {
+      position: absolute;
+      inset: -120px auto auto -130px;
+      width: 760px;
+      height: 1280px;
+      transform: rotate(-20deg);
+      background:
+        linear-gradient(90deg,
+          var(--red) 0 14%,
+          var(--orange) 14% 28%,
+          var(--yellow) 28% 42%,
+          var(--green) 42% 56%,
+          var(--blue) 56% 70%,
+          var(--pink) 70% 84%,
+          transparent 84% 100%);
+      opacity: .94;
+    }
+
+    .slide.alt .ribbons {
+      left: auto;
+      right: -180px;
+      transform: rotate(18deg);
+    }
+
+    .topbar,
+    .footbar {
+      position: absolute;
+      left: 78px;
+      right: 78px;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 24px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .topbar {
+      top: 54px;
+    }
+
+    .footbar {
+      bottom: 48px;
+    }
+
+    .content {
+      position: absolute;
+      z-index: 2;
+      inset: 116px 96px 110px;
+      display: grid;
+      gap: 44px;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-family: var(--display);
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: -.01em;
+    }
+
+    h1 {
+      max-width: 1260px;
+      font-size: 144px;
+      line-height: .92;
+    }
+
+    h2 {
+      max-width: 1180px;
+      font-size: 108px;
+      line-height: .94;
+    }
+
+    p {
+      margin: 0;
+      max-width: 820px;
+      font-size: 36px;
+      line-height: 1.2;
+      font-weight: 600;
+    }
+
+    .cover {
+      align-content: end;
+      padding-left: 520px;
+    }
+
+    .cover .catalogue {
+      display: grid;
+      grid-template-columns: repeat(3, 180px);
+      gap: 16px;
+      margin-top: 48px;
+    }
+
+    .spec {
+      min-height: 130px;
+      padding: 18px;
+      border: 3px solid var(--ink);
+      background: rgba(241, 230, 203, .92);
+      box-shadow: 8px 8px 0 var(--ink);
+      font-family: var(--mono);
+      font-size: 19px;
+      line-height: 1.2;
+    }
+
+    .spec b {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--red);
+      font-family: var(--display);
+      font-size: 34px;
+      line-height: .9;
+      text-transform: uppercase;
+    }
+
+    .three-up {
+      align-content: center;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 26px;
+    }
+
+    .card {
+      min-height: 312px;
+      padding: 28px;
+      border: 4px solid var(--ink);
+      background: var(--paper);
+      box-shadow: 10px 10px 0 var(--ink);
+    }
+
+    .card:nth-child(1) {
+      background: #f5e6a4;
+    }
+
+    .card:nth-child(2) {
+      background: #f4b8c5;
+      transform: translateY(24px);
+    }
+
+    .card:nth-child(3) {
+      background: #b9dfcc;
+    }
+
+    .card b {
+      display: block;
+      margin-bottom: 20px;
+      font-family: var(--mono);
+      font-size: 22px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .card span {
+      display: block;
+      font-family: var(--display);
+      font-size: 54px;
+      line-height: .96;
+      text-transform: uppercase;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      align-items: stretch;
+      border: 4px solid var(--ink);
+      box-shadow: 10px 10px 0 var(--ink);
+    }
+
+    .step {
+      min-height: 430px;
+      padding: 30px;
+      border-right: 4px solid var(--ink);
+      background: var(--paper);
+    }
+
+    .step:last-child {
+      border-right: 0;
+    }
+
+    .step:nth-child(2) {
+      background: #f2d08f;
+    }
+
+    .step:nth-child(3) {
+      background: #a8d8ea;
+    }
+
+    .step:nth-child(4) {
+      background: #d6c4eb;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 34px;
+      font-family: var(--display);
+      font-size: 92px;
+      line-height: .8;
+    }
+
+    .step p {
+      font-size: 30px;
+      line-height: 1.18;
+    }
+
+    .quote {
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .quote h2 {
+      max-width: 1320px;
+      font-size: 104px;
+    }
+
+    .quote-mark {
+      width: 180px;
+      height: 180px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 32px;
+      clip-path: polygon(50% 0%, 60% 22%, 82% 10%, 78% 34%, 100% 50%, 78% 66%, 82% 90%, 60% 78%, 50% 100%, 40% 78%, 18% 90%, 22% 66%, 0% 50%, 22% 34%, 18% 10%, 40% 22%);
+      background: var(--red);
+      color: var(--paper);
+      font-family: var(--display);
+      font-size: 116px;
+      line-height: 1;
+    }
+
+    .close-grid {
+      grid-template-columns: 1fr 520px;
+      align-items: center;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 18px;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 20px;
+      border: 4px solid var(--ink);
+      background: var(--paper);
+      box-shadow: 8px 8px 0 var(--ink);
+      font-size: 31px;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .check i {
+      width: 58px;
+      height: 58px;
+      border: 4px solid var(--ink);
+      background: var(--green);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    .deck-controls {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border: 2px solid rgba(241, 230, 203, .72);
+      background: rgba(42, 26, 15, .84);
+    }
+
+    .deck-controls button {
+      width: 42px;
+      height: 36px;
+      border: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--mono);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .deck-controls button:hover {
+      background: var(--yellow);
+    }
+
+    .deck-controls button:focus-visible {
+      outline: 4px solid var(--paper);
+      outline-offset: 4px;
+      background: var(--yellow);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck-viewport">
+    <main class="deck-stage" id="deckStage">
+      <section class="slide visible" data-slide>
+        <div class="ribbons"></div>
+        <div class="topbar"><span>Review deck</span><span>01 / 05</span></div>
+        <div class="content cover">
+          <div>
+            <h1>The review loop is part of the product.</h1>
+            <p>Use this fixed-stage fixture to test Tunelito over real presentation layouts, large type, sparse copy, and live-call feedback.</p>
+            <div class="catalogue">
+              <div class="spec"><b>live</b>page notes</div>
+              <div class="spec"><b>text</b>short selects</div>
+              <div class="spec"><b>stage</b>16:9 canvas</div>
+            </div>
+          </div>
+        </div>
+        <div class="footbar"><span>arrow keys work</span><span>temporary share surface</span></div>
+      </section>
+
+      <section class="slide alt" data-slide>
+        <div class="ribbons"></div>
+        <div class="topbar"><span>Call moments</span><span>02 / 05</span></div>
+        <div class="content three-up">
+          <h2>Three review moments need different annotation behavior.</h2>
+          <div class="cards">
+            <div class="card"><b>Before</b><span>Broad structure notes</span></div>
+            <div class="card"><b>During</b><span>Exact sentence debates</span></div>
+            <div class="card"><b>After</b><span>Actionable markdown record</span></div>
+          </div>
+        </div>
+        <div class="footbar"><span>large sparse regions</span><span>comment target test</span></div>
+      </section>
+
+      <section class="slide" data-slide>
+        <div class="ribbons"></div>
+        <div class="topbar"><span>Rollout path</span><span>03 / 05</span></div>
+        <div class="content three-up">
+          <h2>Use the feedback while the room still remembers the discussion.</h2>
+          <div class="timeline">
+            <div class="step"><strong>01</strong><p>Open the local deck through Tunelito and send the temporary review link.</p></div>
+            <div class="step"><strong>02</strong><p>Reviewers select text, add page notes, and ask clarifying questions.</p></div>
+            <div class="step"><strong>03</strong><p>The owner edits locally while connected browsers reload automatically.</p></div>
+            <div class="step"><strong>04</strong><p>The comments file becomes the durable record of what changed and why.</p></div>
+          </div>
+        </div>
+        <div class="footbar"><span>timeline table</span><span>dense slide test</span></div>
+      </section>
+
+      <section class="slide alt" data-slide>
+        <div class="ribbons"></div>
+        <div class="topbar"><span>Reviewer quote</span><span>04 / 05</span></div>
+        <div class="content quote">
+          <div class="quote-mark">"</div>
+          <h2>I do not need a perfect deck. I need the exact sentence we are debating to become a real task before everyone drops off the call.</h2>
+        </div>
+        <div class="footbar"><span>quote layout</span><span>center selection test</span></div>
+      </section>
+
+      <section class="slide" data-slide>
+        <div class="ribbons"></div>
+        <div class="topbar"><span>Close</span><span>05 / 05</span></div>
+        <div class="content close-grid">
+          <div>
+            <h2>Questions for the review</h2>
+            <p>Comment on any claim that needs a stronger example, softer wording, or a different order.</p>
+          </div>
+          <div class="checklist">
+            <div class="check"><i></i><span>What should change before sharing?</span></div>
+            <div class="check"><i></i><span>What should become a follow-up?</span></div>
+            <div class="check"><i></i><span>What is already good enough?</span></div>
+          </div>
+        </div>
+        <div class="footbar"><span>end of deck</span><span>use page notes here</span></div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="deck-controls" aria-label="Slide controls">
+    <button type="button" data-jump="-1" aria-label="Previous slide">&lt;</button>
+    <button type="button" data-jump="1" aria-label="Next slide">&gt;</button>
+  </nav>
+
+  <script>
+    class FixedStageDeck {
+      constructor() {
+        this.stage = document.querySelector("#deckStage");
+        this.slides = Array.from(document.querySelectorAll("[data-slide]"));
+        this.index = 0;
+        this.scale();
+        this.bind();
+        this.show(0);
+      }
+
+      scale() {
+        const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        const x = (window.innerWidth - 1920 * factor) / 2;
+        const y = (window.innerHeight - 1080 * factor) / 2;
+        this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+      }
+
+      show(index) {
+        this.index = Math.max(0, Math.min(this.slides.length - 1, index));
+        this.slides.forEach((slide, i) => {
+          slide.classList.toggle("visible", i === this.index);
+        });
+      }
+
+      move(delta) {
+        this.show(this.index + delta);
+      }
+
+      bind() {
+        window.addEventListener("resize", () => this.scale());
+        document.querySelectorAll("[data-jump]").forEach((button) => {
+          button.addEventListener("click", () => this.move(Number(button.dataset.jump)));
+        });
+        window.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === " ") this.move(1);
+          if (event.key === "ArrowLeft" || event.key === "ArrowUp") this.move(-1);
+        });
+      }
+    }
+
+    new FixedStageDeck();
+  </script>
+</body>
+</html>
