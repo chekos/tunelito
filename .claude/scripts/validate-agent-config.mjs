@@ -81,6 +81,7 @@ function validatePlaybooks() {
     "docs/agents/IDEA_TO_RELEASE.md",
     "docs/agents/WORKFLOW.md",
     "docs/agents/QUALITY_GATES.md",
+    "docs/agents/EXAMPLE_FIXTURES.md",
     "docs/agents/ARCHITECTURE.md",
     "docs/agents/SECURITY_REVIEW.md",
     "docs/agents/RELEASE_PLAYBOOK.md",

@@ -31,8 +31,10 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 - `src/ws.js`: minimal WebSocket hub.
 - `src/tunnel.js`: Cloudflare Tunnel process management.
 - `test/`: Node test runner coverage.
+- `examples/`: review fixtures for UI, screenshot, accessibility, and regression checks.
 - `.claude/`: Claude Code hooks, project skills, and subagents.
 - `docs/agents/SKILLS.md`: catalog of project skills and validation policy.
+- `docs/agents/EXAMPLE_FIXTURES.md`: repo-local fixture taxonomy and when to use each example.
 
 ## Default Change Loop
 
@@ -45,6 +47,8 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 7. Summarize what changed, what passed, and any residual risk.
 
 For end-to-end feature, PR, package, or release work, use `docs/agents/IDEA_TO_RELEASE.md` as the lifecycle map.
+
+For injected UI, visual, accessibility, screenshot, or browser-behavior work, use `docs/agents/EXAMPLE_FIXTURES.md` to choose the right example pages before declaring the change ready.
 
 ## Agent-Native Principle
 

@@ -13,6 +13,8 @@ rg --files -g '!*node_modules*' -g '!*.comments.md'
 
 Read the nearest docs and tests before editing. For CLI behavior, read `README.md`, `bin/tunelito.js`, and `test/cli.test.js`. For runtime behavior, read the relevant `src/` file and matching tests.
 
+For injected UI, visual, accessibility, screenshot, or browser-behavior work, also read `docs/agents/EXAMPLE_FIXTURES.md` before choosing manual fixtures.
+
 ## 2. Classify the Change
 
 - CLI/package: arguments, startup output, versioning, package metadata.
@@ -54,6 +56,8 @@ For package changes, also run a clean install smoke:
 ```bash
 npm run pack:check
 ```
+
+For client/UI changes, state which fixtures from `docs/agents/EXAMPLE_FIXTURES.md` were checked. If a relevant fixture was skipped, record the reason.
 
 ## 6. Handoff
 
