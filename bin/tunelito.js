@@ -20,6 +20,7 @@ import {
   defaultAgentLogPath,
   createAgentWorker,
   defaultAgentStatePath,
+  formatAgentTodoTracker,
   normalizeAgentPolicy,
   recordAgentSessionResult,
   waitForAgentInboxComments,
@@ -35,7 +36,7 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
-       tunelito inbox <next|watch|record> <page.html|folder> [options]
+       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -72,6 +73,7 @@ Options:
 Commands:
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
@@ -291,6 +293,7 @@ async function main() {
   const instance = await createTunelitoServer({
     filePath: opts.filePath,
     commentsPath: opts.commentsPath,
+    agentStatePath,
     host: opts.host,
     port: opts.port,
     accessKey,
@@ -376,6 +379,7 @@ async function main() {
     });
     console.log(`Agent session: ${agentSessionWatcher.description}`);
     console.log(`Agent session: watching comments in this process`);
+    console.log(`Agent session: tracker ${inboxStatusCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger })}`);
     console.log(`Agent session: record template ${agentSessionRecordCommand}`);
     console.log(`Agent session: metadata ${sessionPath}`);
     agentSessionWatcher.start();
@@ -429,15 +433,17 @@ function inboxUsage() {
 Usage:
   tunelito inbox next <page.html|folder> [options]
   tunelito inbox watch <page.html|folder> [options]
+  tunelito inbox status <page.html|folder> [options]
   tunelito inbox record <page.html|folder> --id <id> --status <status> [options]
 
 Commands:
   next        Claim pending comments and print a prompt for the current agent
   watch       Wait for the next pending comment, claim it, then print a prompt
+  status      Print a live to-do tracker from the comments inbox and ledger
   record      Record the current agent's result in .tunelito/agent/state.json
   help        Show this message
 
-Options for next/watch:
+Options for next/watch/status:
   --out <path>              Markdown comments file (default: <page-or-folder>.comments.md)
   --agent-state <path>      Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --agent-policy <mode>     Which comments are actionable: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
@@ -456,6 +462,7 @@ Options for next/watch:
   --timeout <s>             Stop waiting after this many seconds (default: 0, no timeout)
   --format <prompt|json|ids>
                             Output format for next/watch (default: prompt)
+  --format <text|json>      Output format for status (default: text)
 
 Options for record:
   --out <path>              Markdown comments file (default: <page-or-folder>.comments.md)
@@ -477,7 +484,7 @@ export function parseInboxArgs(argv) {
   if (!command || command === "help" || command === "-h" || command === "--help") {
     return { help: true };
   }
-  if (!["next", "watch", "record"].includes(command)) {
+  if (!["next", "watch", "status", "record"].includes(command)) {
     throw new Error(`Unknown inbox command: ${command}`);
   }
 
@@ -493,7 +500,7 @@ export function parseInboxArgs(argv) {
     claimTtlSeconds: DEFAULT_INBOX_CLAIM_SECONDS,
     waitIntervalSeconds: DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
     timeoutSeconds: 0,
-    format: command === "record" ? "text" : "prompt",
+    format: command === "record" || command === "status" ? "text" : "prompt",
     filesChanged: [],
     completedTasks: [],
     remainingTasks: [],
@@ -567,6 +574,8 @@ export function parseInboxArgs(argv) {
     if (!opts.id) throw new Error("inbox record requires --id");
     if (!opts.status) throw new Error("inbox record requires --status");
     if (!["text", "json"].includes(opts.format)) throw new Error("Unsupported --format for inbox record: use text or json");
+  } else if (command === "status" && !opts.help) {
+    if (!["text", "json"].includes(opts.format)) throw new Error("Unsupported --format for inbox status: use text or json");
   } else if (!opts.help) {
     if (!["prompt", "json", "ids"].includes(opts.format)) throw new Error("Unsupported --format for inbox next/watch: use prompt, json, or ids");
   }
@@ -590,6 +599,18 @@ export async function runInboxCommand(args, { stdout = process.stdout, stderr = 
 
   try {
     const paths = resolveInboxPaths(opts);
+    if (opts.command === "status") {
+      const tracker = formatAgentTodoTracker({
+        commentsPath: paths.commentsPath,
+        targetPath: paths.filePath,
+        statePath: paths.statePath,
+        trigger: opts.agentTrigger,
+        policy: opts.agentPolicy,
+        now,
+      });
+      stdout.write(formatInboxStatusResult(tracker, opts.format, paths));
+      return 0;
+    }
     if (opts.command === "record") {
       const recorded = recordAgentSessionResult({
         commentsPath: paths.commentsPath,
@@ -607,7 +628,11 @@ export async function runInboxCommand(args, { stdout = process.stdout, stderr = 
           remainingTasks: opts.remainingTasks,
         },
       });
-      stdout.write(formatInboxRecordResult(recorded, opts.format));
+      stdout.write(formatInboxRecordResult(recorded, opts.format, {
+        trigger: opts.agentTrigger,
+        policy: opts.agentPolicy,
+        now,
+      }));
       return 0;
     }
 
@@ -662,6 +687,17 @@ function resolveInboxPaths(opts) {
   };
 }
 
+function formatInboxStatusResult(tracker, format, paths) {
+  if (format === "json") {
+    return `${JSON.stringify({
+      commentsPath: paths.commentsPath,
+      statePath: paths.statePath,
+      tracker,
+    }, null, 2)}\n`;
+  }
+  return tracker;
+}
+
 function formatInboxClaimResult(result, format) {
   if (format === "json") {
     return `${JSON.stringify({
@@ -681,7 +717,7 @@ function formatInboxClaimResult(result, format) {
   return result.comments.length ? result.prompt : `No pending Tunelito comments (${result.reason}).\n`;
 }
 
-function formatInboxRecordResult(recorded, format) {
+function formatInboxRecordResult(recorded, format, { trigger = DEFAULT_AGENT_TRIGGER, policy = DEFAULT_AGENT_POLICY, now = () => new Date() } = {}) {
   if (format === "json") {
     return `${JSON.stringify({
       id: recorded.comment.id,
@@ -693,7 +729,15 @@ function formatInboxRecordResult(recorded, format) {
       statePath: recorded.statePath,
     }, null, 2)}\n`;
   }
-  return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n`;
+  const tracker = formatAgentTodoTracker({
+    commentsPath: recorded.commentsPath,
+    targetPath: recorded.targetPath,
+    statePath: recorded.statePath,
+    trigger,
+    policy,
+    now,
+  });
+  return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n\n${tracker}`;
 }
 
 function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend }) {
@@ -714,6 +758,7 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
     ownerName: ownerName || "",
     hasInstructions: Boolean(promptAppend),
     nextCommand: inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }),
+    statusCommand: inboxStatusCommand({ targetPath, commentsPath, statePath, policy, trigger }),
     recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }),
     createdAt: new Date().toISOString(),
   };
@@ -758,6 +803,23 @@ function inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }) 
     "--status <status>",
     "--summary \"<short summary>\"",
     "--file <relative/path.html>",
+  ].join(" ");
+}
+
+function inboxStatusCommand({ targetPath, commentsPath, statePath, policy, trigger }) {
+  return [
+    "tunelito",
+    "inbox",
+    "status",
+    shellQuote(targetPath),
+    "--out",
+    shellQuote(commentsPath),
+    "--agent-state",
+    shellQuote(statePath),
+    "--agent-policy",
+    shellQuote(policy),
+    "--agent-trigger",
+    shellQuote(trigger),
   ].join(" ");
 }
 

@@ -27,6 +27,10 @@
     ownerSession: configuredOwnerSession,
     author: initialAuthor(configuredDefaultAuthor, configuredViewerRole, configuredOwnerSession),
     comments: [],
+    agentStatusUrl: "",
+    agentStatuses: {},
+    agentStatusFingerprint: "",
+    agentStatusTimer: null,
     pendingSelection: null,
     highlights: [],
     selectionTimer: null,
@@ -75,6 +79,9 @@
         }
         state.viewerCount = message.viewerCount;
         state.comments = message.comments || [];
+        state.agentStatusUrl = message.agentStatusUrl || "";
+        setAgentStatuses(message.agentStatuses);
+        scheduleAgentStatusPoll(2500);
         state.peers = new Map((message.peers || []).map((peer) => [peer.id, peer]));
         updateCommentsLink(message.commentsUrl);
         renderComments();
@@ -82,6 +89,7 @@
         if (state.liveMode) connectToExistingPeers(message.peers || []);
       } else if (message.type === "comment") {
         addComment(message.comment);
+        fetchAgentStatuses();
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
@@ -283,6 +291,94 @@
           cursor: pointer;
         }
         .comment:hover { border-color: #94a3b8; }
+        .comment.work-active {
+          border-color: #5eead4;
+          background: #f0fdfa;
+        }
+        .comment.work-done {
+          border-color: #86efac;
+          background: #f7fef9;
+        }
+        .comment.work-warning {
+          border-color: #facc15;
+          background: #fefce8;
+        }
+        .comment.work-danger {
+          border-color: #fca5a5;
+          background: #fff7f7;
+        }
+        .comment.work-muted {
+          background: #f8fafc;
+        }
+        .meta-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 4px;
+        }
+        .meta-row .meta {
+          min-width: 0;
+          margin-bottom: 0;
+        }
+        .work-badge {
+          flex: 0 0 auto;
+          max-width: 150px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          border: 1px solid #cbd5e1;
+          border-radius: 999px;
+          background: #f8fafc;
+          color: #475569;
+          font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 5px 7px;
+        }
+        .work-badge.active { border-color: #2dd4bf; background: #ccfbf1; color: #115e59; }
+        .work-badge.done { border-color: #86efac; background: #dcfce7; color: #166534; }
+        .work-badge.warning { border-color: #fde047; background: #fef9c3; color: #854d0e; }
+        .work-badge.danger { border-color: #fca5a5; background: #fee2e2; color: #991b1b; }
+        .work {
+          display: none;
+          margin-top: 9px;
+          border-top: 1px solid rgba(148, 163, 184, .28);
+          padding-top: 8px;
+        }
+        .work.visible { display: block; }
+        .work-list {
+          display: grid;
+          gap: 5px;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+        }
+        .work-task {
+          display: grid;
+          grid-template-columns: 16px 1fr;
+          gap: 6px;
+          align-items: start;
+          color: #334155;
+          font-size: 12px;
+        }
+        .work-task::before {
+          content: "";
+          width: 13px;
+          height: 13px;
+          margin-top: 2px;
+          border: 1px solid #94a3b8;
+          border-radius: 4px;
+          background: #fff;
+        }
+        .work-task.done {
+          color: #64748b;
+          text-decoration: line-through;
+          text-decoration-thickness: 1px;
+        }
+        .work-task.done::before {
+          border-color: #16a34a;
+          background: #16a34a;
+          box-shadow: inset 0 0 0 3px #fff;
+        }
         .quote {
           color: #334155;
           font-size: 12px;
@@ -299,6 +395,7 @@
           font-size: 12px;
           margin-bottom: 4px;
         }
+        .meta-row .meta { margin-bottom: 0; }
         .body {
           color: #172033;
           white-space: pre-wrap;
@@ -781,9 +878,15 @@
       const item = document.createElement("article");
       item.className = "comment";
       item.innerHTML = `
-        <div class="meta"></div>
+        <div class="meta-row">
+          <div class="meta"></div>
+          <div class="work-badge" hidden></div>
+        </div>
         <div class="quote"></div>
         <div class="body"></div>
+        <div class="work" aria-label="Agent work status">
+          <ul class="work-list"></ul>
+        </div>
       `;
       const scope = normalizeScope(comment.scope);
       const quote = item.querySelector(".quote");
@@ -792,10 +895,37 @@
       quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
       quote.classList.toggle("note", !hasQuote);
       item.querySelector(".body").textContent = comment.body;
+      renderCommentWorkStatus(item, comment);
       item.addEventListener("click", () => scrollToComment(comment));
       ui.comments.appendChild(item);
     }
     updateHighlights();
+  }
+
+  function renderCommentWorkStatus(item, comment) {
+    const status = workStatusForComment(comment);
+    if (!status) return;
+    item.classList.add(`work-${status.tone || "pending"}`);
+    const badge = item.querySelector(".work-badge");
+    badge.hidden = false;
+    badge.textContent = status.label || status.status || "Queued";
+    badge.classList.add(status.tone || "pending");
+
+    const tasks = [
+      ...(Array.isArray(status.done) ? status.done.map((text) => ({ text, done: true })) : []),
+      ...(Array.isArray(status.todo) ? status.todo.map((text) => ({ text, done: false })) : []),
+    ].filter((task) => task.text);
+    if (!tasks.length) return;
+
+    const work = item.querySelector(".work");
+    const list = item.querySelector(".work-list");
+    for (const task of tasks.slice(0, 4)) {
+      const row = document.createElement("li");
+      row.className = `work-task${task.done ? " done" : ""}`;
+      row.textContent = task.text;
+      list.appendChild(row);
+    }
+    work.classList.add("visible");
   }
 
   function renderStatus(message, viewerCount) {
@@ -813,6 +943,63 @@
     const url = commentsUrl ? withAccessKey(commentsUrl) : "";
     ui.markdownLink.href = url || "#";
     ui.markdownLink.hidden = !url;
+  }
+
+  function setAgentStatuses(payload) {
+    const comments = payload && typeof payload === "object" && payload.comments && typeof payload.comments === "object"
+      ? payload.comments
+      : {};
+    state.agentStatuses = comments;
+    state.agentStatusFingerprint = JSON.stringify(comments);
+  }
+
+  async function fetchAgentStatuses() {
+    if (!state.agentStatusUrl) return;
+    try {
+      const response = await fetch(agentStatusFetchPath(), { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const comments = payload?.comments && typeof payload.comments === "object" ? payload.comments : {};
+      const fingerprint = JSON.stringify(comments);
+      if (fingerprint === state.agentStatusFingerprint) return;
+      state.agentStatuses = comments;
+      state.agentStatusFingerprint = fingerprint;
+      renderComments();
+    } catch {
+      // Status badges are best-effort; comments still work if the tracker is unavailable.
+    }
+  }
+
+  function scheduleAgentStatusPoll(delayMs) {
+    if (state.agentStatusTimer) {
+      clearTimeout(state.agentStatusTimer);
+      state.agentStatusTimer = null;
+    }
+    if (!state.agentStatusUrl) return;
+    state.agentStatusTimer = setTimeout(async () => {
+      state.agentStatusTimer = null;
+      await fetchAgentStatuses();
+      scheduleAgentStatusPoll(2500);
+    }, delayMs);
+  }
+
+  function agentStatusFetchPath() {
+    const url = new URL(state.agentStatusUrl, location.href);
+    url.searchParams.set("tunelito_page", state.pagePath);
+    if (accessKey) url.searchParams.set("tunelito_key", accessKey);
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  function workStatusForComment(comment) {
+    if (!state.agentStatusUrl || !comment?.id) return null;
+    return state.agentStatuses[comment.id] || {
+      id: comment.id,
+      status: "pending",
+      label: "Queued",
+      tone: "pending",
+      done: [],
+      todo: [compact(comment.body || comment.quote || "Waiting for agent review", 160)],
+    };
   }
 
   function connectToExistingPeers(peers) {

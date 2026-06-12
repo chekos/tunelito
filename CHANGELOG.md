@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Adds browser-visible agent work status on comment cards, plus `tunelito inbox status` as the matching terminal tracker. Reviewers can see queued, in-progress, follow-up, and integrated feedback directly in the Tunelito panel.
+
 ## 0.11.0 - 2026-06-10
 
 - Makes `--agent-session` watch and claim comments from the serving process, so current-agent review sessions start with one command instead of a separate `inbox watch` step.

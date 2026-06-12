@@ -105,10 +105,16 @@ Use the current agent session instead of spawning a child agent:
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-The same process serves the room, watches comments, claims actionable feedback, and prints a prompt for the current agent. Record the current agent's result with the claim id from the printed command:
+The same process serves the room, watches comments, claims actionable feedback, prints a prompt for the current agent, and shows browser-visible status on each comment card. Record the current agent's result with the claim id from the printed command:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
+```
+
+Print the same comment work tracker in the terminal:
+
+```bash
+tunelito inbox status ./site
 ```
 
 Allow broad comments to continue for up to five passes:

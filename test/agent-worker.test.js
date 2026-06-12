@@ -17,6 +17,7 @@ import {
   createAgentWorker,
   defaultAgentBehaviorPrompt,
   fingerprintComment,
+  formatAgentTodoTracker,
   isWatchedCommentsFilename,
   loadAgentState,
   normalizeAgentConfig,
@@ -838,6 +839,74 @@ test("agent inbox claims and records comments without spawning a worker", () => 
   assert.equal(recorded.state.claim, undefined);
   assert.deepEqual(recorded.state.filesChanged, ["index.html"]);
   assert.match(readFileSync(join(siteDir, ".tunelito", "agent", "log.md"), "utf8"), /c_active: resolved/);
+});
+
+test("agent todo tracker shows pending, follow-up, and completed work", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-agent-tracker-"));
+  const siteDir = join(dir, "site");
+  mkdirSync(siteDir);
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(siteDir, ".tunelito", "agent", "state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><p>Draft</p></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [
+      comment({ id: "c_pending", body: "Update the hero headline.", pagePath: "/" }),
+      comment({ id: "c_follow", body: "Refresh the whole page.", pagePath: "/" }),
+      comment({ id: "c_done", body: "Fix the footer.", pagePath: "/" }),
+    ],
+  }));
+
+  const claimed = claimNextAgentComments({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    limit: 2,
+    now: () => new Date("2026-06-10T00:00:00.000Z"),
+  });
+  recordAgentSessionResult({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimId: claimed.claim.id,
+    now: () => new Date("2026-06-10T00:01:00.000Z"),
+    result: {
+      id: "c_pending",
+      status: "resolved",
+      summary: "Updated the hero headline.",
+      completedTasks: ["Update the hero headline"],
+    },
+  });
+  recordAgentSessionResult({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    claimId: claimed.claim.id,
+    now: () => new Date("2026-06-10T00:02:00.000Z"),
+    result: {
+      id: "c_follow",
+      status: "needs_followup",
+      summary: "Refreshed the top section.",
+      completedTasks: ["Refresh the top section"],
+      remainingTasks: ["Refresh the footer"],
+    },
+  });
+
+  const tracker = formatAgentTodoTracker({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    now: () => new Date("2026-06-10T00:03:00.000Z"),
+  });
+
+  assert.match(tracker, /Tunelito To Do/);
+  assert.match(tracker, /## c_pending - resolved/);
+  assert.match(tracker, /- \[x\] ~~Update the hero headline~~/);
+  assert.match(tracker, /## c_follow - needs_followup/);
+  assert.match(tracker, /- \[x\] ~~Refresh the top section~~/);
+  assert.match(tracker, /- \[ \] Refresh the footer/);
+  assert.match(tracker, /## c_done - pending/);
+  assert.match(tracker, /- \[ \] Fix the footer\./);
 });
 
 test("agent inbox reclaims comments after claim ttl expires", () => {

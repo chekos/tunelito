@@ -144,12 +144,17 @@ tunelito ./site --owner "Reviewer Lead" \
 worker. The same Tunelito server process watches the persistent comments
 Markdown, keeps interval polling as fallback, claims the next actionable comment
 in `.tunelito/agent/state.json`, prints a prompt with the matching claim id, and
-pauses further claims until that claim is recorded or expires. Edit the matching
-source files, then record the result:
+pauses further claims until that claim is recorded or expires. The browser
+comments panel shows reviewer-facing status badges from the same ledger. Edit
+the matching source files, then record the result:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
+
+Use `tunelito inbox status ./site` to inspect the same work tracker in the
+terminal. It prints pending and claimed comment work as unchecked tasks, and
+completed work as checked, crossed-out tasks.
 
 Use `tunelito inbox next ./site` for a non-waiting manual check, or
 `tunelito inbox watch ./site` when you need the one-shot primitive without a
@@ -253,7 +258,8 @@ are Tunelito's data store and ledger, not your edit targets.
   to stop.)
 - If you used `--agent`, point the user at `.tunelito/agent/log.md` for the
   human-readable record of what the worker did. If you used `--agent-session`,
-  summarize the `tunelito inbox record` statuses you wrote.
+  summarize the `tunelito inbox record` statuses you wrote and the current
+  `tunelito inbox status` tracker.
 
 ## Safety and non-negotiables
 

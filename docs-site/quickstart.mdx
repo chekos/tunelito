@@ -68,10 +68,16 @@ If you are already inside Claude Code, Codex, or another coding-agent session, u
 npx --yes tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-That one process serves the room, watches comments, claims actionable feedback, and prints the prompt for the current agent. After editing, record the result with the claim id from the printed command:
+That one process serves the room, watches comments, claims actionable feedback, prints the prompt for the current agent, and shows reviewer-facing status badges on each comment card. After editing, record the result with the claim id from the printed command:
 
 ```bash
 npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated copy." --file index.html
+```
+
+To see the same work tracker in the terminal:
+
+```bash
+npx --yes tunelito inbox status ./site
 ```
 
 For larger comments that may need more than one pass, set a pass budget:

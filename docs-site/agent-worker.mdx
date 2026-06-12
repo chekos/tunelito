@@ -13,7 +13,7 @@ If you are already inside Claude Code, Codex, or another coding-agent session, u
 npx --yes tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-The same Tunelito process serves the room, watches the persistent comments inbox, claims the next actionable comment in `.tunelito/agent/state.json`, and prints a prompt for the current agent. After editing, record the result with the claim id from the printed command:
+The same Tunelito process serves the room, watches the persistent comments inbox, claims the next actionable comment in `.tunelito/agent/state.json`, prints a prompt for the current agent, and shows the work status on browser comment cards. After editing, record the result with the claim id from the printed command:
 
 ```bash
 npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
@@ -161,6 +161,16 @@ site/
 ```
 
 The state file records each comment ID, fingerprint, attempts, status, summary, and changed files. Resolved comments are skipped on future polling cycles, even if the original highlighted text becomes stale after an edit. Tunelito blocks the state file and derived log file from static serving, and `.tunelito` ledger writes do not trigger browser reloads.
+
+When `--agent` or `--agent-session` is active, the browser comments panel reads this same state and shows a compact status badge on each comment card. Reviewers can see when feedback is queued, being worked on, needs follow-up, integrated, or blocked without opening the markdown inbox.
+
+Use the tracker command to inspect the same current work in the terminal without editing the inbox or ledger:
+
+```bash
+npx --yes tunelito inbox status ./site
+```
+
+The tracker prints pending and claimed comment work as unchecked tasks. Completed work from `completedTasks` or the recorded summary is checked and crossed out, and `needs_followup` comments show completed tasks beside the remaining tasks.
 
 Statuses include:
 

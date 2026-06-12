@@ -224,9 +224,13 @@ test("parseInboxArgs supports watch and record options", () => {
   assert.deepEqual(record.completedTasks, ["Updated hero"]);
   assert.deepEqual(record.remainingTasks, ["Update footer"]);
   assert.throws(() => parseInboxArgs(["next", "site", "--claim", "claim_123"]), /--claim is only supported/);
+
+  const status = parseInboxArgs(["status", "site", "--format", "json"]);
+  assert.equal(status.command, "status");
+  assert.equal(status.format, "json");
 });
 
-test("runInboxCommand claims and records a comment", async () => {
+test("runInboxCommand claims, records, and reports comment status", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-inbox-cli-"));
   const siteDir = join(dir, "site");
   mkdirSync(siteDir);
@@ -255,6 +259,20 @@ test("runInboxCommand claims and records a comment", async () => {
   assert.equal(loadAgentState(statePath).comments.c_cli.status, "claimed");
   const claimId = loadAgentState(statePath).comments.c_cli.claim.id;
 
+  const claimedStatusOut = streamCollector();
+  const claimedStatusCode = await runInboxCommand([
+    "status",
+    siteDir,
+    "--out",
+    commentsPath,
+    "--agent-state",
+    statePath,
+  ], { stdout: claimedStatusOut });
+
+  assert.equal(claimedStatusCode, 0);
+  assert.match(claimedStatusOut.text(), /## c_cli - claimed/);
+  assert.match(claimedStatusOut.text(), /- \[ \] Being worked on: Make this concise\./);
+
   const recordOut = streamCollector();
   const recordCode = await runInboxCommand([
     "record",
@@ -277,6 +295,8 @@ test("runInboxCommand claims and records a comment", async () => {
 
   assert.equal(recordCode, 0);
   assert.match(recordOut.text(), /Recorded c_cli as resolved/);
+  assert.match(recordOut.text(), /Tunelito To Do/);
+  assert.match(recordOut.text(), /- \[x\] ~~Made the copy concise\.~~/);
   assert.equal(loadAgentState(statePath).comments.c_cli.status, "resolved");
 });
 

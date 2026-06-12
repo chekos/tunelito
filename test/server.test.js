@@ -6,7 +6,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OWNER_KEY_PARAM, createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
-import { CLIENT_ROUTE } from "../src/inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE } from "../src/inject.js";
+import { renderCommentsMarkdown } from "../src/comments.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-server-"));
@@ -274,8 +275,98 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /data-scope="site"/);
     assert.match(clientScript, /class="launcher-glyph"/);
     assert.match(clientScript, /aria-label="Open Tunelito comments"/);
+    assert.match(clientScript, /work-badge/);
+    assert.match(clientScript, /Agent work status/);
     assert.match(clientScript, /width: 44px;\s+height: 44px;/);
     assert.doesNotMatch(clientScript, /Comments <span class="count"/);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server exposes agent work status for browser comment cards", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-agent-status-"));
+  const commentsPath = join(siteDir, "site.comments.md");
+  const statePath = join(siteDir, "agent-state.json");
+  writeFileSync(join(siteDir, "index.html"), "<!doctype html><html><body><main>Home page</main></body></html>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: siteDir,
+    comments: [
+      {
+        id: "c_done",
+        author: "Dana",
+        authorRole: "visitor",
+        scope: "page",
+        quote: "",
+        body: "Make the hero specific.",
+        prefix: "",
+        suffix: "",
+        path: "",
+        pagePath: "/",
+        textStart: null,
+        textEnd: null,
+        created: "2026-06-10T00:00:00.000Z",
+      },
+      {
+        id: "c_waiting",
+        author: "Rae",
+        authorRole: "visitor",
+        scope: "page",
+        quote: "",
+        body: "Tighten the footer.",
+        prefix: "",
+        suffix: "",
+        path: "",
+        pagePath: "/",
+        textStart: null,
+        textEnd: null,
+        created: "2026-06-10T00:01:00.000Z",
+      },
+    ],
+  }));
+  writeFileSync(statePath, `${JSON.stringify({
+    version: 1,
+    updatedAt: "2026-06-10T00:02:00.000Z",
+    comments: {
+      c_done: {
+        id: "c_done",
+        status: "resolved",
+        summary: "Made the hero specific.",
+        completedTasks: ["Make the hero specific"],
+        filesChanged: ["index.html"],
+        updatedAt: "2026-06-10T00:02:00.000Z",
+        completedAt: "2026-06-10T00:02:00.000Z",
+      },
+    },
+  }, null, 2)}\n`);
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    agentStatePath: statePath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    const root = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    sockets.push(root.socket);
+    await waitFor(root.socket, "open");
+    await waitUntil(() => root.messages.some((message) => message.type === "hello"));
+    const hello = root.messages.find((message) => message.type === "hello");
+    assert.equal(hello.agentStatusUrl, AGENT_STATUS_ROUTE);
+    assert.equal(hello.agentStatuses.comments.c_done.label, "Integrated");
+    assert.deepEqual(hello.agentStatuses.comments.c_done.done, ["Make the hero specific"]);
+    assert.equal(hello.agentStatuses.comments.c_waiting.label, "Queued");
+
+    const status = await fetch(new URL(AGENT_STATUS_ROUTE, instance.localUrl)).then((res) => res.json());
+    assert.equal(status.comments.c_done.tone, "done");
+    assert.equal(status.comments.c_waiting.tone, "pending");
+
+    const rawState = await fetch(new URL("/agent-state.json", instance.localUrl));
+    assert.equal(rawState.status, 404);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();

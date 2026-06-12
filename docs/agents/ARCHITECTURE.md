@@ -27,6 +27,7 @@ The server owns local IO and transport:
 - mark owner-key sessions so owner comments can carry `authorRole: owner`
 - accept WebSocket comment events
 - write/read markdown comments or keep live-mode comments in memory
+- expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
 - broadcast reload events when source HTML changes
@@ -49,7 +50,7 @@ The active-agent inbox owns comment handoff when `--agent-session` or `tunelito 
 - reuse the same comment parser, owner/mention policies, continuation state, and terminal statuses as the local agent worker
 - print bounded prompts from the `--agent-session` server process, or through `tunelito inbox next` / `tunelito inbox watch` for one-shot manual claims
 - record outcomes through `tunelito inbox record` rather than direct ledger edits
-- write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, and record commands
+- write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, tracker, and record commands
 
 The browser client owns reviewer interaction:
 
@@ -58,6 +59,7 @@ The browser client owns reviewer interaction:
 - render comment controls
 - submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
+- render agent work status on comment cards when `--agent` or `--agent-session` is active
 - render peer cursors and live selection highlights in `--live`
 - assign editable random visitor names, or seed the owner name for owner-key sessions
 - reconnect/reload when the server says to
