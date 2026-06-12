@@ -859,6 +859,59 @@ export function recordAgentSessionResult({
   };
 }
 
+export function formatAgentTodoTracker({
+  commentsPath,
+  targetPath,
+  statePath,
+  trigger = DEFAULT_AGENT_TRIGGER,
+  policy = DEFAULT_AGENT_POLICY,
+  now = () => new Date(),
+} = {}) {
+  const config = normalizeAgentInboxConfig({
+    commentsPath,
+    targetPath,
+    statePath,
+    trigger,
+    policy,
+  });
+  const state = loadAgentState(config.statePath);
+  const comments = existsSync(config.commentsPath) ? loadCommentsFromMarkdown(config.commentsPath) : [];
+  const snapshot = buildAgentStatusSnapshot({
+    comments: comments.filter((comment) => comment?.id && commentMatchesAgentPolicy(comment, { policy: config.policy, trigger: config.trigger })),
+    state,
+    now,
+  });
+  const visible = Object.values(snapshot.comments);
+
+  const lines = ["Tunelito To Do"];
+  if (!visible.length) {
+    lines.push("", "No actionable comments match the current agent policy.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  for (const item of visible) {
+    lines.push("", `## ${item.id} - ${item.status}`);
+    for (const done of item.done) lines.push(`- [x] ~~${done}~~`);
+    for (const todo of item.todo) lines.push(`- [ ] ${todo}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export function buildAgentStatusSnapshot({ comments = [], state = emptyAgentState(), now = () => new Date() } = {}) {
+  const checkedAt = now();
+  const statuses = {};
+  for (const comment of comments) {
+    if (!comment?.id) continue;
+    statuses[comment.id] = formatAgentWorkStatus(comment, state.comments?.[comment.id], checkedAt);
+  }
+  return {
+    version: 1,
+    updatedAt: state.updatedAt || null,
+    generatedAt: checkedAt.toISOString(),
+    comments: statuses,
+  };
+}
+
 export function fingerprintComment(comment) {
   const payload = {
     scope: comment.scope || "page",
@@ -1150,6 +1203,63 @@ function normalizeSingleResult(item) {
     completedTasks: normalizeStringList(item.completedTasks),
     remainingTasks: normalizeStringList(item.remainingTasks),
   };
+}
+
+function formatAgentWorkStatus(comment, existing, checkedAt) {
+  const status = existing?.status || "pending";
+  const details = workStatusDetails(status);
+  const done = [];
+  const todo = [];
+
+  for (const task of normalizeStringList(existing?.completedTasks)) done.push(task);
+
+  if (isTerminalStatus(status)) {
+    if (!done.length) done.push(existing?.summary || summarizeCommentRequest(comment));
+  } else if (status === "needs_followup") {
+    if (!done.length && existing?.summary) done.push(existing.summary);
+    const remaining = normalizeStringList(existing?.remainingTasks);
+    todo.push(...(remaining.length ? remaining : [summarizeCommentRequest(comment)]));
+  } else {
+    const active = status === "claimed" || status === "in_progress";
+    const prefix = active ? `${details.label}: ` : "";
+    todo.push(`${prefix}${summarizeCommentRequest(comment)}`);
+  }
+
+  return {
+    id: comment.id,
+    status,
+    label: details.label,
+    tone: details.tone,
+    done,
+    todo,
+    summary: existing?.summary || "",
+    filesChanged: normalizeStringList(existing?.filesChanged),
+    updatedAt: existing?.updatedAt || "",
+    completedAt: existing?.completedAt || null,
+    claim: existing?.claim ? {
+      owner: existing.claim.owner || "",
+      expiresAt: existing.claim.expiresAt || "",
+      active: hasActiveClaim(existing, checkedAt),
+    } : null,
+  };
+}
+
+function summarizeCommentRequest(comment) {
+  const body = preview(comment?.body || comment?.quote || "");
+  return body || `Address ${comment?.scope || "page"} comment`;
+}
+
+function workStatusDetails(status) {
+  if (status === "claimed" || status === "in_progress") return { label: "Being worked on", tone: "active" };
+  if (status === "needs_followup") return { label: "Needs follow-up", tone: "warning" };
+  if (status === "resolved") return { label: "Integrated", tone: "done" };
+  if (status === "no-op") return { label: "Already covered", tone: "done" };
+  if (status === "ignored") return { label: "Not actionable", tone: "muted" };
+  if (status === "blocked") return { label: "Blocked", tone: "danger" };
+  if (status === "stale") return { label: "Stale", tone: "danger" };
+  if (status === "partial") return { label: "Partially done", tone: "warning" };
+  if (status === "changed_needs_review") return { label: "Changed, needs review", tone: "warning" };
+  return { label: "Queued", tone: "pending" };
 }
 
 function normalizeStatus(status) {

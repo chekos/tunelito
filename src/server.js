@@ -4,8 +4,9 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, readdirSync, realpathSync, statSync, watch } from "node:fs";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildAgentStatusSnapshot, defaultAgentLogPath, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, renderCommentsMarkdown } from "./comments.js";
-import { CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
@@ -27,8 +28,10 @@ export async function createTunelitoServer(options) {
   const liveMode = Boolean(options.liveMode || options.live);
   const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(targetPath));
   const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: targetPath });
+  const agentStatePath = options.agentStatePath && !liveMode ? resolve(options.agentStatePath) : "";
   const blockedPaths = [
     ...blockedCommentPaths(commentsPath),
+    ...blockedAgentPaths(agentStatePath),
     ...(options.blockedPaths || []).filter(Boolean).map((path) => resolve(path)),
   ];
   const events = new EventEmitter();
@@ -51,6 +54,7 @@ export async function createTunelitoServer(options) {
       sourceName,
       comments,
       commentsPath,
+      agentStatePath,
       blockedPaths,
       liveMode,
       accessKey,
@@ -125,6 +129,7 @@ export async function createTunelitoServer(options) {
 
   hub.on("connection", (client, req) => {
     const pagePath = normalizePagePath(req?.tunelitoPagePath);
+    const visibleComments = commentsForPage(pagePath);
     const peer = {
       id: createPeerId(),
       connectedAt: new Date().toISOString(),
@@ -140,8 +145,10 @@ export async function createTunelitoServer(options) {
       pagePath,
       peers: peerListForPage(pagePath, peer.id),
       sourceName: directoryMode ? pagePath : sourceName,
-      comments: commentsForPage(pagePath),
+      comments: visibleComments,
       commentsUrl: liveMode ? null : COMMENTS_ROUTE,
+      agentStatusUrl: agentStatePath ? AGENT_STATUS_ROUTE : null,
+      agentStatuses: agentStatePath ? agentStatusSnapshot({ agentStatePath, comments: visibleComments }) : null,
       viewerCount: hub.size,
       authorRole: peer.authorRole,
       defaultAuthor: peer.authorRole === "owner" ? ownerName : "",
@@ -248,7 +255,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -288,6 +295,19 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       return;
     }
     sendText(res, 200, renderCommentsMarkdown({ comments: comments.all(), sourcePath: targetPath }), "text/markdown; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === AGENT_STATUS_ROUTE) {
+    if (liveMode || !agentStatePath) {
+      sendText(res, 404, "Tunelito agent status is unavailable for this session.", "text/plain; charset=utf-8", req.method, responseHeaders);
+      return;
+    }
+    const pagePath = normalizePagePath(url.searchParams.get(PAGE_PARAM));
+    const visibleComments = directoryMode
+      ? comments.all().filter((comment) => isSiteComment(comment) || normalizePagePath(comment.pagePath) === pagePath)
+      : comments.all();
+    sendJson(res, 200, agentStatusSnapshot({ agentStatePath, comments: visibleComments }), req.method, responseHeaders);
     return;
   }
 
@@ -435,6 +455,10 @@ function sendText(res, status, body, contentType = "text/plain; charset=utf-8", 
     return;
   }
   res.end(buffer);
+}
+
+function sendJson(res, status, payload, method = "GET", extraHeaders = {}) {
+  sendText(res, status, `${JSON.stringify(payload)}\n`, "application/json; charset=utf-8", method, extraHeaders);
 }
 
 function sendRedirect(res, location, extraHeaders = {}) {
@@ -680,6 +704,26 @@ function isBlockedDirectoryEntry(directoryPath, entryName, blockedPaths) {
 
 function blockedCommentPaths(commentsPath) {
   return commentsPath ? [commentsPath, `${commentsPath}.tmp`] : [];
+}
+
+function blockedAgentPaths(agentStatePath) {
+  return agentStatePath ? [agentStatePath, `${agentStatePath}.tmp`, defaultAgentLogPath(agentStatePath)] : [];
+}
+
+function agentStatusSnapshot({ agentStatePath, comments }) {
+  let state;
+  let stateAvailable = true;
+  try {
+    state = loadAgentState(agentStatePath);
+  } catch {
+    state = { updatedAt: null, comments: {} };
+    stateAvailable = false;
+  }
+  return {
+    enabled: true,
+    stateAvailable,
+    ...buildAgentStatusSnapshot({ comments, state }),
+  };
 }
 
 function isBlockedPath(realPath, blockedPaths) {

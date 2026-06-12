@@ -94,7 +94,7 @@ If you are already inside an agent session, use active-agent mode:
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-The same Tunelito process blocks until an actionable comment appears, claims it in `.tunelito/agent/state.json`, and prints a prompt with the matching claim id. After editing, record the result:
+The same Tunelito process blocks until an actionable comment appears, claims it in `.tunelito/agent/state.json`, shows work status on the browser comment card, and prints a prompt with the matching claim id. After editing, record the result:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated heading rhythm." --file index.html
@@ -106,7 +106,7 @@ Tunelito can also run that watching loop for you. By default, every persistent c
 tunelito ./site --agent codex
 ```
 
-The worker writes status to `.tunelito/agent/state.json` instead of editing the comments file. That state prevents already handled comment IDs from being retried after source edits make the original highlight stale.
+The worker writes status to `.tunelito/agent/state.json` instead of editing the comments file. That state powers the browser badges, and prevents already handled comment IDs from being retried after source edits make the original highlight stale.
 
 Large actionable comments can continue across several bounded passes. When the agent returns `needs_followup`, Tunelito saves completed and remaining tasks in the state file and queues that same comment again. This applies to selected-text comments, page notes, and site notes.
 

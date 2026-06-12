@@ -45,7 +45,13 @@ If you are already inside Claude Code, Codex, or another agent session, use agen
 npx --yes tunelito ./site --agent-session --no-tunnel --open
 ```
 
-The same Tunelito process serves the review room, watches the comments inbox, claims the next actionable comment, and prints a prompt for the current agent. After editing, record the result with the `tunelito inbox record --claim ...` command from the prompt.
+The same Tunelito process serves the review room, watches the comments inbox, claims the next actionable comment, and prints a prompt for the current agent. Reviewers see agent work status on each browser comment card, so feedback can move from queued to being worked on to integrated without opening the markdown inbox. After editing, record the result with the `tunelito inbox record --claim ...` command from the prompt.
+
+To see the same live checklist in the terminal:
+
+```bash
+npx --yes tunelito inbox status ./site
+```
 
 From a clone:
 
@@ -112,7 +118,7 @@ tunelito ./page.html --live
 Tunelito 0.11.0
 
 Usage: tunelito <page.html|folder> [options]
-       tunelito inbox <next|watch|record> <page.html|folder> [options]
+       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -149,6 +155,7 @@ Options:
 Commands:
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
@@ -274,6 +281,8 @@ Tunelito serves the review room, writes `.tunelito/session.json` beside the serv
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated the hero copy." --file index.html
 ```
 
+The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks; completed work is printed as checked and crossed out.
+
 Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
 
 Tunelito can run the local agent worker for you:
@@ -326,7 +335,7 @@ tunelito ./site --agent codex --agent-instructions "Keep copy concise and preser
 
 Use `--agent-instructions-file instructions.md` for longer guidance. Use `--agent-prompt` or `--agent-prompt-file` to replace the built-in behavior prompt; Tunelito still appends the workspace context, required JSON shape, and pending comments.
 
-Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `needs_followup`, `no-op`, `ignored`, `blocked`, `partial`, and `stale`. That state file prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale, while still allowing a large inline, page, or site comment to continue from its saved remaining tasks. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
+Handled comments are recorded in `.tunelito/agent/state.json` with statuses like `resolved`, `needs_followup`, `no-op`, `ignored`, `blocked`, `partial`, and `stale`. That state file powers the browser card badges, prevents the worker from repeating the same edit after the source text changes and the original highlight becomes stale, and lets a large inline, page, or site comment continue from its saved remaining tasks. A readable run log is written to `.tunelito/agent/log.md`; Tunelito blocks both files from static serving and ignores `.tunelito` ledger writes for browser reloads.
 
 Treat `--agent` as trusted-session behavior: reviewer comments become instructions to a local process that can edit files.
 

@@ -125,9 +125,9 @@ When the agent saves HTML changes, Tunelito asks connected browsers to reload. P
 
 If a selected-text comment, page note, or site note needs more than one pass, the agent can return `needs_followup` with completed and remaining tasks. Tunelito stores that continuation in the state file and sends the same comment again on the next wake or fallback poll. If the agent reaches `--agent-max-passes` or stops making progress, Tunelito marks the comment `partial`.
 
-Resolved comments are skipped on future worker passes. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
+Resolved comments are skipped on future worker passes and show as integrated in the browser comment panel. If editing the HTML makes the original highlighted quote stale, the comment still stays resolved in the ledger and will not be applied again.
 
-When you use `--agent-session`, the Tunelito server process is the active-agent loop. It waits for actionable comments, claims one for the current agent session, prints the prompt, and pauses further claims until that claim is recorded or expires. After editing, record the result with the claim id from the printed command:
+When you use `--agent-session`, the Tunelito server process is the active-agent loop. It waits for actionable comments, claims one for the current agent session, updates the browser comment-card status, prints the prompt, and pauses further claims until that claim is recorded or expires. After editing, record the result with the claim id from the printed command:
 
 ```bash
 npx --yes tunelito inbox record ./review-site --id c_... --claim claim_... --status resolved --summary "Updated the about page copy." --file about.html
