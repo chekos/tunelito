@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      @font-face{font-family:'Source Serif 4';font-style:normal;font-weight:200 900;font-display:swap;src:url('fonts/sourceserif-normal-200_900.woff2') format('woff2');}
+      @font-face{font-family:'Source Serif 4';font-style:italic;font-weight:200 900;font-display:swap;src:url('fonts/sourceserif-italic-200_900.woff2') format('woff2');}
+      @font-face{font-family:'Kalam';font-style:normal;font-weight:300;font-display:swap;src:url('fonts/kalam-normal-300.woff2') format('woff2');}
+      @font-face{font-family:'Kalam';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/kalam-normal-400.woff2') format('woff2');}
+      @font-face{font-family:'Kalam';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/kalam-normal-700.woff2') format('woff2');}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/jbmono-400.woff2') format('woff2');}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/jbmono-700.woff2') format('woff2');}
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root {
+        --bone: #FFFEF9;
+        --desert-sand: #F4F1E8;
+        --noir: #0A0A0A;
+        --graphite: #2A2A2A;
+        --terracotta: #B84C2F;
+        --terracotta-warm: #D35F3F;
+        --sage: #657458;
+        --accent-pop: #FF5E3A;
+        --grid-minor: rgba(101,116,88,0.05);
+        --grid-major: rgba(101,116,88,0.11);
+        /* font stacks are written literally on elements so static analyzers can resolve them;
+           these tokens remain for reference. */
+        --font-serif: 'Source Serif 4', serif;
+        --font-hand: 'Kalam', 'Bradley Hand', cursive;
+        --font-mono: 'JetBrains Mono', monospace;
+        --brutal: 2px solid var(--noir);
+        --shadow-brutal: 10px 10px 0 var(--noir);
+        --shadow-brutal-sm: 6px 6px 0 var(--noir);
+      }
+      html, body {
+        width: 1920px; height: 1080px; overflow: hidden;
+        color: var(--noir);
+        background-color: var(--bone);
+        background-image:
+          linear-gradient(var(--grid-minor) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px),
+          linear-gradient(var(--grid-major) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);
+        background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+        font-family: 'Source Serif 4', serif;
+        font-optical-sizing: auto;
+        -webkit-font-smoothing: antialiased;
+      }
+      .scene { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+      #scene1 { z-index: 1; }
+      #scene2 { z-index: 2; opacity: 0; }
+      #scene3 { z-index: 3; opacity: 0; }
+      #scene4 { z-index: 4; opacity: 0; }
+      #scene5 { z-index: 5; opacity: 0; }
+      #scene6 { z-index: 6; opacity: 0; }
+
+      .wrap { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 130px 200px; gap: 30px; }
+
+      /* section eyebrow */
+      .eyebrow { font-family: 'Source Serif 4', serif; font-size: 24px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--sage); }
+      .note { font-family: 'Source Serif 4', serif; font-size: 30px; line-height: 1.55; color: var(--graphite); max-width: 1400px; }
+      .note b { color: var(--noir); font-weight: 600; }
+      .tcotta { color: var(--terracotta); }
+      .soft { background-image: linear-gradient(to right, rgba(184,76,47,0.14), rgba(184,76,47,0.22) 20%, rgba(184,76,47,0.22) 80%, rgba(184,76,47,0.14)); padding: 2px 8px; font-weight: 600; }
+      .pill-hi { display: inline-block; color: var(--noir); background-image: linear-gradient(to right, rgba(184,76,47,0.25), rgba(184,76,47,0.82) 20%, rgba(184,76,47,0.72) 80%, rgba(184,76,47,0.95)); margin: -2px -2px; padding: 2px 10px; font-weight: 700; transform: rotate(-1.5deg); border-radius: 3px 8px 2px 6px; }
+      .buildstat { font-family: 'JetBrains Mono', monospace; font-size: 22px; color: var(--sage); letter-spacing: 0.02em; }
+
+      /* meta badge / command pill */
+      .meta-badge { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 26px; background: var(--desert-sand); border: var(--brutal); color: var(--graphite); padding: 12px 22px; width: fit-content; }
+      .meta-badge .sigil { color: var(--terracotta); }
+
+      /* Scene 1 / 6 wordmark */
+      #s1-title, #s6-title { font-family: 'Source Serif 4', serif; font-size: 188px; font-weight: 700; line-height: 1.0; letter-spacing: -0.02em; color: var(--noir); }
+      #s1-title .dot, #s6-title .dot { color: var(--terracotta); }
+      #s1-sub { font-size: 48px; font-weight: 400; color: var(--graphite); max-width: 1240px; line-height: 1.25; }
+      #s6-tag { font-size: 46px; color: var(--graphite); }
+      #s6-foot { font-family: 'JetBrains Mono', monospace; font-size: 24px; color: var(--sage); margin-top: 10px; }
+
+      /* hand-written margin note (the delight) */
+      .hand { font-family: 'Kalam', cursive; font-weight: 400; color: var(--noir); line-height: 1.3; }
+
+      /* terminal / report / nodes — brutalist cards */
+      .frame { background: var(--bone); border: var(--brutal); box-shadow: var(--shadow-brutal); }
+      .frame-bar { height: 56px; background: var(--desert-sand); border-bottom: var(--brutal); display: flex; align-items: center; padding: 0 24px; font-family: 'JetBrains Mono', monospace; font-size: 22px; color: var(--sage); letter-spacing: 0.04em; }
+      .term-body { padding: 32px 38px; font-family: 'JetBrains Mono', monospace; font-size: 28px; line-height: 1.7; color: var(--graphite); }
+      .term-body .ln { white-space: pre; }
+      .term-body .prompt { color: var(--terracotta); }
+      .term-body .ok { color: var(--noir); font-weight: 700; }
+      .term-body .lbl { color: var(--sage); }
+      .term-body .url { color: var(--graphite); }
+      .term-body .key { color: var(--terracotta); }
+      .term-body .dim { color: var(--sage); }
+
+      #s2-term { width: 1320px; margin-top: 10px; }
+      #s2-note { margin-top: 30px; }
+
+      /* Scene 3 — document + marginalia */
+      .s3-grid { display: flex; gap: 64px; align-items: flex-start; margin-top: 6px; }
+      #s3-report { width: 1020px; position: relative; }
+      .report-body { padding: 40px 48px 48px; }
+      .report-body h3 { font-family: 'Source Serif 4', serif; font-size: 40px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 22px; color: var(--noir); }
+      .doc { position: relative; min-height: 230px; }
+      .doc p { font-family: 'Source Serif 4', serif; font-size: 31px; line-height: 1.6; color: var(--graphite); margin: 0; }
+      .doc .pafter { position: absolute; inset: 0; opacity: 0; }
+      #s3-reload { position: absolute; top: 70px; right: 22px; font-family: 'JetBrains Mono', monospace; font-size: 20px; color: var(--terracotta); background: var(--bone); border: var(--brutal); padding: 8px 14px; opacity: 0; z-index: 6; }
+      .s3-margin { width: 600px; position: relative; padding-top: 8px; min-height: 520px; }
+      .s3-mlabel { font-family: 'JetBrains Mono', monospace; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sage); margin-bottom: 30px; }
+      .mnote { position: relative; margin-bottom: 40px; }
+      .mnote .hand { font-size: 40px; }
+      .mnote .by { font-family: 'JetBrains Mono', monospace; font-size: 19px; color: var(--sage); margin-top: 4px; }
+      .mnote .arr { color: var(--sage); }
+      /* agent annotation = machine, monospace, boxed */
+      #s3-agent { border: 2px solid var(--terracotta); background: rgba(184,76,47,0.05); padding: 20px 22px; position: relative; }
+      #s3-agent .who { font-family: 'JetBrains Mono', monospace; font-size: 20px; color: var(--terracotta); letter-spacing: 0.06em; margin-bottom: 8px; }
+      #s3-agent .atxt { position: relative; font-family: 'JetBrains Mono', monospace; font-size: 25px; line-height: 1.35; color: var(--graphite); }
+      #s3-agent .atxt .dn { position: absolute; inset: 0; opacity: 0; color: var(--terracotta); font-weight: 700; }
+      #s3-caret { display: inline-block; width: 14px; height: 26px; background: var(--terracotta); margin-left: 4px; vertical-align: -4px; }
+      #s3-note { margin-top: 4px; }
+
+      /* Scene 4 — the loop */
+      #s4-head { font-family: 'Source Serif 4', serif; font-size: 64px; font-weight: 600; letter-spacing: -0.01em; max-width: 1480px; line-height: 1.12; color: var(--noir); }
+      .flow { display: flex; align-items: stretch; gap: 0; margin-top: 46px; }
+      .node { background: var(--bone); border: var(--brutal); padding: 26px 28px; min-width: 300px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+      .node .tag { font-family: 'JetBrains Mono', monospace; font-size: 19px; color: var(--sage); letter-spacing: 0.12em; text-transform: uppercase; }
+      .node .main { font-family: 'JetBrains Mono', monospace; font-size: 27px; color: var(--noir); }
+      .node .sub { font-family: 'Source Serif 4', serif; font-size: 21px; color: var(--graphite); }
+      .node.agentnode { border: 2px solid var(--terracotta); background: rgba(184,76,47,0.05); }
+      .node.agentnode .main { color: var(--terracotta); }
+      .farrow { display: flex; align-items: center; justify-content: center; width: 64px; color: var(--terracotta); font-size: 40px; font-family: 'JetBrains Mono', monospace; }
+      #s4-note { margin-top: 46px; }
+      #s4-note .link { color: var(--terracotta); font-family: 'JetBrains Mono', monospace; font-size: 27px; }
+
+      /* Scene 5 — move on */
+      #s5-term { width: 1100px; margin-top: 8px; }
+      #s5-md { margin-top: 30px; width: fit-content; background: var(--desert-sand); border: var(--brutal); padding: 26px 32px; font-family: 'JetBrains Mono', monospace; font-size: 24px; line-height: 1.7; color: var(--graphite); }
+      #s5-md .h { color: var(--noir); font-weight: 700; }
+      #s5-md .q { color: var(--terracotta); }
+      #s5-md .c { color: var(--sage); }
+      #s5-note { margin-top: 24px; }
+      #s5-build { margin-top: 26px; }
+
+      #scene6 .wrap { align-items: center; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="56" data-width="1920" data-height="1080">
+
+      <!-- ===== SCENE 1 — what it is ===== -->
+      <div id="scene1" class="scene">
+        <div class="wrap">
+          <div class="eyebrow" id="s1-eyebrow">Local-first &middot; no backend</div>
+          <div id="s1-title">Tunelito<span class="dot">.</span></div>
+          <div id="s1-sub">A live, shareable preview for the rich HTML your <span class="soft">coding agent</span> builds.</div>
+          <div class="buildstat" id="s1-build">Serve: local &middot; Deps: 0 &middot; Tunnel: on demand</div>
+        </div>
+      </div>
+
+      <!-- ===== SCENE 2 — point it at a page ===== -->
+      <div id="scene2" class="scene">
+        <div class="wrap">
+          <div class="eyebrow" id="s2-kick">Point it at a page</div>
+          <div class="frame" id="s2-term">
+            <div class="frame-bar">~/project — tunelito</div>
+            <div class="term-body">
+              <div class="ln" id="s2-l1"><span class="prompt">$</span> npx tunelito ./report.html</div>
+              <div class="ln" id="s2-l2"><span class="ok">Tunelito is running</span></div>
+              <div class="ln" id="s2-l3"><span class="lbl">Local:   </span><span class="url">http://127.0.0.1:4317/?</span><span class="key">tunelito_key=…</span></div>
+              <div class="ln" id="s2-l4"><span class="lbl">Public:  </span><span class="url">https://calm-haze.trycloudflare.com/?</span><span class="key">key=…</span></div>
+              <div class="ln" id="s2-l5"><span class="lbl">Comments: </span><span class="url">./report.comments.md</span></div>
+            </div>
+          </div>
+          <div class="note" id="s2-note"><b>Served over a secure tunnel, for as long as you need.</b> Nothing to deploy, no API keys, no setup.</div>
+        </div>
+      </div>
+
+      <!-- ===== SCENE 3 — comment together, agent edits live ===== -->
+      <div id="scene3" class="scene">
+        <div class="wrap" style="padding:120px 160px;">
+          <div class="eyebrow" id="s3-kick">Comment together &middot; your agent edits live</div>
+          <svg id="s3-link" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:3; opacity:0; overflow:visible;">
+            <path id="s3-link-path" fill="none" stroke="#657458" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round" opacity="0.85"></path>
+            <circle id="s3-link-dot" r="6" fill="#B84C2F"></circle>
+          </svg>
+          <div class="s3-grid">
+            <div class="frame" id="s3-report">
+              <div class="frame-bar">report.html — live preview</div>
+              <div class="report-body">
+                <h3>Q3 Launch report</h3>
+                <div class="doc">
+                  <p class="pbefore" id="s3-before">Adoption grew across every region this quarter. <span class="soft" id="s3-hl">The summary should lead with the headline number</span> before the regional breakdown.</p>
+                  <p class="pafter" id="s3-after">Adoption grew <span class="pill-hi">38%</span> — our strongest quarter yet. Regional detail follows below.</p>
+                </div>
+              </div>
+              <div id="s3-reload">↻ reloaded</div>
+            </div>
+            <div class="s3-margin">
+              <div class="s3-mlabel" id="s3-mlabel">live comments</div>
+              <div class="mnote" id="s3-c1">
+                <div class="hand">Lead with the 38% number here</div>
+                <div class="by">you · just now</div>
+              </div>
+              <div class="mnote" id="s3-c2">
+                <div class="hand" style="transform:rotate(2deg); display:inline-block;">Agreed — and tighten the regional list</div>
+                <div class="by">coworker · just now</div>
+              </div>
+              <div class="mnote" id="s3-agent">
+                <div class="who">✱ claude · local agent</div>
+                <div class="atxt">
+                  <span class="ed" id="s3-ag-ed">editing report.html<span id="s3-caret"></span></span>
+                  <span class="dn" id="s3-ag-dn">✓ updated report.html · reloaded</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note" id="s3-note"><b>Your agent picks up the comments and edits the page</b> — and the preview reloads, live on the call.</div>
+        </div>
+      </div>
+
+      <!-- ===== SCENE 4 — the loop ===== -->
+      <div id="scene4" class="scene">
+        <div class="wrap">
+          <div class="eyebrow" id="s4-kick">The loop · reusing your local agent</div>
+          <div id="s4-head">The coding agent you <span class="soft">already run locally</span> reads the comments and edits the page.</div>
+          <div class="flow">
+            <div class="node flow-node"><span class="tag">Reviewers</span><span class="main">report.comments.md</span></div>
+            <span class="farrow flow-node arrowpulse">→</span>
+            <div class="node agentnode flow-node"><span class="tag">Local agent</span><span class="main">claude · codex</span><span class="sub">tagged, or scans on an interval</span></div>
+            <span class="farrow flow-node arrowpulse">→</span>
+            <div class="node flow-node"><span class="tag">Edits</span><span class="main">report.html</span></div>
+            <span class="farrow flow-node arrowpulse">→</span>
+            <div class="node flow-node"><span class="tag">Live</span><span class="main">preview reloads</span></div>
+          </div>
+          <div class="note" id="s4-note">Tag <span class="link">@claude</span> in a comment, or let it scan on an interval. <b>You collaborate with your teammates and your agent at the same time.</b></div>
+        </div>
+      </div>
+
+      <!-- ===== SCENE 5 — then move on ===== -->
+      <div id="scene5" class="scene">
+        <div class="wrap">
+          <div class="eyebrow" id="s5-kick">Then move on</div>
+          <div class="frame" id="s5-term">
+            <div class="frame-bar">~/project — tunelito</div>
+            <div class="term-body">
+              <div class="ln" id="s5-l1"><span class="dim">^C</span></div>
+              <div class="ln" id="s5-l2"><span class="ok">Tunelito stopped.</span> <span class="dim">Tunnel closed. Server off.</span></div>
+            </div>
+          </div>
+          <div id="s5-md">
+            <div class="h"># Tunelito comments for `report.html`</div>
+            <div class="q">&gt; The summary should lead with the headline number</div>
+            <div>Lead with the 38% number here.</div>
+            <div class="c">_scope: page · id: c_4d1a · report.comments.md_</div>
+          </div>
+          <div class="note" id="s5-note"><b>Your file never left your machine.</b> Every comment is saved in Markdown beside it. You move on.</div>
+          <div class="buildstat" id="s5-build">Files: on your machine &middot; Tunnel: closed &middot; Comments: saved</div>
+        </div>
+      </div>
+
+      <!-- ===== SCENE 6 — outro ===== -->
+      <div id="scene6" class="scene">
+        <div class="wrap">
+          <div id="s6-title">Tunelito<span class="dot">.</span></div>
+          <div id="s6-tag">Point it at a page. Iterate together. Move on.</div>
+          <div class="meta-badge" id="s6-cmd" style="margin-top:8px; font-size:30px;"><span class="sigil">$</span> npx tunelito ./page.html</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      var XF = 0.45;
+      function crossfade(o, n, T) {
+        tl.to(o, { opacity: 0, duration: XF, ease: "power2.inOut" }, T);
+        tl.fromTo(n, { opacity: 0 }, { opacity: 1, duration: XF, ease: "power2.inOut" }, T);
+      }
+
+      // Marginalia leader line: anchored from the end of the highlighted sentence
+      // to the first comment, computed from real layout (static, so deterministic).
+      (function () {
+        var hl = document.getElementById("s3-hl");
+        var n1 = document.getElementById("s3-c1");
+        var path = document.getElementById("s3-link-path");
+        var dot = document.getElementById("s3-link-dot");
+        if (!hl || !n1 || !path) return;
+        var a = hl.getBoundingClientRect();
+        var b = n1.getBoundingClientRect();
+        var x1 = a.right - 4, y1 = a.bottom - 5;
+        var x2 = b.left - 16, y2 = b.top + b.height / 2;
+        var mx = (x1 + x2) / 2;
+        path.setAttribute("d", "M " + x1 + " " + y1 + " C " + mx + " " + y1 + " " + mx + " " + y2 + " " + x2 + " " + y2);
+        dot.setAttribute("cx", x1);
+        dot.setAttribute("cy", y1);
+      })();
+
+      // Scene 1 (0 - 7)
+      tl.from("#s1-eyebrow", { y: -18, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.3);
+      tl.from("#s1-title",   { y: 50, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.5);
+      tl.from("#s1-sub",     { y: 28, opacity: 0, duration: 0.6, ease: "power2.out" }, 0.95);
+      tl.from("#s1-build",   { opacity: 0, duration: 0.5, ease: "power1.out" }, 1.4);
+
+      crossfade("#scene1", "#scene2", 7.0);
+
+      // Scene 2 (7 - 16)
+      tl.from("#s2-kick", { x: -24, opacity: 0, duration: 0.5, ease: "power2.out" }, 7.2);
+      tl.from("#s2-term", { y: 40, opacity: 0, duration: 0.6, ease: "power3.out" }, 7.4);
+      tl.from("#s2-l1", { opacity: 0, duration: 0.3, ease: "power1.out" }, 8.0);
+      tl.from("#s2-l2", { opacity: 0, duration: 0.3, ease: "power1.out" }, 8.4);
+      tl.from("#s2-l3", { opacity: 0, duration: 0.3, ease: "power1.out" }, 8.7);
+      tl.from("#s2-l4", { opacity: 0, duration: 0.3, ease: "power1.out" }, 9.0);
+      tl.from("#s2-l5", { opacity: 0, duration: 0.3, ease: "power1.out" }, 9.3);
+      tl.from("#s2-note", { y: 18, opacity: 0, duration: 0.5, ease: "power2.out" }, 10.0);
+
+      crossfade("#scene2", "#scene3", 16.0);
+
+      // Scene 3 (16 - 31) — comment, then the agent edits live
+      tl.from("#s3-kick", { x: -24, opacity: 0, duration: 0.5, ease: "power2.out" }, 16.2);
+      tl.from("#s3-report", { y: 40, opacity: 0, duration: 0.6, ease: "power3.out" }, 16.4);
+      tl.from("#s3-mlabel", { opacity: 0, duration: 0.4, ease: "power1.out" }, 17.4);
+      tl.from("#s3-c1", { y: 20, opacity: 0, duration: 0.5, ease: "power3.out" }, 17.8);
+      tl.fromTo("#s3-link", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power1.out" }, 17.9);
+      tl.from("#s3-c2", { y: 20, opacity: 0, duration: 0.5, ease: "power3.out" }, 18.4);
+      tl.from("#s3-agent", { y: 20, opacity: 0, duration: 0.5, ease: "power3.out" }, 19.3);
+      // blinking caret while the agent works
+      tl.to("#s3-caret", { opacity: 0, duration: 0.45, ease: "none", repeat: 5, yoyo: true }, 19.9);
+      tl.from("#s3-note", { y: 16, opacity: 0, duration: 0.5, ease: "power2.out" }, 20.0);
+      // ...the page updates live — comment resolved, leader line retracts
+      tl.to("#s3-link", { opacity: 0, duration: 0.35, ease: "power1.in" }, 22.1);
+      tl.to("#s3-before", { opacity: 0, duration: 0.4, ease: "power2.inOut" }, 22.2);
+      tl.fromTo("#s3-after", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.inOut" }, 22.25);
+      tl.fromTo("#s3-reload", { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, 22.3);
+      tl.to("#s3-ag-ed", { opacity: 0, duration: 0.3, ease: "power1.inOut" }, 22.4);
+      tl.fromTo("#s3-ag-dn", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.inOut" }, 22.55);
+      tl.to("#s3-caret", { opacity: 0, duration: 0.2, ease: "power1.out", overwrite: "auto" }, 22.4);
+      tl.to("#s3-reload", { opacity: 0, duration: 0.35, ease: "power1.in" }, 25.4);
+
+      crossfade("#scene3", "#scene4", 31.0);
+
+      // Scene 4 (31 - 42)
+      tl.from("#s4-kick", { x: -24, opacity: 0, duration: 0.5, ease: "power2.out" }, 31.2);
+      tl.from("#s4-head", { y: 34, opacity: 0, duration: 0.7, ease: "power3.out" }, 31.4);
+      tl.from(".flow-node", { y: 24, opacity: 0, duration: 0.45, ease: "power2.out", stagger: 0.13 }, 32.3);
+      tl.from("#s4-note", { y: 18, opacity: 0, duration: 0.5, ease: "power2.out" }, 34.0);
+      // the one persistent delight: arrow pulse
+      tl.to(".arrowpulse", { x: 7, scale: 1.12, duration: 0.9, ease: "sine.inOut", repeat: 7, yoyo: true, stagger: 0 }, 34.8);
+
+      crossfade("#scene4", "#scene5", 42.0);
+
+      // Scene 5 (42 - 50)
+      tl.from("#s5-kick", { x: -24, opacity: 0, duration: 0.5, ease: "power2.out" }, 42.2);
+      tl.from("#s5-term", { y: 34, opacity: 0, duration: 0.55, ease: "power3.out" }, 42.4);
+      tl.from("#s5-l1", { opacity: 0, duration: 0.3, ease: "power1.out" }, 43.0);
+      tl.from("#s5-l2", { opacity: 0, duration: 0.3, ease: "power1.out" }, 43.4);
+      tl.from("#s5-md", { y: 24, opacity: 0, duration: 0.55, ease: "power2.out" }, 44.0);
+      tl.from("#s5-note", { y: 16, opacity: 0, duration: 0.5, ease: "power2.out" }, 45.2);
+      tl.from("#s5-build", { opacity: 0, duration: 0.5, ease: "power1.out" }, 46.0);
+
+      crossfade("#scene5", "#scene6", 50.0);
+
+      // Scene 6 (50 - 56)
+      tl.from("#s6-title", { y: 44, opacity: 0, duration: 0.7, ease: "power3.out" }, 50.3);
+      tl.from("#s6-tag",   { y: 22, opacity: 0, duration: 0.5, ease: "power2.out" }, 50.85);
+      tl.from("#s6-cmd",   { y: 18, opacity: 0, duration: 0.45, ease: "power2.out" }, 51.3);
+      tl.to("#scene6 .wrap", { opacity: 0, duration: 0.7, ease: "power2.in" }, 55.0);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
