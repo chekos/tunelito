@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -172,6 +172,61 @@ test("parseArgs rejects prompt options without an agent", () => {
     () => parseArgs(["site", "--agent-instructions", "Use short copy."]),
     /--agent prompt options require --agent/,
   );
+});
+
+test("parseDoctorArgs supports read-only diagnostic options", () => {
+  const opts = parseDoctorArgs([
+    "site",
+    "--out",
+    "site.comments.md",
+    "--agent-state",
+    "state.json",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "0",
+    "--no-auth",
+    "--no-tunnel",
+    "--live",
+    "--agent-session",
+    "--agent-policy",
+    "owner",
+    "--json",
+  ]);
+
+  assert.equal(opts.targetPath, resolve("site"));
+  assert.equal(opts.commentsPath, resolve("site.comments.md"));
+  assert.equal(opts.agentStatePath, resolve("state.json"));
+  assert.equal(opts.host, "0.0.0.0");
+  assert.equal(opts.port, 0);
+  assert.equal(opts.auth, false);
+  assert.equal(opts.tunnel, false);
+  assert.equal(opts.live, true);
+  assert.equal(opts.agentSession, true);
+  assert.equal(opts.agentPolicy, "owner");
+  assert.equal(opts.format, "json");
+});
+
+test("runDoctorCommand prints parseable JSON and returns nonzero for errors", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-doctor-cli-"));
+  const targetPath = join(dir, "notes.txt");
+  writeFileSync(targetPath, "not html");
+
+  const stdout = streamCollector();
+  const code = await runDoctorCommand([targetPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+    deps: {
+      checkPort: async () => ({ available: true }),
+      commandExists: () => false,
+    },
+  });
+  const report = JSON.parse(stdout.text());
+
+  assert.equal(code, 1);
+  assert.equal(report.format, "tunelito-doctor");
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.some((check) => check.id === "target.file" && check.status === "fail"), true);
 });
 
 test("parseCommentsArgs supports target and direct comments inspection", () => {

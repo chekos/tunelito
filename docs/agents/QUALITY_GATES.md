@@ -55,6 +55,21 @@ Also update:
 - `docs/spec/tunelito-comments.schema.json`
 - README and docs-site comments or CLI pages
 
+## Doctor or Diagnostic Changes
+
+Required:
+
+- `test/doctor.test.js`
+- `test/cli.test.js`
+- `tunelito doctor <target> --json` for a representative target
+- read-only coverage proving no comments file, agent state, server, tunnel, or browser is created
+
+Also update:
+
+- README and docs-site CLI reference
+- `docs/agents/START_HERE.md`
+- `docs/agents/SECURITY_REVIEW.md` when safety checks change
+
 ## Client/UI Changes
 
 Required:

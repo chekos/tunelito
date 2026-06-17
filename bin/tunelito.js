@@ -27,6 +27,7 @@ import {
 } from "../src/agent-worker.js";
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
+import { buildDoctorReport } from "../src/doctor.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
@@ -37,6 +38,7 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito doctor [page.html|folder] [options]
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
@@ -73,6 +75,7 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  doctor                Run read-only local setup and safety diagnostics
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
@@ -245,6 +248,10 @@ function validateMentionAgentPolicy(policy, trigger) {
 
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv[0] === "doctor") {
+    process.exitCode = await runDoctorCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "comments") {
     process.exitCode = runCommentsCommand(argv.slice(1));
     return;
@@ -432,6 +439,124 @@ async function main() {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function doctorUsage() {
+  return `Tunelito doctor -- read-only local setup and safety diagnostics.
+
+Usage:
+  tunelito doctor [page.html|folder] [options]
+
+Options:
+  --out <path>              Markdown comments file to inspect
+  --agent-state <path>      Agent resolution ledger to inspect
+  --host <host>             Host to evaluate (default: 127.0.0.1)
+  --port <number>           Port to evaluate (default: 4317)
+  --no-auth                 Evaluate an unauthenticated session shape
+  --no-tunnel               Evaluate a local-only session shape
+  --live                    Evaluate live-mode persistence
+  --agent <codex|claude|custom>
+                            Evaluate local agent worker compatibility
+  --agent-session           Evaluate active-agent session compatibility
+  --agent-policy <mode>     Which comments are actionable: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
+  --agent-trigger <txt>     Marker for mention policies, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
+  --json                    Print the machine-readable tunelito-doctor report
+`;
+}
+
+export function parseDoctorArgs(argv) {
+  const opts = {
+    host: "127.0.0.1",
+    port: 4317,
+    auth: true,
+    tunnel: true,
+    agentPolicy: DEFAULT_AGENT_POLICY,
+    agentTrigger: DEFAULT_AGENT_TRIGGER,
+    format: "text",
+  };
+  const positional = [];
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help" || arg === "help") {
+      opts.help = true;
+    } else if (arg === "--out") {
+      opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--agent-state") {
+      opts.agentStatePath = resolve(requiredValue(argv[++i], "--agent-state"));
+    } else if (arg === "--host") {
+      opts.host = requiredValue(argv[++i], "--host");
+    } else if (arg === "--port") {
+      opts.port = parseIntegerValue(argv[++i], "--port", { min: 0, max: 65535 });
+    } else if (arg === "--no-auth") {
+      opts.auth = false;
+    } else if (arg === "--no-tunnel") {
+      opts.tunnel = false;
+    } else if (arg === "--live") {
+      opts.live = true;
+    } else if (arg === "--agent") {
+      opts.agent = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom").toLowerCase();
+    } else if (arg === "--agent-session") {
+      opts.agentSession = true;
+    } else if (arg === "--agent-policy") {
+      opts.agentPolicy = normalizeAgentPolicy(requiredValue(argv[++i], "--agent-policy"));
+      opts.agentPolicyProvided = true;
+    } else if (arg === "--agent-trigger") {
+      opts.agentTrigger = requiredValue(argv[++i], "--agent-trigger");
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown doctor option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length > 1) {
+    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+  }
+  if (opts.agent && !["codex", "claude", "custom"].includes(opts.agent)) {
+    throw new Error(`Unsupported --agent provider: ${opts.agent}`);
+  }
+  validateMentionAgentPolicy(opts.agentPolicy, opts.agentTrigger);
+  if (positional[0]) opts.targetPath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runDoctorCommand(args, { stdout = process.stdout, stderr = process.stderr, deps = {} } = {}) {
+  let opts;
+  try {
+    opts = parseDoctorArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${doctorUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(doctorUsage());
+    return 0;
+  }
+
+  const report = await buildDoctorReport(opts, deps);
+  stdout.write(formatDoctorReport(report, opts.format));
+  return report.ok ? 0 : 1;
+}
+
+function formatDoctorReport(report, format) {
+  if (format === "json") return `${JSON.stringify(report, null, 2)}\n`;
+  const lines = [
+    "Tunelito doctor",
+    `Status: ${report.ok ? "ok" : "error"}`,
+    `Errors: ${report.summary.errors}`,
+    `Warnings: ${report.summary.warnings}`,
+    `Info: ${report.summary.info}`,
+    "",
+  ];
+  for (const check of report.checks) {
+    lines.push(`[${check.status}] ${check.id}: ${check.message}`);
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 function commentsUsage() {

@@ -47,6 +47,7 @@ Expected behavior:
 - Fall back to `npx cloudflared@latest`.
 - Print clear failure guidance when no tunnel can start.
 - Stop the tunnel process on shutdown.
+- `tunelito doctor` may report `cloudflared` availability and tunnel/auth risks, but it must not start a tunnel or install packages.
 
 ## Agent Guardrails
 
@@ -62,6 +63,7 @@ Product-level local agent worker behavior:
 - Inbox claims must expire so a crashed or abandoned active-agent session does not permanently hide a pending comment.
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.
+- `tunelito doctor` may inspect agent ledger JSON, but it must not create, delete, or rewrite `.tunelito/agent/state.json`.
 - Agent output must be structured by comment ID so handled comments are not retried indefinitely.
 - `needs_followup` continuations must stay bounded by `--agent-max-passes` and stop if a follow-up pass reports no observable progress.
 

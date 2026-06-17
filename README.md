@@ -87,6 +87,12 @@ For local-only work:
 tunelito ./page.html --no-tunnel --open
 ```
 
+To diagnose local setup, target paths, comments inbox health, agent ledger JSON, port availability, tunnel availability, and risky auth/tunnel combinations without starting a server:
+
+```bash
+tunelito doctor ./page.html --json
+```
+
 For in-meeting collaboration without writing comments to disk:
 
 ```bash
@@ -119,6 +125,7 @@ tunelito ./page.html --live
 Tunelito 0.13.0
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito doctor [page.html|folder] [options]
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
@@ -155,6 +162,7 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  doctor                Run read-only local setup and safety diagnostics
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt

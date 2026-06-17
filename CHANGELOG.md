@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds `tunelito doctor`, a read-only diagnostic command for local setup, comments inbox health, agent ledger JSON, ports, tunnel availability, and safety warnings.
 - Adds `tunelito comments inspect`, a versioned JSON comments index for agents and diagnostics that derives from the existing Markdown inbox.
 
 ## 0.13.0 - 2026-06-17

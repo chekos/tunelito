@@ -54,6 +54,12 @@ about, run `tunelito --help` (or `npx --yes tunelito --help`) and read it; run
 `tunelito --version` to know which build you are on. Never invent a flag that is
 not in that output.
 
+When local setup is unclear, run `tunelito doctor <target> --json` before
+guessing. It is read-only: it checks runtime, target paths, comments inbox
+health, agent ledger JSON, port availability, tunnel availability, and risky
+auth/tunnel combinations without starting a server, opening a browser, creating
+state, or installing packages.
+
 ## Step 1 -- Start a session
 
 Default invocation, no flags needed:

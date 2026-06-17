@@ -18,6 +18,8 @@ sed -n '1,220p' docs/agents/ARCHITECTURE.md
 npm run check
 ```
 
+Use `node bin/tunelito.js doctor <target> --json` when local setup, comments inbox, agent ledger, port, tunnel, or auth/tunnel safety state is unclear. It is read-only and does not start a server.
+
 If the tree is dirty, identify which changes are yours before editing. Preserve unrelated user or agent work.
 
 ## Source Map

@@ -12,6 +12,7 @@ The CLI owns process orchestration:
 - choose persistent or ephemeral live mode
 - choose optional local agent worker settings
 - choose optional owner display identity
+- report read-only setup and safety diagnostics through `tunelito doctor`
 - generate the review key
 - start the local server
 - start the local agent worker when requested

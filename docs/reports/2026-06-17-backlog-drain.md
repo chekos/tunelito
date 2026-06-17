@@ -50,3 +50,38 @@ Verification:
 - `npm run ci` passed: check, agent config, docs check, 129 tests, smoke check, and package smoke check.
 - Multi-agent adversarial verification ran in two passes. Persistence/security review was clean. Contract/docs review found two issues: direct empty or visible-only Markdown files could look like clean empty indexes, and command-level coverage for `--out`/direct success was thin. Both were fixed and the contract reviewer re-check reported no remaining blockers.
 - No UI changed, so the `visual-qa-hig` equivalent was not applicable for this issue.
+
+## Issue #52: Add tunelito doctor for local setup, inbox, tunnel, and safety diagnostics
+
+Status: implemented, verified, committed, and closed. The exact commit SHA is recorded on GitHub issue #52.
+
+Priority: major security, because it diagnoses auth/tunnel exposure, agent ledger health, comments inbox parsing, and local setup without starting a session.
+
+Decision:
+
+- Added a read-only `tunelito doctor` command instead of folding diagnostics into the server-start path.
+- Implemented runtime, target, comments index, agent state, host/port, tunnel availability, and safety checks in one report.
+- Kept JSON as the stable agent/tool surface with `format: "tunelito-doctor"` and `version: 1`; text output is a human summary.
+- Reused the #49 comments index for comments diagnostics and `loadAgentState` for ledger parsing.
+- Treated `--no-auth` with tunnel enabled, non-loopback hosts, and agent-input trust as warnings; treated `--live` with agent workflows as an error because it conflicts with persistent inbox requirements.
+- Chose a non-binding port availability heuristic using `lsof` with a timeout. A first implementation briefly opened a TCP listener to test availability; adversarial review caught that as a read-only violation, so it was replaced. If a non-binding check cannot determine availability, doctor warns instead of binding.
+- Kept `doctor` from starting a Tunelito server, tunnel, browser, package install, or repair action.
+
+What changed:
+
+- `src/doctor.js`: added report assembly and diagnostic checks.
+- `bin/tunelito.js`: added `doctor` routing, argument parsing, JSON/text output, and top-level help.
+- `test/doctor.test.js`: covered runtime-only diagnostics, valid file/folder targets, custom comments path, damaged comments files, invalid agent state JSON, safety warnings, unavailable/unknown port checks, and read-only behavior.
+- `test/cli.test.js`: covered doctor argument parsing and JSON/exit-code behavior.
+- README, Mintlify CLI docs, `docs/agents/START_HERE.md`, `docs/agents/SECURITY_REVIEW.md`, `docs/agents/ARCHITECTURE.md`, `docs/agents/QUALITY_GATES.md`, bundled `docs-site/skill.md`, and `CHANGELOG.md` document the new read-only diagnostic path.
+
+Verification:
+
+- `npm run check` passed.
+- `node --test test/doctor.test.js test/cli.test.js` passed: 50 tests.
+- `node bin/tunelito.js doctor examples/simple-review.html --json --no-tunnel` passed with runtime, target, comments, agent-state, port, and no-tunnel diagnostics.
+- `npm run docs:check` passed.
+- `npm run pack:check` passed.
+- `npm run ci` passed: check, agent config, docs check, 139 tests, smoke check, and package smoke check.
+- Multi-agent adversarial verification ran in two passes. The docs/acceptance reviewer was clean. The security/read-only reviewer found the TCP listener problem in the initial port check; after replacement with a non-binding `lsof` heuristic, the re-check reported no remaining read-only/security blockers.
+- No UI changed, so the `visual-qa-hig` equivalent was not applicable for this issue.
