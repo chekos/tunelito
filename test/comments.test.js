@@ -365,6 +365,64 @@ test("comment store persists owner approval metadata", () => {
   });
 });
 
+test("comment store renames only comments tied to the same reviewer identity", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-reviewer-rename-"));
+  const commentsPath = join(dir, "page.comments.md");
+  const sourcePath = join(dir, "page.html");
+  const store = createCommentStore({ commentsPath, sourcePath });
+
+  const first = store.add({
+    author: "Clear Harbor",
+    authorRole: "visitor",
+    reviewerId: "r_first",
+    quote: "",
+    body: "First reviewer comment.",
+  });
+  const sameNameOtherReviewer = store.add({
+    author: "Clear Harbor",
+    authorRole: "visitor",
+    reviewerId: "r_second",
+    quote: "",
+    body: "Different reviewer comment.",
+  });
+  const sameReviewerOwnerRole = store.add({
+    author: "Chekos",
+    authorRole: "owner",
+    reviewerId: "r_first",
+    quote: "",
+    body: "Owner comment should keep owner semantics.",
+  });
+  const legacy = store.add({
+    author: "Clear Harbor",
+    authorRole: "visitor",
+    quote: "",
+    body: "Legacy comment without reviewer metadata.",
+  });
+
+  const changed = store.renameReviewer({
+    reviewerId: "r_first",
+    authorRole: "visitor",
+    author: "chekos",
+  });
+
+  assert.deepEqual(changed.map((comment) => comment.id), [first.id]);
+  assert.equal(store.all().find((comment) => comment.id === first.id).author, "chekos");
+  assert.equal(store.all().find((comment) => comment.id === sameNameOtherReviewer.id).author, "Clear Harbor");
+  assert.equal(store.all().find((comment) => comment.id === sameReviewerOwnerRole.id).author, "Chekos");
+  assert.equal(store.all().find((comment) => comment.id === legacy.id).author, "Clear Harbor");
+
+  const markdown = readFileSync(commentsPath, "utf8");
+  assert.match(markdown, /## chekos at /);
+  assert.match(markdown, /reviewer: `r_first`/);
+  assert.match(markdown, /## Clear Harbor at /);
+  assert.match(markdown, /Legacy comment without reviewer metadata\./);
+
+  const restored = loadCommentsFromMarkdown(commentsPath);
+  assert.equal(restored.find((comment) => comment.id === first.id).author, "chekos");
+  assert.equal(restored.find((comment) => comment.id === sameNameOtherReviewer.id).author, "Clear Harbor");
+  assert.equal(restored.find((comment) => comment.id === legacy.id).reviewerId, undefined);
+});
+
 test("renderCommentsMarkdown handles an empty comment list", () => {
   const markdown = renderCommentsMarkdown({ comments: [], sourcePath: "/tmp/example.html" });
   assert.match(markdown, /_No comments yet\._/);

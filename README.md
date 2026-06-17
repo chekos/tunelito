@@ -79,7 +79,7 @@ To label your own comments as the session owner:
 tunelito ./page.html --owner "Chekos"
 ```
 
-Tunelito assigns everyone else a random editable display name, so comments from multiple reviewers are easy to tell apart.
+Tunelito assigns everyone else a friendly editable display name, so comments from multiple reviewers are easy to tell apart.
 
 For local-only work:
 
@@ -99,7 +99,7 @@ tunelito ./page.html --live
 - Tap `Comment` and leave a note on the selected text.
 - Add a `Page note` without selecting text.
 - Add a `Site note` that appears on every page in a folder review.
-- Keep or edit their assigned display name before commenting.
+- Keep or edit their assigned display name. Renaming updates earlier comments from the same reviewer identity.
 - See other comments appear live.
 - In `--live`, see peer cursors and live selection highlights when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
@@ -261,7 +261,7 @@ _Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 
 If a site comment is created from selected text, Tunelito keeps the quote for context and highlights it on the origin page only.
 
-Tunelito also stores hidden metadata comments so the live session can be restored after a restart.
+Tunelito also stores hidden metadata comments so the live session can be restored after a restart. That metadata includes a stable reviewer identity for new comments, which lets a reviewer rename themselves and update earlier comments from the same browser session. Older comments without reviewer identity metadata are left unchanged during renames instead of being guessed by matching display names.
 
 In `--live`, comments are not written to markdown and are not restored after restart.
 

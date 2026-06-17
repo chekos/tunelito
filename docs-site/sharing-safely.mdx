@@ -17,6 +17,8 @@ The key is bearer access. Anyone with the full URL can view the page and leave c
 
 The first valid request sets a short-lived HTTP-only cookie so page assets and WebSocket sync keep working.
 
+Reviewer identity IDs are only used to support display-name renames. They are not authentication, authorization, or proof of who a reviewer is.
+
 ## Owner labels
 
 `--owner <name>` adds a separate owner key to the printed `Local:` URL. Comments from that owner session are marked as owner-authored, while public tunnel URLs still only carry the review key.

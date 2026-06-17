@@ -10,6 +10,7 @@
   const accessKey = locationParams.get("tunelito_key") || "";
   const ownerKey = locationParams.get("tunelito_owner_key") || "";
   const pagePath = script?.dataset?.pagePath || location.pathname || "/";
+  const initialIdentity = createInitialIdentity(configuredDefaultAuthor, configuredViewerRole, configuredOwnerSession);
   const state = {
     socket: null,
     pagePath,
@@ -25,7 +26,9 @@
     viewerCount: null,
     viewerRole: configuredViewerRole,
     ownerSession: configuredOwnerSession,
-    author: initialAuthor(configuredDefaultAuthor, configuredViewerRole, configuredOwnerSession),
+    reviewerId: initialIdentity.reviewerId,
+    author: initialIdentity.author,
+    pendingReviewerRename: null,
     comments: [],
     agentStatusUrl: "",
     agentStatuses: {},
@@ -42,6 +45,7 @@
   addDocumentHighlightStyle();
   persistIdentity();
   const ui = mountUi();
+  updateIdentityUi();
   connect();
   bindSelection();
 
@@ -51,11 +55,13 @@
     if (accessKey) socketUrl.searchParams.set("tunelito_key", accessKey);
     if (ownerKey) socketUrl.searchParams.set("tunelito_owner_key", ownerKey);
     socketUrl.searchParams.set("tunelito_page", state.pagePath);
+    if (state.reviewerId) socketUrl.searchParams.set("tunelito_reviewer_id", state.reviewerId);
     const socket = new WebSocket(socketUrl);
     state.socket = socket;
 
     socket.addEventListener("open", () => {
       state.connected = true;
+      sendPendingReviewerRename();
       renderStatus();
     });
     socket.addEventListener("close", () => {
@@ -70,15 +76,18 @@
         state.liveMode = Boolean(message.liveMode);
         state.pagePath = message.pagePath || state.pagePath;
         state.peerId = message.peerId || "";
-        state.viewerRole = message.authorRole === "owner" ? "owner" : state.viewerRole;
+        state.viewerRole = message.authorRole === "owner" ? "owner" : "visitor";
         state.ownerSession = message.ownerSession || state.ownerSession;
+        state.reviewerId = message.reviewerId || state.reviewerId;
         if (state.viewerRole === "owner" && message.defaultAuthor && !state.author) {
           state.author = message.defaultAuthor;
-          ui.name.value = state.author;
-          persistIdentity();
         }
+        persistIdentity();
+        updateIdentityUi();
         state.viewerCount = message.viewerCount;
         state.comments = message.comments || [];
+        queueCurrentAuthorRenameIfNeeded();
+        applyPendingReviewerRename();
         state.agentStatusUrl = message.agentStatusUrl || "";
         setAgentStatuses(message.agentStatuses);
         scheduleAgentStatusPoll(2500);
@@ -93,6 +102,8 @@
       } else if (message.type === "comment-updated") {
         updateComment(message.comment);
         fetchAgentStatuses();
+      } else if (message.type === "reviewer-renamed") {
+        handleReviewerRenamed(message);
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
@@ -250,11 +261,62 @@
           line-height: 1;
         }
         .identity {
-          display: flex;
-          gap: 8px;
           padding: 12px 14px;
           border-bottom: 1px solid #eef2f7;
           background: #f8fafc;
+        }
+        .identity-card {
+          display: grid;
+          gap: 8px;
+          min-width: 0;
+          border: 1px solid #dbe5ef;
+          border-radius: 8px;
+          background: #fff;
+          padding: 10px;
+        }
+        .identity-label {
+          color: #64748b;
+          font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
+        .identity-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+        .identity-name {
+          flex: 1;
+          min-width: 0;
+          overflow-wrap: anywhere;
+          color: #172033;
+          font: 800 15px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .identity-edit {
+          flex: 0 0 auto;
+          border: 1px solid #d7dde8;
+          border-radius: 7px;
+          background: #fff;
+          color: #0f766e;
+          cursor: pointer;
+          font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 7px 9px;
+        }
+        .identity-edit:hover { border-color: #99f6e4; background: #f0fdfa; }
+        .identity-edit:focus-visible {
+          outline: 2px solid #2dd4bf;
+          outline-offset: 2px;
+        }
+        .identity-form {
+          display: grid;
+          gap: 8px;
+        }
+        .identity-form[hidden] { display: none; }
+        .identity-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
         }
         .note-actions {
           display: flex;
@@ -426,6 +488,7 @@
           color: #64748b;
           font-size: 12px;
           margin-bottom: 4px;
+          overflow-wrap: anywhere;
         }
         .meta-row .meta { margin-bottom: 0; }
         .body {
@@ -605,7 +668,11 @@
             font-size: 16px;
           }
           button.secondary, button.primary {
-            min-height: 42px;
+            min-height: 44px;
+            padding: 10px 12px;
+          }
+          .identity-edit {
+            min-height: 44px;
             padding: 10px 12px;
           }
           .approve-button {
@@ -643,7 +710,20 @@
           <button class="icon-button" title="Close">×</button>
         </div>
         <div class="identity">
-          <input class="name" autocomplete="name" placeholder="Your name" />
+          <div class="identity-card">
+            <div class="identity-label">Assigned as</div>
+            <div class="identity-row">
+              <strong class="identity-name"></strong>
+              <button class="identity-edit" type="button" title="Edit reviewer name" aria-label="Edit reviewer name">Edit</button>
+            </div>
+            <form class="identity-form" hidden>
+              <input class="name" autocomplete="name" placeholder="Reviewer name" />
+              <div class="identity-actions">
+                <button class="secondary" data-action="cancel-name" type="button">Cancel</button>
+                <button class="primary" data-action="save-name" type="submit">Save</button>
+              </div>
+            </form>
+          </div>
         </div>
         <div class="note-actions" aria-label="Add unanchored comment">
           <button class="secondary" data-action="page-note">Page note</button>
@@ -662,18 +742,26 @@
     const launcher = shadow.querySelector(".launcher");
     const composer = shadow.querySelector(".composer");
     const selection = shadow.querySelector(".selection");
+    const identityCard = shadow.querySelector(".identity-card");
+    const identityName = shadow.querySelector(".identity-name");
+    const identityEdit = shadow.querySelector(".identity-edit");
+    const identityForm = shadow.querySelector(".identity-form");
     const name = shadow.querySelector(".name");
     const markdownLink = shadow.querySelector(".link");
     shadow.querySelector(".title strong").textContent = sourceName;
     markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
     markdownLink.hidden = configuredLiveMode;
-    name.value = state.author;
 
     launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
     shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
-    name.addEventListener("input", () => {
-      state.author = name.value.trim();
-      persistIdentity();
+    identityEdit.addEventListener("click", () => openIdentityEditor());
+    identityForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      commitIdentityName();
+    });
+    identityForm.querySelector("[data-action='cancel-name']").addEventListener("click", () => closeIdentityEditor({ restoreFocus: true }));
+    name.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeIdentityEditor({ restoreFocus: true });
     });
     selection.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -705,6 +793,10 @@
       status: shadow.querySelector(".status"),
       mini: shadow.querySelector(".mini"),
       markdownLink,
+      identityCard,
+      identityName,
+      identityEdit,
+      identityForm,
       name,
     };
   }
@@ -719,6 +811,113 @@
     ui.panel.classList.toggle("open", open);
     ui.launcher.classList.toggle("active", open);
     ui.launcher.setAttribute("aria-expanded", String(open));
+  }
+
+  function updateIdentityUi() {
+    const author = state.author || (state.viewerRole === "owner" ? (configuredDefaultAuthor || "Owner") : "Reviewer");
+    ui.identityName.textContent = author;
+    ui.name.value = author;
+  }
+
+  function openIdentityEditor() {
+    ui.identityForm.hidden = false;
+    ui.identityCard.classList.add("editing");
+    ui.name.value = state.author || "";
+    ui.name.focus();
+    ui.name.select();
+  }
+
+  function closeIdentityEditor({ restoreFocus = false } = {}) {
+    ui.identityForm.hidden = true;
+    ui.identityCard.classList.remove("editing");
+    ui.name.value = state.author || "";
+    if (restoreFocus) ui.identityEdit.focus({ preventScroll: true });
+  }
+
+  function commitIdentityName() {
+    const author = ui.name.value.trim();
+    if (!author) {
+      renderStatus("Reviewer name is required.");
+      ui.name.focus();
+      return;
+    }
+
+    renameCurrentReviewer(author);
+    closeIdentityEditor({ restoreFocus: true });
+  }
+
+  function renameCurrentReviewer(author) {
+    if (state.author === author) return;
+    state.author = author;
+    persistIdentity();
+    state.pendingReviewerRename = {
+      reviewerId: state.reviewerId,
+      authorRole: state.viewerRole,
+      author,
+    };
+    renameVisibleComments(state.reviewerId, state.viewerRole, author);
+    updateIdentityUi();
+    sendPendingReviewerRename();
+  }
+
+  function applyPendingReviewerRename() {
+    const pending = state.pendingReviewerRename;
+    if (!pending) return;
+    renameVisibleComments(pending.reviewerId, pending.authorRole, pending.author);
+    sendPendingReviewerRename();
+  }
+
+  function queueCurrentAuthorRenameIfNeeded() {
+    const author = currentAuthor("");
+    if (!author || !state.reviewerId) return;
+    const hasOlderCommentAuthor = state.comments.some((comment) => (
+      comment?.reviewerId === state.reviewerId
+      && normalizeAuthorRole(comment.authorRole) === normalizeAuthorRole(state.viewerRole)
+      && comment.author !== author
+    ));
+    if (!hasOlderCommentAuthor) return;
+    state.pendingReviewerRename = {
+      reviewerId: state.reviewerId,
+      authorRole: state.viewerRole,
+      author,
+    };
+  }
+
+  function sendPendingReviewerRename() {
+    const pending = state.pendingReviewerRename;
+    if (!pending || state.socket?.readyState !== WebSocket.OPEN) return;
+    state.socket.send(JSON.stringify({
+      type: "rename-reviewer",
+      author: pending.author,
+    }));
+  }
+
+  function handleReviewerRenamed(message) {
+    if (message?.author) {
+      renameVisibleComments(message.reviewerId, message.authorRole, message.author);
+    }
+    const pending = state.pendingReviewerRename;
+    if (
+      pending
+      && message?.author === pending.author
+      && message?.reviewerId === pending.reviewerId
+      && normalizeAuthorRole(message?.authorRole) === normalizeAuthorRole(pending.authorRole)
+    ) {
+      state.pendingReviewerRename = null;
+    }
+  }
+
+  function renameVisibleComments(reviewerId, authorRole, author) {
+    if (!reviewerId) return;
+    let changed = false;
+    state.comments = state.comments.map((comment) => {
+      if (comment?.reviewerId !== reviewerId || normalizeAuthorRole(comment.authorRole) !== normalizeAuthorRole(authorRole) || comment.author === author) {
+        return comment;
+      }
+      changed = true;
+      return { ...comment, author };
+    });
+    if (changed) renderComments();
   }
 
   function bindSelection() {
@@ -878,6 +1077,7 @@
       body,
       author,
       authorRole: state.viewerRole,
+      reviewerId: state.reviewerId,
       pagePath: state.pagePath,
     };
     if (state.liveMode) {
@@ -1241,7 +1441,7 @@
     state.pendingCursor = {
       x: event.pageX,
       y: event.pageY,
-      author: currentAuthor("Guest"),
+      author: currentAuthor("Reviewer"),
     };
     if (state.cursorTimer) return;
     state.cursorTimer = setTimeout(() => {
@@ -1263,7 +1463,7 @@
         textStart: selection.textStart,
         textEnd: selection.textEnd,
         path: selection.path,
-        author: currentAuthor("Guest"),
+        author: currentAuthor("Reviewer"),
       },
     });
   }
@@ -1285,7 +1485,7 @@
       state.peerCursors.set(peerId, entry);
     }
 
-    entry.element.querySelector(".label").textContent = event.author || "Guest";
+    entry.element.querySelector(".label").textContent = event.author || "Reviewer";
     entry.element.style.opacity = "1";
     entry.element.style.transform = `translate3d(${Math.round(event.x - window.scrollX)}px, ${Math.round(event.y - window.scrollY)}px, 0)`;
     clearTimeout(entry.timer);
@@ -1566,26 +1766,32 @@
     return text.length > length ? `${text.slice(0, length - 1)}…` : text;
   }
 
-  function initialAuthor(defaultAuthor, viewerRole, ownerSession) {
+  function createInitialIdentity(defaultAuthor, viewerRole, ownerSession) {
     const storedAuthor = storedValue("tunelito:author");
     const storedRole = storedValue("tunelito:authorRole");
     const storedOwnerSession = storedValue("tunelito:ownerSession");
+    const storedReviewerId = normalizeReviewerId(storedValue("tunelito:reviewerId"));
     if (viewerRole === "owner") {
-      return storedRole === "owner" && storedOwnerSession === ownerSession && storedAuthor
+      const reviewerId = normalizeReviewerId(ownerSession) || storedReviewerId || createReviewerId();
+      const author = storedRole === "owner" && storedOwnerSession === ownerSession && storedAuthor
         ? storedAuthor
-        : (defaultAuthor || randomVisitorName());
+        : (defaultAuthor || friendlyReviewerName(reviewerId));
+      return { reviewerId, author };
     }
-    return storedRole !== "owner" && storedAuthor ? storedAuthor : randomVisitorName();
+    const reviewerId = storedRole !== "owner" && storedReviewerId ? storedReviewerId : createReviewerId();
+    const author = storedRole !== "owner" && storedAuthor ? storedAuthor : friendlyReviewerName(reviewerId);
+    return { reviewerId, author };
   }
 
   function currentAuthor(fallback) {
-    return state.author || ui.name.value.trim() || fallback;
+    return state.author || ui?.name?.value.trim() || fallback;
   }
 
   function persistIdentity() {
     storeValue("tunelito:author", state.author);
     storeValue("tunelito:authorRole", state.viewerRole);
     storeValue("tunelito:ownerSession", state.ownerSession);
+    storeValue("tunelito:reviewerId", state.reviewerId);
   }
 
   function storedValue(key) {
@@ -1604,19 +1810,40 @@
     }
   }
 
-  function randomVisitorName() {
-    const bytes = new Uint8Array(3);
+  function createReviewerId() {
+    const bytes = new Uint8Array(9);
     if (window.crypto?.getRandomValues) {
       window.crypto.getRandomValues(bytes);
     } else {
       for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
     }
-    const code = Array.from(bytes, (byte) => byte.toString(36).padStart(2, "0")).join("").toUpperCase();
-    return `Guest ${code}`;
+    return `r_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function friendlyReviewerName(reviewerId) {
+    const adjectives = ["Bright", "Clear", "Steady", "Fresh", "Kind", "Open", "True", "Calm", "Sharp", "Warm", "Quick", "Solid"];
+    const nouns = ["Harbor", "Signal", "Cedar", "Bridge", "Canvas", "Field", "Anchor", "Ledger", "Beacon", "Marker", "Summit", "Compass"];
+    let hash = 0;
+    for (const char of String(reviewerId || "")) {
+      hash = ((hash * 31) + char.charCodeAt(0)) >>> 0;
+    }
+    return `${adjectives[hash % adjectives.length]} ${nouns[Math.floor(hash / adjectives.length) % nouns.length]}`;
+  }
+
+  function normalizeReviewerId(value) {
+    return String(value || "")
+      .replace(/\u0000/g, "")
+      .trim()
+      .slice(0, 160)
+      .replace(/[^A-Za-z0-9_-]/g, "");
   }
 
   function normalizeScope(scope) {
     return String(scope || "").toLowerCase() === "site" ? "site" : "page";
+  }
+
+  function normalizeAuthorRole(role) {
+    return String(role || "").toLowerCase() === "owner" ? "owner" : "visitor";
   }
 
   function scopeLabel(scope) {

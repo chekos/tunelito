@@ -5,7 +5,7 @@ description: "How Tunelito stores reviewer comments and restores live session st
 
 Reviewers can select text and leave anchored comments from the injected Tunelito panel. They can also add unanchored page notes or site-wide notes without selecting text. Comments sync live to connected browsers and are written to Markdown immediately.
 
-Each browser gets a random editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Owner-keyed sessions can also approve a visitor comment for agent work from the comments panel.
+Each browser gets a friendly editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Owner-keyed sessions can also approve a visitor comment for agent work from the comments panel.
 
 On mobile, Tunelito keeps the always-visible control small: a compact speech-bubble button with a count badge sits above common bottom navigation. Tap it to open the comments sheet.
 
@@ -82,7 +82,7 @@ Use the same heading rhythm across every itinerary page.
 _Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 ```
 
-Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart.
+Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart. New comments include a stable reviewer identity in that metadata, so renaming yourself updates earlier comments from the same browser session. Older comments without reviewer identity metadata stay unchanged during renames instead of being guessed by display name.
 
 ## Agent inbox workflow
 

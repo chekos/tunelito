@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Adds owner approval for visitor comments, letting owner-keyed sessions approve a specific visitor comment for local-agent work without rewriting it as an owner comment.
+- Replaces `Guest <code>` reviewer names with friendly assigned names and lets reviewers rename prior comments tied to the same reviewer identity.
 
 ## 0.12.0 - 2026-06-12
 

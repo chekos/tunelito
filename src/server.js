@@ -5,7 +5,7 @@ import { createReadStream, existsSync, readFileSync, readdirSync, realpathSync, 
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
-import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, renderCommentsMarkdown } from "./comments.js";
+import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
@@ -14,6 +14,7 @@ const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js"
 export const ACCESS_KEY_PARAM = "tunelito_key";
 export const OWNER_KEY_PARAM = "tunelito_owner_key";
 export const PAGE_PARAM = "tunelito_page";
+const REVIEWER_ID_PARAM = "tunelito_reviewer_id";
 const ACCESS_KEY_COOKIE = "tunelito_key";
 const OWNER_KEY_COOKIE = "tunelito_owner_key";
 
@@ -86,6 +87,9 @@ export async function createTunelitoServer(options) {
     }
     req.tunelitoAuthorRole = authorizeOwnerRequest(req, url, ownerKey).ok ? "owner" : "visitor";
     req.tunelitoPagePath = normalizePagePath(url.searchParams.get(PAGE_PARAM));
+    req.tunelitoReviewerId = req.tunelitoAuthorRole === "owner"
+      ? ownerSessionId
+      : normalizeReviewerId(url.searchParams.get(REVIEWER_ID_PARAM));
     hub.handleUpgrade(req, socket);
   });
 
@@ -139,11 +143,13 @@ export async function createTunelitoServer(options) {
   hub.on("connection", (client, req) => {
     const pagePath = normalizePagePath(req?.tunelitoPagePath);
     const visibleComments = commentsForPage(pagePath);
+    const peerId = createPeerId();
     const peer = {
-      id: createPeerId(),
+      id: peerId,
       connectedAt: new Date().toISOString(),
       pagePath,
       authorRole: req?.tunelitoAuthorRole === "owner" ? "owner" : "visitor",
+      reviewerId: normalizeReviewerId(req?.tunelitoReviewerId) || reviewerIdFromPeerId(peerId),
     };
     peers.set(client, peer);
     client.send({
@@ -162,6 +168,7 @@ export async function createTunelitoServer(options) {
       authorRole: peer.authorRole,
       defaultAuthor: peer.authorRole === "owner" ? ownerName : "",
       ownerSession: peer.authorRole === "owner" ? ownerSessionId : "",
+      reviewerId: peer.reviewerId,
     });
     if (liveMode) {
       broadcastToPage(pagePath, { type: "peer-joined", peer }, { except: client });
@@ -193,6 +200,7 @@ export async function createTunelitoServer(options) {
           ...(event.comment || {}),
           ownerApproval: null,
           authorRole: peer?.authorRole === "owner" ? "owner" : "visitor",
+          reviewerId: peer?.reviewerId || normalizeReviewerId(event.comment?.reviewerId),
           pagePath: peer?.pagePath || normalizePagePath(event.comment?.pagePath),
         };
         if (input.authorRole === "owner" && ownerName && !String(input.author || "").trim()) {
@@ -201,6 +209,30 @@ export async function createTunelitoServer(options) {
         const comment = comments.add(input);
         events.emit("comment", comment);
         broadcastComment(comment);
+      } catch (error) {
+        client.send({ type: "error", message: error.message });
+      }
+    } else if (event.type === "rename-reviewer") {
+      try {
+        if (!peer) throw new Error("Reviewer connection is unavailable.");
+        const author = cleanOwnerName(event.author || event.name);
+        if (!author) throw new Error("Reviewer name is required.");
+        const changed = comments.renameReviewer({
+          reviewerId: peer.reviewerId,
+          authorRole: peer.authorRole,
+          author,
+        });
+        client.send({
+          type: "reviewer-renamed",
+          reviewerId: peer.reviewerId,
+          authorRole: peer.authorRole,
+          author,
+          changedIds: changed.map((comment) => comment.id),
+        });
+        for (const comment of changed) {
+          events.emit("comment-updated", comment);
+          broadcastCommentUpdate(comment);
+        }
       } catch (error) {
         client.send({ type: "error", message: error.message });
       }
@@ -638,6 +670,10 @@ function rejectUpgrade(socket, status, message) {
 
 function createPeerId() {
   return `p_${randomBytes(9).toString("base64url")}`;
+}
+
+function reviewerIdFromPeerId(peerId) {
+  return `r_${String(peerId || "").replace(/^p_/, "")}`;
 }
 
 function findPeerClient(peers, peerId, pagePath = "") {

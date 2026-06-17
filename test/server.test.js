@@ -277,8 +277,16 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /aria-label="Open Tunelito comments"/);
     assert.match(clientScript, /work-badge/);
     assert.match(clientScript, /Agent work status/);
+    assert.match(clientScript, /Assigned as/);
+    assert.match(clientScript, /identity-card/);
+    assert.match(clientScript, /friendlyReviewerName/);
+    assert.match(clientScript, /rename-reviewer/);
+    assert.match(clientScript, /pendingReviewerRename/);
+    assert.match(clientScript, /queueCurrentAuthorRenameIfNeeded/);
     assert.match(clientScript, /width: 44px;\s+height: 44px;/);
+    assert.match(clientScript, /button\.secondary, button\.primary \{\s+min-height: 44px;/);
     assert.doesNotMatch(clientScript, /Comments <span class="count"/);
+    assert.doesNotMatch(clientScript, /Guest [A-Z0-9]/);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
@@ -521,6 +529,16 @@ test("live mode keeps comments in memory and relays peer signaling", async () =>
     const liveEvent = second.messages.find((message) => message.type === "live-event");
     assert.equal(liveEvent.from, firstHello.peerId);
     assert.equal(liveEvent.event.type, "cursor");
+
+    first.socket.send(JSON.stringify({
+      type: "rename-reviewer",
+      author: "Ada Lovelace",
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment-updated" && message.comment.id === "c_live_1"));
+    const renameUpdate = second.messages.find((message) => message.type === "comment-updated" && message.comment.id === "c_live_1").comment;
+    assert.equal(renameUpdate.author, "Ada Lovelace");
+    assert.equal(renameUpdate.reviewerId, firstHello.reviewerId);
+    assert.equal(existsSync(commentsPath), false);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
@@ -767,6 +785,103 @@ test("server assigns owner identity only to owner-key sessions", async () => {
     assert.match(markdown, /## Edited Owner \(owner\) at /);
     assert.match(markdown, /author role: `owner`/);
     assert.match(markdown, /## Visitor at /);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server renames prior comments by reviewer identity instead of display name", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-reviewer-rename-server-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  const sourceHtml = "<!doctype html><html><body><main>Rename draft</main></body></html>";
+  writeFileSync(htmlPath, sourceHtml);
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    const firstSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    firstSocketUrl.searchParams.set("tunelito_reviewer_id", "r_first");
+    const first = openJsonSocket(firstSocketUrl);
+    sockets.push(first.socket);
+    await waitFor(first.socket, "open");
+    await waitUntil(() => first.messages.some((message) => message.type === "hello"));
+    const firstHello = first.messages.find((message) => message.type === "hello");
+    assert.equal(firstHello.reviewerId, "r_first");
+
+    const secondSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    secondSocketUrl.searchParams.set("tunelito_reviewer_id", "r_second");
+    const second = openJsonSocket(secondSocketUrl);
+    sockets.push(second.socket);
+    await waitFor(second.socket, "open");
+    await waitUntil(() => second.messages.some((message) => message.type === "hello"));
+
+    first.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Clear Harbor",
+        quote: "Rename draft",
+        body: "First reviewer feedback.",
+        reviewerId: "r_second",
+        textStart: 0,
+        textEnd: 12,
+      },
+    }));
+    await waitUntil(() => first.messages.some((message) => message.type === "comment" && message.comment.body === "First reviewer feedback."));
+    const firstComment = first.messages.find((message) => message.type === "comment" && message.comment.body === "First reviewer feedback.").comment;
+    assert.equal(firstComment.reviewerId, "r_first");
+
+    second.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Clear Harbor",
+        quote: "Rename draft",
+        body: "Second reviewer feedback.",
+        textStart: 0,
+        textEnd: 12,
+      },
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback."));
+    const secondComment = second.messages.find((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback.").comment;
+    assert.equal(secondComment.reviewerId, "r_second");
+
+    first.socket.send(JSON.stringify({
+      type: "rename-reviewer",
+      reviewerId: "r_second",
+      author: "chekos",
+    }));
+
+    await waitUntil(() => first.messages.some((message) => message.type === "reviewer-renamed" && message.author === "chekos"));
+    await waitUntil(() => first.messages.some((message) => message.type === "comment-updated" && message.comment.id === firstComment.id));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment-updated" && message.comment.id === firstComment.id));
+    const updated = first.messages.find((message) => message.type === "comment-updated" && message.comment.id === firstComment.id).comment;
+    assert.equal(updated.author, "chekos");
+    assert.equal(updated.reviewerId, "r_first");
+    assert.equal(second.messages.some((message) => message.type === "comment-updated" && message.comment.id === secondComment.id), false);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /## chekos at /);
+    assert.match(markdown, /First reviewer feedback\./);
+    assert.match(markdown, /## Clear Harbor at /);
+    assert.match(markdown, /Second reviewer feedback\./);
+    assert.match(markdown, /reviewer: `r_first`/);
+    assert.match(markdown, /reviewer: `r_second`/);
+
+    const fresh = openJsonSocket(firstSocketUrl);
+    sockets.push(fresh.socket);
+    await waitFor(fresh.socket, "open");
+    await waitUntil(() => fresh.messages.some((message) => message.type === "hello"));
+    const restored = fresh.messages.find((message) => message.type === "hello").comments;
+    assert.equal(restored.find((comment) => comment.id === firstComment.id).author, "chekos");
+    assert.equal(restored.find((comment) => comment.id === secondComment.id).author, "Clear Harbor");
+    assert.equal(readFileSync(htmlPath, "utf8"), sourceHtml);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
