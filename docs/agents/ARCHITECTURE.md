@@ -25,7 +25,9 @@ The server owns local IO and transport:
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
 - mark owner-key sessions so owner comments can carry `authorRole: owner`
+- let owner-key sessions approve a specific visitor comment for local-agent handling without changing the source HTML
 - accept WebSocket comment events
+- tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
 - expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
@@ -61,7 +63,9 @@ The browser client owns reviewer interaction:
 - render highlights and sidebar entries
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
 - render peer cursors and live selection highlights in `--live`
-- assign editable random visitor names, or seed the owner name for owner-key sessions
+- render optional pointer halos locally, and broadcast them as ephemeral live events in `--live`
+- assign friendly editable visitor names, or seed the owner name for owner-key sessions
+- persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to
 
 ## Invariants
@@ -72,8 +76,10 @@ The browser client owns reviewer interaction:
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep `--live` comments ephemeral; do not write them to markdown.
+- Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as comment metadata, not authentication; the review key remains the access gate.
+- Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never spawn a local agent worker for `--agent-session`; active-agent mode watches comments, prints prompts, and writes session metadata for the current agent session.
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.

@@ -14,7 +14,9 @@ The browser client handles:
 - text selection
 - comment composition
 - comment sidebar
+- assigned reviewer names and explicit renaming
 - unanchored page notes and site-wide notes
+- optional presenter pointer halos on fine-pointer devices
 - live sync over WebSocket, plus WebRTC data channels in `--live`
 - highlight rendering when the browser supports it
 - reload notices when the file changes
@@ -60,7 +62,7 @@ site/
 site.comments.md
 ```
 
-The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML file and treat site feedback as applying across the folder.
+The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart and tie new comments to a stable reviewer identity for renames. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML file and treat site feedback as applying across the folder.
 
 The local agent worker and active-agent inbox commands do not edit this Markdown file. They treat comments as an append-only inbox and write resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices. It also stores continuation state for comments that need multiple bounded passes, so the next agent prompt can continue from saved remaining tasks instead of redoing completed work.
 

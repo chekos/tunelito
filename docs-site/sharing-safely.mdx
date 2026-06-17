@@ -17,6 +17,8 @@ The key is bearer access. Anyone with the full URL can view the page and leave c
 
 The first valid request sets a short-lived HTTP-only cookie so page assets and WebSocket sync keep working.
 
+Reviewer identity IDs are only used to support display-name renames. They are not authentication, authorization, or proof of who a reviewer is.
+
 ## Owner labels
 
 `--owner <name>` adds a separate owner key to the printed `Local:` URL. Comments from that owner session are marked as owner-authored, while public tunnel URLs still only carry the review key.
@@ -35,7 +37,7 @@ WebRTC data channels are encrypted by the browser when peer-to-peer connectivity
 
 ## Local agent worker
 
-The agent worker is explicit opt-in. When `--agent` is enabled, reviewer comments become input to a local CLI that can edit files in the served folder. Use it for trusted review sessions, add `--agent-trigger "@agent"` so only marked comments are actionable, or combine owner identity with `--agent-policy owner-or-mention --agent-trigger "@agent"` for owner-led sessions. Tunelito blocks the agent state file, temp file, and derived log file from static serving even if a custom `--agent-state` path is inside the served folder.
+The agent worker is explicit opt-in. When `--agent` is enabled, reviewer comments become input to a local CLI that can edit files in the served folder. Use it for trusted review sessions, add `--agent-trigger "@agent"` so only marked comments are actionable, or combine owner identity with `--agent-policy owner-or-mention --agent-trigger "@agent"` for owner-led sessions. Owner-keyed sessions can approve a specific visitor comment for agent work, but that approval still only matters when `--agent`, `--agent-command`, or `--agent-session` is explicitly enabled. Tunelito blocks the agent state file, temp file, and derived log file from static serving even if a custom `--agent-state` path is inside the served folder.
 
 `--agent-session` has the same trust boundary but does not spawn a child process. The server process watches comments, claims actionable feedback for the current agent session, prints prompts with `tunelito inbox record --claim ...` commands, shows the current work on browser comment cards and through `tunelito inbox status`, and writes `.tunelito/session.json`. Reviewer comments still become instructions to the current local agent session, so use the same owner or mention policies for shared calls.
 

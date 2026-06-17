@@ -79,7 +79,7 @@ To label your own comments as the session owner:
 tunelito ./page.html --owner "Chekos"
 ```
 
-Tunelito assigns everyone else a random editable display name, so comments from multiple reviewers are easy to tell apart.
+Tunelito assigns everyone else a friendly editable display name, so comments from multiple reviewers are easy to tell apart.
 
 For local-only work:
 
@@ -99,9 +99,10 @@ tunelito ./page.html --live
 - Tap `Comment` and leave a note on the selected text.
 - Add a `Page note` without selecting text.
 - Add a `Site note` that appears on every page in a folder review.
-- Keep or edit their assigned display name before commenting.
+- Keep or edit their assigned display name. Renaming updates earlier comments from the same reviewer identity.
+- Toggle a local pointer halo on fine-pointer devices when pointing during a call.
 - See other comments appear live.
-- In `--live`, see peer cursors and live selection highlights when the browser can connect peer-to-peer.
+- In `--live`, see peer cursors, live selection highlights, and pointer halos when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
 
 ## What You Control
@@ -131,7 +132,7 @@ Options:
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent fallback polling interval in seconds (default: 120)
-  --agent-policy <mode> Which comments the agent handles: all|mention|owner|owner-or-mention (default: all)
+  --agent-policy <mode> Which comments are actionable: all|mention|owner|owner-or-mention (default: all)
   --agent-trigger <txt> Marker for mention policies, or "all" (default: all)
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
@@ -181,7 +182,7 @@ Or tell your agent: "run `npx --yes tunelito skill show` and install the skill i
 
 ## How It Works
 
-Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, and reload notices. The original HTML files are not modified.
+Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original HTML files are not modified.
 
 The server also:
 
@@ -189,7 +190,7 @@ The server also:
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
-- relays WebRTC signaling and live fallback events in `--live`
+- relays WebRTC signaling and ephemeral live fallback events, including peer cursors and pointer halos, in `--live`
 - starts `cloudflared tunnel --url <local-url>` when available
 - falls back to `npx cloudflared@latest` when `cloudflared` is not installed
 
@@ -199,7 +200,7 @@ Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback pac
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
 
-When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and the local agent worker receives the owner name and each comment's author role. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner.
+When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and that owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name, each comment's author role, and any owner approval metadata. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner and approve visitor comments for agent handling.
 
 `--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
@@ -261,13 +262,13 @@ _Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 
 If a site comment is created from selected text, Tunelito keeps the quote for context and highlights it on the origin page only.
 
-Tunelito also stores hidden metadata comments so the live session can be restored after a restart.
+Tunelito also stores hidden metadata comments so the live session can be restored after a restart. That metadata includes a stable reviewer identity for new comments, which lets a reviewer rename themselves and update earlier comments from the same browser session. Older comments without reviewer identity metadata are left unchanged during renames instead of being guessed by matching display names.
 
 In `--live`, comments are not written to markdown and are not restored after restart.
 
 ## Agent Comment Loop
 
-The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name and each comment's `authorRole`, so host instructions can ask the agent to prefer owner comments or wait for owner approval.
+The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name, each comment's `authorRole`, and owner approval metadata for approved visitor comments. Host instructions can ask the agent to prefer owner comments or wait for owner approval.
 
 If you are already inside an agent session, let the current agent own the loop:
 
@@ -307,13 +308,13 @@ Use `--agent-trigger "@agent"` or another marker when you want stricter sessions
 tunelito ./site --agent codex --agent-trigger "@agent"
 ```
 
-Use `--agent-policy owner` when only owner-authored comments should reach the worker:
+Use `--agent-policy owner` when only owner-authored or owner-approved comments should reach the worker:
 
 ```bash
 tunelito ./site --owner "Chekos" --agent codex --agent-policy owner
 ```
 
-For the recommended owner-led workflow, let owner comments through automatically and let visitors opt in with a marker:
+For the recommended owner-led workflow, let owner-authored or owner-approved comments through automatically and let visitors opt in with a marker:
 
 ```bash
 tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"

@@ -591,8 +591,19 @@ test("agent fingerprint and prompt include comment scope and pass limits", () =>
 });
 
 test("agent prompt includes owner context and comment author roles", () => {
+  const visitor = comment({ id: "c_approved", author: "Rin", authorRole: "visitor", body: "Only run this after owner approval." });
   const prompt = buildAgentPrompt({
-    comments: [comment({ id: "c_owner", author: "Chekos", authorRole: "owner", body: "Only run this after owner approval." })],
+    comments: [
+      comment({ id: "c_owner", author: "Chekos", authorRole: "owner", body: "Only run this after owner approval." }),
+      {
+        ...visitor,
+        ownerApproval: {
+          approvedBy: "Chekos",
+          approvedAt: "2026-06-16T23:10:00.000Z",
+          fingerprint: fingerprintComment(visitor),
+        },
+      },
+    ],
     commentsPath: "/tmp/site.comments.md",
     workspaceRoot: "/tmp/site",
     statePath: "/tmp/site/.tunelito/agent/state.json",
@@ -605,6 +616,9 @@ test("agent prompt includes owner context and comment author roles", () => {
   assert.match(prompt, /Owner: Chekos/);
   assert.match(prompt, /Policy: all/);
   assert.match(prompt, /"authorRole": "owner"/);
+  assert.match(prompt, /"ownerApproval"/);
+  assert.match(prompt, /"approvedBy": "Chekos"/);
+  assert.doesNotMatch(prompt, /fingerprint/);
   assert.match(prompt, /prefer, ignore, or wait for owner feedback/);
 });
 
@@ -624,23 +638,44 @@ test("agent trigger defaults to all comments and supports explicit mention filte
 test("agent policy matches owner and mention combinations", () => {
   const visitor = comment({ id: "c_visitor", authorRole: "visitor", body: "Make this shorter." });
   const mentionedVisitor = comment({ id: "c_mentioned", authorRole: "visitor", body: "@agent Make this shorter." });
+  const approvedVisitorBase = comment({
+    id: "c_approved",
+    authorRole: "visitor",
+    body: "Make this shorter.",
+  });
+  const approvedVisitor = {
+    ...approvedVisitorBase,
+    ownerApproval: {
+      approvedBy: "Chekos",
+      approvedAt: "2026-06-16T23:10:00.000Z",
+      fingerprint: fingerprintComment(approvedVisitorBase),
+    },
+  };
+  const staleApprovedVisitor = {
+    ...approvedVisitor,
+    id: "c_stale_approved",
+    body: "Make this much longer.",
+  };
   const owner = comment({ id: "c_owner", authorRole: "owner", body: "Make this shorter." });
 
   assert.equal(commentMatchesAgentPolicy(visitor, { policy: "all", trigger: DEFAULT_AGENT_TRIGGER }), true);
   assert.equal(commentMatchesAgentPolicy(visitor, { policy: "mention", trigger: "@agent" }), false);
   assert.equal(commentMatchesAgentPolicy(mentionedVisitor, { policy: "mention", trigger: "@agent" }), true);
   assert.equal(commentMatchesAgentPolicy(owner, { policy: "owner", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(approvedVisitor, { policy: "owner", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(staleApprovedVisitor, { policy: "owner", trigger: "@agent" }), false);
   assert.equal(commentMatchesAgentPolicy(visitor, { policy: "owner", trigger: "@agent" }), false);
   assert.equal(commentMatchesAgentPolicy(owner, { policy: "owner-or-mention", trigger: "@agent" }), true);
+  assert.equal(commentMatchesAgentPolicy(approvedVisitor, { policy: "owner-or-mention", trigger: "@agent" }), true);
   assert.equal(commentMatchesAgentPolicy(mentionedVisitor, { policy: "owner-or-mention", trigger: "@agent" }), true);
   assert.equal(commentMatchesAgentPolicy(visitor, { policy: "owner-or-mention", trigger: "@agent" }), false);
 
   const state = { comments: {} };
-  const queue = prepareAgentQueue([visitor, mentionedVisitor, owner], state, {
+  const queue = prepareAgentQueue([visitor, mentionedVisitor, approvedVisitor, owner], state, {
     policy: "owner-or-mention",
     trigger: "@agent",
   });
-  assert.deepEqual(queue.pending.map((item) => item.comment.id), ["c_mentioned", "c_owner"]);
+  assert.deepEqual(queue.pending.map((item) => item.comment.id), ["c_mentioned", "c_approved", "c_owner"]);
 });
 
 test("mention-based agent policies require a marker trigger", () => {

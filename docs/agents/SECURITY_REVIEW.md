@@ -12,8 +12,11 @@ Expected behavior:
 - The first keyed request sets an HTTP-only cookie.
 - WebSocket upgrades require the key or cookie.
 - Live-mode signaling and fallback relay messages stay behind the same WebSocket auth gate.
+- Live pointer halo events are ephemeral UI only; they must stay behind the WebSocket auth gate and must not be written to comments markdown.
 - `--no-auth` is explicit and documented.
 - `--owner` uses a separate owner key as an identity label only; do not treat owner labels as access control.
+- Reviewer IDs support display-name rename behavior only; do not treat them as authentication or authorization.
+- Owner approval of visitor comments requires the owner-keyed session, persists only outside `--live`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
 
 Tests should cover both allowed and denied paths.
 

@@ -277,8 +277,21 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /aria-label="Open Tunelito comments"/);
     assert.match(clientScript, /work-badge/);
     assert.match(clientScript, /Agent work status/);
+    assert.match(clientScript, /Assigned as/);
+    assert.match(clientScript, /identity-card/);
+    assert.match(clientScript, /friendlyReviewerName/);
+    assert.match(clientScript, /rename-reviewer/);
+    assert.match(clientScript, /pendingReviewerRename/);
+    assert.match(clientScript, /queueCurrentAuthorRenameIfNeeded/);
+    assert.match(clientScript, /Toggle laser pointer/);
+    assert.match(clientScript, /laser-pointer/);
+    assert.match(clientScript, /\.laser,\s+\.peer-laser \{/);
+    assert.match(clientScript, /pointer-events: none/);
+    assert.match(clientScript, /hasFinePointer/);
     assert.match(clientScript, /width: 44px;\s+height: 44px;/);
+    assert.match(clientScript, /button\.secondary, button\.primary \{\s+min-height: 44px;/);
     assert.doesNotMatch(clientScript, /Comments <span class="count"/);
+    assert.doesNotMatch(clientScript, /Guest [A-Z0-9]/);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
@@ -521,6 +534,26 @@ test("live mode keeps comments in memory and relays peer signaling", async () =>
     const liveEvent = second.messages.find((message) => message.type === "live-event");
     assert.equal(liveEvent.from, firstHello.peerId);
     assert.equal(liveEvent.event.type, "cursor");
+
+    first.socket.send(JSON.stringify({
+      type: "live-event",
+      event: { type: "laser-pointer", active: true, x: 24, y: 48, pressed: false, author: "Ada" },
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "live-event" && message.event.type === "laser-pointer"));
+    const laserEvent = second.messages.find((message) => message.type === "live-event" && message.event.type === "laser-pointer");
+    assert.equal(laserEvent.from, firstHello.peerId);
+    assert.equal(laserEvent.event.active, true);
+    assert.equal(existsSync(commentsPath), false);
+
+    first.socket.send(JSON.stringify({
+      type: "rename-reviewer",
+      author: "Ada Lovelace",
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment-updated" && message.comment.id === "c_live_1"));
+    const renameUpdate = second.messages.find((message) => message.type === "comment-updated" && message.comment.id === "c_live_1").comment;
+    assert.equal(renameUpdate.author, "Ada Lovelace");
+    assert.equal(renameUpdate.reviewerId, firstHello.reviewerId);
+    assert.equal(existsSync(commentsPath), false);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
@@ -769,6 +802,234 @@ test("server assigns owner identity only to owner-key sessions", async () => {
     assert.match(markdown, /## Visitor at /);
   } finally {
     for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server renames prior comments by reviewer identity instead of display name", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-reviewer-rename-server-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  const sourceHtml = "<!doctype html><html><body><main>Rename draft</main></body></html>";
+  writeFileSync(htmlPath, sourceHtml);
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    const firstSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    firstSocketUrl.searchParams.set("tunelito_reviewer_id", "r_first");
+    const first = openJsonSocket(firstSocketUrl);
+    sockets.push(first.socket);
+    await waitFor(first.socket, "open");
+    await waitUntil(() => first.messages.some((message) => message.type === "hello"));
+    const firstHello = first.messages.find((message) => message.type === "hello");
+    assert.equal(firstHello.reviewerId, "r_first");
+
+    const secondSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    secondSocketUrl.searchParams.set("tunelito_reviewer_id", "r_second");
+    const second = openJsonSocket(secondSocketUrl);
+    sockets.push(second.socket);
+    await waitFor(second.socket, "open");
+    await waitUntil(() => second.messages.some((message) => message.type === "hello"));
+
+    first.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Clear Harbor",
+        quote: "Rename draft",
+        body: "First reviewer feedback.",
+        reviewerId: "r_second",
+        textStart: 0,
+        textEnd: 12,
+      },
+    }));
+    await waitUntil(() => first.messages.some((message) => message.type === "comment" && message.comment.body === "First reviewer feedback."));
+    const firstComment = first.messages.find((message) => message.type === "comment" && message.comment.body === "First reviewer feedback.").comment;
+    assert.equal(firstComment.reviewerId, "r_first");
+
+    second.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Clear Harbor",
+        quote: "Rename draft",
+        body: "Second reviewer feedback.",
+        textStart: 0,
+        textEnd: 12,
+      },
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback."));
+    const secondComment = second.messages.find((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback.").comment;
+    assert.equal(secondComment.reviewerId, "r_second");
+
+    first.socket.send(JSON.stringify({
+      type: "rename-reviewer",
+      reviewerId: "r_second",
+      author: "chekos",
+    }));
+
+    await waitUntil(() => first.messages.some((message) => message.type === "reviewer-renamed" && message.author === "chekos"));
+    await waitUntil(() => first.messages.some((message) => message.type === "comment-updated" && message.comment.id === firstComment.id));
+    await waitUntil(() => second.messages.some((message) => message.type === "comment-updated" && message.comment.id === firstComment.id));
+    const updated = first.messages.find((message) => message.type === "comment-updated" && message.comment.id === firstComment.id).comment;
+    assert.equal(updated.author, "chekos");
+    assert.equal(updated.reviewerId, "r_first");
+    assert.equal(second.messages.some((message) => message.type === "comment-updated" && message.comment.id === secondComment.id), false);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /## chekos at /);
+    assert.match(markdown, /First reviewer feedback\./);
+    assert.match(markdown, /## Clear Harbor at /);
+    assert.match(markdown, /Second reviewer feedback\./);
+    assert.match(markdown, /reviewer: `r_first`/);
+    assert.match(markdown, /reviewer: `r_second`/);
+
+    const fresh = openJsonSocket(firstSocketUrl);
+    sockets.push(fresh.socket);
+    await waitFor(fresh.socket, "open");
+    await waitUntil(() => fresh.messages.some((message) => message.type === "hello"));
+    const restored = fresh.messages.find((message) => message.type === "hello").comments;
+    assert.equal(restored.find((comment) => comment.id === firstComment.id).author, "chekos");
+    assert.equal(restored.find((comment) => comment.id === secondComment.id).author, "Clear Harbor");
+    assert.equal(readFileSync(htmlPath, "utf8"), sourceHtml);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server lets owner approve visitor comments for agent work", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-owner-approval-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Approval draft</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    ownerName: "Chekos",
+    ownerKey: "owner-secret",
+  });
+
+  const sockets = [];
+  try {
+    const ownerSocketUrl = new URL(instance.localUrl);
+    ownerSocketUrl.pathname = "/__tunelito/ws";
+    const owner = openJsonSocket(ownerSocketUrl);
+    sockets.push(owner.socket);
+    await waitFor(owner.socket, "open");
+    await waitUntil(() => owner.messages.some((message) => message.type === "hello"));
+
+    const visitorSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
+    visitorSocketUrl.searchParams.set("tunelito_key", "review-secret");
+    const visitor = openJsonSocket(visitorSocketUrl);
+    sockets.push(visitor.socket);
+    await waitFor(visitor.socket, "open");
+    await waitUntil(() => visitor.messages.some((message) => message.type === "hello"));
+
+    visitor.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Visitor",
+        quote: "Approval draft",
+        body: "This should be owner-approved before the agent handles it.",
+        textStart: 0,
+        textEnd: 14,
+        ownerApproval: {
+          approvedBy: "Mallory",
+          approvedAt: "2026-06-16T23:00:00.000Z",
+          fingerprint: "forged",
+        },
+      },
+    }));
+
+    await waitUntil(() => visitor.messages.some((message) => message.type === "comment"));
+    const created = visitor.messages.find((message) => message.type === "comment").comment;
+    assert.equal(created.authorRole, "visitor");
+    assert.equal(created.ownerApproval, undefined);
+
+    visitor.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: created.id,
+      approvedBy: "Visitor",
+    }));
+    await waitUntil(() => visitor.messages.some((message) => message.type === "error" && /Only the owner/.test(message.message)));
+    assert.equal(visitor.messages.some((message) => message.type === "comment-updated"), false);
+
+    owner.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: created.id,
+      approvedBy: "Lead Reviewer",
+    }));
+
+    await waitUntil(() => owner.messages.some((message) => message.type === "comment-updated"));
+    await waitUntil(() => visitor.messages.some((message) => message.type === "comment-updated"));
+    const ownerUpdate = owner.messages.find((message) => message.type === "comment-updated").comment;
+    const visitorUpdate = visitor.messages.find((message) => message.type === "comment-updated").comment;
+    assert.equal(ownerUpdate.id, created.id);
+    assert.equal(visitorUpdate.ownerApproval.approvedBy, "Lead Reviewer");
+    assert.match(visitorUpdate.ownerApproval.approvedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(visitorUpdate.ownerApproval.fingerprint, /^[a-f0-9]{64}$/);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /approved by owner: `Lead Reviewer`/);
+    assert.match(markdown, /This should be owner-approved before the agent handles it\./);
+
+    const fresh = openJsonSocket(visitorSocketUrl);
+    sockets.push(fresh.socket);
+    await waitFor(fresh.socket, "open");
+    await waitUntil(() => fresh.messages.some((message) => message.type === "hello"));
+    const restored = fresh.messages.find((message) => message.type === "hello").comments.find((comment) => comment.id === created.id);
+    assert.equal(restored.ownerApproval.approvedBy, "Lead Reviewer");
+
+    const clientScript = await fetch(new URL("/__tunelito/client.js?tunelito_key=review-secret", instance.originUrl)).then((res) => res.text());
+    assert.match(clientScript, /Approve for agent/);
+    assert.match(clientScript, /comment-updated/);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server rejects owner approval in live mode", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-live-owner-approval-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Live approval draft</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    ownerName: "Chekos",
+    ownerKey: "owner-secret",
+    liveMode: true,
+  });
+
+  const ownerSocketUrl = new URL(instance.localUrl);
+  ownerSocketUrl.pathname = "/__tunelito/ws";
+  const owner = openJsonSocket(ownerSocketUrl);
+  try {
+    await waitFor(owner.socket, "open");
+    await waitUntil(() => owner.messages.some((message) => message.type === "hello"));
+
+    owner.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: "c_live",
+      approvedBy: "Chekos",
+    }));
+
+    await waitUntil(() => owner.messages.some((message) => message.type === "error" && /persistent comments/.test(message.message)));
+  } finally {
+    owner.socket.close();
     await instance.close();
   }
 });

@@ -49,7 +49,7 @@ Options:
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent fallback polling interval in seconds (default: ${DEFAULT_AGENT_INTERVAL_SECONDS})
-  --agent-policy <mode> Which comments the agent handles: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
+  --agent-policy <mode> Which comments are actionable: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
   --agent-trigger <txt> Marker for mention policies, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
