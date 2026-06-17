@@ -63,6 +63,7 @@ The browser client owns reviewer interaction:
 - render highlights and sidebar entries
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
 - render peer cursors and live selection highlights in `--live`
+- render optional pointer halos locally, and broadcast them as ephemeral live events in `--live`
 - assign friendly editable visitor names, or seed the owner name for owner-key sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to
@@ -75,6 +76,7 @@ The browser client owns reviewer interaction:
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep `--live` comments ephemeral; do not write them to markdown.
+- Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as comment metadata, not authentication; the review key remains the access gate.
 - Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.

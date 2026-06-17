@@ -22,6 +22,7 @@
     dataChannels: new Map(),
     pendingIceCandidates: new Map(),
     peerCursors: new Map(),
+    peerLasers: new Map(),
     peerSelections: new Map(),
     viewerCount: null,
     viewerRole: configuredViewerRole,
@@ -29,6 +30,12 @@
     reviewerId: initialIdentity.reviewerId,
     author: initialIdentity.author,
     pendingReviewerRename: null,
+    laserPointerEnabled: false,
+    laserPointerAvailable: hasFinePointer(),
+    laserPointerPressed: false,
+    laserPointerVisible: false,
+    pendingLaserPointer: null,
+    laserPointerTimer: null,
     comments: [],
     agentStatusUrl: "",
     agentStatuses: {},
@@ -46,6 +53,7 @@
   persistIdentity();
   const ui = mountUi();
   updateIdentityUi();
+  updateLaserToggle();
   connect();
   bindSelection();
 
@@ -328,6 +336,28 @@
         .note-actions button {
           flex: 1;
         }
+        .note-actions button[hidden] {
+          display: none;
+        }
+        .pointer-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .pointer-button[aria-pressed="true"] {
+          border-color: #f87171;
+          background: #fff1f2;
+          color: #991b1b;
+        }
+        .pointer-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          border: 1px solid #fecaca;
+          background: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, .14);
+        }
         input, textarea {
           width: 100%;
           border: 1px solid #d7dde8;
@@ -556,6 +586,38 @@
           cursor: pointer;
         }
         .selection.visible { display: block; }
+        .laser,
+        .peer-laser {
+          position: fixed;
+          left: 0;
+          top: 0;
+          z-index: 2147483643;
+          width: 32px;
+          height: 32px;
+          border: 2px solid rgba(255, 241, 242, .9);
+          border-radius: 999px;
+          background: rgba(239, 68, 68, .38);
+          box-shadow: 0 0 0 1px rgba(127, 29, 29, .18), 0 0 22px rgba(239, 68, 68, .38);
+          opacity: 0;
+          pointer-events: none;
+          transform: translate3d(var(--laser-x, -999px), var(--laser-y, -999px), 0) translate(-50%, -50%) scale(var(--laser-scale, 1));
+          transition: opacity .12s ease, transform .05s linear;
+        }
+        .laser.visible,
+        .peer-laser.visible {
+          opacity: .88;
+        }
+        .laser.pressed,
+        .peer-laser.pressed {
+          --laser-scale: .58;
+        }
+        .peer-laser {
+          width: 28px;
+          height: 28px;
+          border-color: rgba(255, 251, 235, .95);
+          background: rgba(245, 158, 11, .36);
+          box-shadow: 0 0 0 1px rgba(146, 64, 14, .18), 0 0 20px rgba(245, 158, 11, .34);
+        }
         .composer {
           position: fixed;
           z-index: 2147483647;
@@ -686,6 +748,7 @@
         <span class="count" hidden>0</span>
       </button>
       <button class="selection">Comment</button>
+      <div class="laser" aria-hidden="true"></div>
       <div class="composer" role="dialog" aria-label="Add comment">
         <div class="composer-meta">
           <span class="composer-scope">Page comment</span>
@@ -728,6 +791,10 @@
         <div class="note-actions" aria-label="Add unanchored comment">
           <button class="secondary" data-action="page-note">Page note</button>
           <button class="secondary" data-action="site-note">Site note</button>
+          <button class="secondary pointer-button" data-action="laser-pointer" type="button" aria-pressed="false" title="Toggle laser pointer">
+            <span class="pointer-dot" aria-hidden="true"></span>
+            <span>Pointer</span>
+          </button>
         </div>
         <div class="comments"></div>
         <div class="footer">
@@ -742,11 +809,13 @@
     const launcher = shadow.querySelector(".launcher");
     const composer = shadow.querySelector(".composer");
     const selection = shadow.querySelector(".selection");
+    const laser = shadow.querySelector(".laser");
     const identityCard = shadow.querySelector(".identity-card");
     const identityName = shadow.querySelector(".identity-name");
     const identityEdit = shadow.querySelector(".identity-edit");
     const identityForm = shadow.querySelector(".identity-form");
     const name = shadow.querySelector(".name");
+    const laserToggle = shadow.querySelector("[data-action='laser-pointer']");
     const markdownLink = shadow.querySelector(".link");
     shadow.querySelector(".title strong").textContent = sourceName;
     markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
@@ -772,6 +841,7 @@
     });
     shadow.querySelector("[data-action='page-note']").addEventListener("click", () => openNoteComposer("page"));
     shadow.querySelector("[data-action='site-note']").addEventListener("click", () => openNoteComposer("site"));
+    laserToggle.addEventListener("click", () => setLaserPointerEnabled(!state.laserPointerEnabled));
     for (const button of composer.querySelectorAll("[data-scope]")) {
       button.addEventListener("click", () => setComposerScope(button.dataset.scope));
     }
@@ -787,6 +857,7 @@
       panel,
       launcher,
       selection,
+      laser,
       composer,
       count: shadow.querySelector(".count"),
       comments: shadow.querySelector(".comments"),
@@ -798,6 +869,7 @@
       identityEdit,
       identityForm,
       name,
+      laserToggle,
     };
   }
 
@@ -811,6 +883,26 @@
     ui.panel.classList.toggle("open", open);
     ui.launcher.classList.toggle("active", open);
     ui.launcher.setAttribute("aria-expanded", String(open));
+  }
+
+  function setLaserPointerEnabled(enabled) {
+    state.laserPointerAvailable = hasFinePointer();
+    state.laserPointerEnabled = Boolean(enabled && state.laserPointerAvailable);
+    if (!state.laserPointerEnabled) {
+      hideLaserPointer({ broadcast: true });
+    }
+    updateLaserToggle();
+  }
+
+  function updateLaserToggle() {
+    state.laserPointerAvailable = hasFinePointer();
+    if (!state.laserPointerAvailable && state.laserPointerEnabled) {
+      state.laserPointerEnabled = false;
+      hideLaserPointer({ broadcast: true });
+    }
+    ui.laserToggle.hidden = !state.laserPointerAvailable;
+    ui.laserToggle.setAttribute("aria-pressed", String(state.laserPointerEnabled));
+    ui.laserToggle.classList.toggle("active", state.laserPointerEnabled);
   }
 
   function updateIdentityUi() {
@@ -921,13 +1013,17 @@
   }
 
   function bindSelection() {
-    document.addEventListener("pointermove", sharePointerPosition, { passive: true });
+    document.addEventListener("pointermove", handlePointerMove, { passive: true });
+    document.addEventListener("pointerdown", handleLaserPointerDown, { passive: true });
+    document.addEventListener("pointerup", handleLaserPointerUp, { passive: true });
+    document.documentElement.addEventListener("pointerleave", () => hideLaserPointer({ broadcast: true }));
     document.addEventListener("mouseup", scheduleSelectionCapture);
     document.addEventListener("keyup", scheduleSelectionCapture);
     document.addEventListener("selectionchange", scheduleSelectionCapture);
     document.addEventListener("touchend", scheduleSelectionCapture, { passive: true });
     window.addEventListener("resize", () => {
       if (ui.composer.classList.contains("open")) positionComposer(state.pendingSelection?.rect || null);
+      updateLaserToggle();
     });
 
     document.addEventListener("mousedown", (event) => {
@@ -944,6 +1040,82 @@
         if (!selection || selection.isCollapsed) hideSelectionButton();
       }, 0);
     }, { passive: true });
+  }
+
+  function handlePointerMove(event) {
+    sharePointerPosition(event);
+    updateLaserPointer(event);
+  }
+
+  function handleLaserPointerDown(event) {
+    if (!state.laserPointerEnabled || isEventInsideTunelito(event)) return;
+    state.laserPointerPressed = true;
+    updateLaserPointer(event);
+  }
+
+  function handleLaserPointerUp(event) {
+    if (!state.laserPointerEnabled) return;
+    state.laserPointerPressed = false;
+    updateLaserPointer(event);
+  }
+
+  function updateLaserPointer(event) {
+    if (!state.laserPointerEnabled || !state.laserPointerAvailable) return;
+    if (isEventInsideTunelito(event)) {
+      hideLaserPointer({ broadcast: true });
+      return;
+    }
+
+    showLaserPointer(event.pageX, event.pageY, state.laserPointerPressed);
+    queueLaserPointerBroadcast({
+      active: true,
+      x: event.pageX,
+      y: event.pageY,
+      pressed: state.laserPointerPressed,
+      author: currentAuthor("Reviewer"),
+    });
+  }
+
+  function showLaserPointer(pageX, pageY, pressed = false) {
+    positionLaserElement(ui.laser, pageX, pageY, pressed);
+    ui.laser.classList.add("visible");
+    state.laserPointerVisible = true;
+  }
+
+  function hideLaserPointer({ broadcast = false } = {}) {
+    if (!state.laserPointerVisible && !broadcast) return;
+    ui.laser.classList.remove("visible", "pressed");
+    state.laserPointerVisible = false;
+    state.laserPointerPressed = false;
+    if (broadcast) {
+      queueLaserPointerBroadcast({
+        active: false,
+        author: currentAuthor("Reviewer"),
+      });
+    }
+  }
+
+  function positionLaserElement(element, pageX, pageY, pressed = false) {
+    element.style.setProperty("--laser-x", `${Math.round(pageX - window.scrollX)}px`);
+    element.style.setProperty("--laser-y", `${Math.round(pageY - window.scrollY)}px`);
+    element.classList.toggle("pressed", Boolean(pressed));
+  }
+
+  function queueLaserPointerBroadcast(event) {
+    if (!state.liveMode || !event) return;
+    state.pendingLaserPointer = event;
+    if (state.laserPointerTimer) return;
+    state.laserPointerTimer = setTimeout(() => {
+      state.laserPointerTimer = null;
+      if (state.pendingLaserPointer) {
+        broadcastLiveEvent({ type: "laser-pointer", ...state.pendingLaserPointer });
+      }
+      state.pendingLaserPointer = null;
+    }, 40);
+  }
+
+  function isEventInsideTunelito(event) {
+    return event.composedPath().includes(ui.shadow.host);
   }
 
   function scheduleSelectionCapture() {
@@ -1316,6 +1488,7 @@
     closePeerConnection(peerId);
     state.peerSelections.delete(peerId);
     removePeerCursor(peerId);
+    removePeerLaser(peerId);
     updatePeerHighlights();
   }
 
@@ -1427,6 +1600,8 @@
       addComment(event.comment);
     } else if (event.type === "cursor") {
       renderPeerCursor(peerId, event);
+    } else if (event.type === "laser-pointer") {
+      renderPeerLaser(peerId, event);
     } else if (event.type === "selection") {
       state.peerSelections.set(peerId, event.selection);
       updatePeerHighlights();
@@ -1502,6 +1677,36 @@
     state.peerCursors.delete(peerId);
   }
 
+  function renderPeerLaser(peerId, event) {
+    if (!event?.active) {
+      removePeerLaser(peerId);
+      return;
+    }
+
+    let entry = state.peerLasers.get(peerId);
+    if (!entry) {
+      const element = document.createElement("div");
+      element.className = "peer-laser";
+      element.setAttribute("aria-hidden", "true");
+      ui.shadow.appendChild(element);
+      entry = { element, timer: null };
+      state.peerLasers.set(peerId, entry);
+    }
+
+    positionLaserElement(entry.element, Number(event.x) || 0, Number(event.y) || 0, event.pressed);
+    entry.element.classList.add("visible");
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => removePeerLaser(peerId), 1600);
+  }
+
+  function removePeerLaser(peerId) {
+    const entry = state.peerLasers.get(peerId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.element.remove();
+    state.peerLasers.delete(peerId);
+  }
+
   function resetPeerConnections() {
     for (const peerId of Array.from(state.peerConnections.keys())) closePeerConnection(peerId);
     state.peerConnections.clear();
@@ -1509,6 +1714,7 @@
     state.pendingIceCandidates.clear();
     state.peerSelections.clear();
     for (const peerId of Array.from(state.peerCursors.keys())) removePeerCursor(peerId);
+    for (const peerId of Array.from(state.peerLasers.keys())) removePeerLaser(peerId);
     updatePeerHighlights();
   }
 
@@ -1755,6 +1961,11 @@
 
   function isMobileViewport() {
     return window.matchMedia("(max-width: 640px)").matches;
+  }
+
+  function hasFinePointer() {
+    const query = window.matchMedia?.("(hover: hover) and (pointer: fine)");
+    return query ? query.matches : true;
   }
 
   function clamp(value, min, max) {

@@ -90,4 +90,33 @@ Verification:
 
 ## Issue #41: Explore optional laser pointer mode for live HTML reviews
 
-Status: pending.
+Status: implemented and verified; included in the issue #41 commit.
+
+Priority: minor, because it is default-off ephemeral review UI and does not change comment persistence or agent behavior.
+
+Decision:
+
+- Implemented a default-off `Pointer` control in the injected Tunelito panel.
+- Chose a red halo around the normal cursor instead of hiding the native cursor. This keeps reviewed pages usable and avoids browser-specific custom cursor behavior.
+- Exposed the control only on fine-pointer devices. Touch-only/mobile devices hide the control.
+- Made the pointer local in any session and broadcast it to peers only in `--live`.
+- Treated pointer events as ephemeral live UI: no markdown persistence, no hidden metadata, and no source HTML edits.
+- Kept all overlays `pointer-events: none` so links, text selection, forms, and Tunelito controls continue to work.
+
+What changed:
+
+- `src/client.js`: pointer toggle, local laser overlay, peer laser overlay, fine-pointer gating, pointer down/up pressed state, live broadcast through the existing live-event path, peer cleanup on disconnect.
+- `test/server.test.js`: client-bundle assertions for pointer UI/overlay invariants and live relay coverage proving `laser-pointer` events stay in the ephemeral live path.
+- Docs: README, Mintlify docs, architecture/security playbooks, and changelog updated for the selected pointer scope.
+
+Verification:
+
+- `npm run check` passed.
+- `node --test test/server.test.js` passed: 19 tests.
+- `npm run docs:check` passed.
+- `npm run ci` passed: check, agent config, docs check, 117 tests, smoke check, and package smoke check.
+- Browser fixture check used `examples/slide-deck.html` in `--live` with two browser contexts. Pointer was off by default, visible after toggle, followed cursor movement, rendered on a peer as an ephemeral live event, and used `pointer-events: none`.
+- The same browser check confirmed page notes still worked while pointer mode was enabled, the source HTML was unchanged, and no live comments markdown file was written.
+- Touch-only browser emulation with `hasTouch: true` hid the pointer control and avoided horizontal overflow at 390x844.
+- UI/HIG adversarial subagent found no blockers. Security/persistence adversarial subagent found only this report entry was stale; implementation re-check was otherwise clean.
+- A dedicated `visual-qa-hig` workflow was requested but no repo or installed workflow by that name exists; used the repo fixture/browser pass from `docs/agents/EXAMPLE_FIXTURES.md` plus the UI adversarial subagent instead.

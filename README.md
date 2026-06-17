@@ -100,8 +100,9 @@ tunelito ./page.html --live
 - Add a `Page note` without selecting text.
 - Add a `Site note` that appears on every page in a folder review.
 - Keep or edit their assigned display name. Renaming updates earlier comments from the same reviewer identity.
+- Toggle a local pointer halo on fine-pointer devices when pointing during a call.
 - See other comments appear live.
-- In `--live`, see peer cursors and live selection highlights when the browser can connect peer-to-peer.
+- In `--live`, see peer cursors, live selection highlights, and pointer halos when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
 
 ## What You Control
@@ -181,7 +182,7 @@ Or tell your agent: "run `npx --yes tunelito skill show` and install the skill i
 
 ## How It Works
 
-Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, and reload notices. The original HTML files are not modified.
+Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original HTML files are not modified.
 
 The server also:
 
@@ -189,7 +190,7 @@ The server also:
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
-- relays WebRTC signaling and live fallback events in `--live`
+- relays WebRTC signaling and ephemeral live fallback events, including peer cursors and pointer halos, in `--live`
 - starts `cloudflared tunnel --url <local-url>` when available
 - falls back to `npx cloudflared@latest` when `cloudflared` is not installed
 

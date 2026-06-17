@@ -283,6 +283,11 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /rename-reviewer/);
     assert.match(clientScript, /pendingReviewerRename/);
     assert.match(clientScript, /queueCurrentAuthorRenameIfNeeded/);
+    assert.match(clientScript, /Toggle laser pointer/);
+    assert.match(clientScript, /laser-pointer/);
+    assert.match(clientScript, /\.laser,\s+\.peer-laser \{/);
+    assert.match(clientScript, /pointer-events: none/);
+    assert.match(clientScript, /hasFinePointer/);
     assert.match(clientScript, /width: 44px;\s+height: 44px;/);
     assert.match(clientScript, /button\.secondary, button\.primary \{\s+min-height: 44px;/);
     assert.doesNotMatch(clientScript, /Comments <span class="count"/);
@@ -529,6 +534,16 @@ test("live mode keeps comments in memory and relays peer signaling", async () =>
     const liveEvent = second.messages.find((message) => message.type === "live-event");
     assert.equal(liveEvent.from, firstHello.peerId);
     assert.equal(liveEvent.event.type, "cursor");
+
+    first.socket.send(JSON.stringify({
+      type: "live-event",
+      event: { type: "laser-pointer", active: true, x: 24, y: 48, pressed: false, author: "Ada" },
+    }));
+    await waitUntil(() => second.messages.some((message) => message.type === "live-event" && message.event.type === "laser-pointer"));
+    const laserEvent = second.messages.find((message) => message.type === "live-event" && message.event.type === "laser-pointer");
+    assert.equal(laserEvent.from, firstHello.peerId);
+    assert.equal(laserEvent.event.active, true);
+    assert.equal(existsSync(commentsPath), false);
 
     first.socket.send(JSON.stringify({
       type: "rename-reviewer",
