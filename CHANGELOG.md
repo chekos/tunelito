@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Adds owner approval for visitor comments, letting owner-keyed sessions approve a specific visitor comment for local-agent work without rewriting it as an owner comment.
+
 ## 0.12.0 - 2026-06-12
 
 - Adds browser-visible agent work status on comment cards, plus `tunelito inbox status` as the matching terminal tracker. Reviewers can see queued, in-progress, follow-up, and integrated feedback directly in the Tunelito panel.

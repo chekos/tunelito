@@ -12,6 +12,7 @@ export function normalizeComment(input, now = new Date()) {
   const id = input.id || `c_${now.getTime().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const author = cleanText(input.author || "Anonymous", 80) || "Anonymous";
   const authorRole = normalizeAuthorRole(input.authorRole || input.role);
+  const ownerApproval = normalizeOwnerApproval(input.ownerApproval);
   const scope = normalizeCommentScope(input.scope);
   const quote = cleanText(input.quote || "", 4000);
   const body = cleanText(input.body || input.comment || "", 8000);
@@ -22,6 +23,7 @@ export function normalizeComment(input, now = new Date()) {
     id,
     author,
     authorRole,
+    ...(ownerApproval ? { ownerApproval } : {}),
     scope,
     quote,
     body,
@@ -61,6 +63,22 @@ export function createCommentStore({ commentsPath, sourcePath }) {
     return comment;
   }
 
+  function update(id, updater) {
+    const index = comments.findIndex((comment) => comment.id === id);
+    if (index < 0) return null;
+    const current = comments[index];
+    const patch = typeof updater === "function" ? updater({ ...current }) : updater;
+    const next = normalizeComment({
+      ...current,
+      ...(patch || {}),
+      id: current.id,
+      created: current.created,
+    });
+    comments[index] = next;
+    write();
+    return next;
+  }
+
   function write() {
     mkdirSync(dirname(commentsPath), { recursive: true });
     const temp = `${commentsPath}.tmp`;
@@ -74,6 +92,7 @@ export function createCommentStore({ commentsPath, sourcePath }) {
     },
     all,
     add,
+    update,
     write,
   };
 }
@@ -91,12 +110,28 @@ export function createMemoryCommentStore() {
     return comment;
   }
 
+  function update(id, updater) {
+    const index = comments.findIndex((comment) => comment.id === id);
+    if (index < 0) return null;
+    const current = comments[index];
+    const patch = typeof updater === "function" ? updater({ ...current }) : updater;
+    const next = normalizeComment({
+      ...current,
+      ...(patch || {}),
+      id: current.id,
+      created: current.created,
+    });
+    comments[index] = next;
+    return next;
+  }
+
   return {
     get commentsPath() {
       return null;
     },
     all,
     add,
+    update,
     write() {},
   };
 }
@@ -174,6 +209,11 @@ function renderCommentHeading(comment, options = {}) {
 function renderCommentContextLine(comment, options = {}) {
   const context = [];
   if (normalizeAuthorRole(comment.authorRole) === "owner") context.push("author role: `owner`");
+  if (comment.ownerApproval?.approvedAt) {
+    const by = cleanText(comment.ownerApproval.approvedBy || "Owner", 80) || "Owner";
+    context.push(`approved by owner: \`${visibleMarkdownText(by, options)}\``);
+    context.push(`approved at: \`${visibleMarkdownText(formatDate(comment.ownerApproval.approvedAt), options)}\``);
+  }
   context.push(`scope: \`${normalizeCommentScope(comment.scope)}\``);
   if (comment.pagePath) context.push(`page: \`${visibleMarkdownText(comment.pagePath, options)}\``);
   if (comment.path) context.push(`path: \`${visibleMarkdownText(comment.path, options)}\``);
@@ -217,6 +257,17 @@ function cleanText(value, limit) {
   return String(value ?? "")
     .replace(/\u0000/g, "")
     .slice(0, limit);
+}
+
+function normalizeOwnerApproval(input) {
+  if (!input || typeof input !== "object") return null;
+  const approvedAt = cleanText(input.approvedAt || input.at || "", 80);
+  if (!approvedAt) return null;
+  return {
+    approvedBy: cleanText(input.approvedBy || input.by || "Owner", 80) || "Owner",
+    approvedAt,
+    fingerprint: cleanText(input.fingerprint || "", 128),
+  };
 }
 
 function visibleMarkdownText(value, { escapeMetadataMarkers = true } = {}) {

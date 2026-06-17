@@ -131,7 +131,7 @@ Options:
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
   --agent-interval <s>  Agent fallback polling interval in seconds (default: 120)
-  --agent-policy <mode> Which comments the agent handles: all|mention|owner|owner-or-mention (default: all)
+  --agent-policy <mode> Which comments are actionable: all|mention|owner|owner-or-mention (default: all)
   --agent-trigger <txt> Marker for mention policies, or "all" (default: all)
   --agent-instructions <txt>
                         Append host instructions to the built-in agent prompt
@@ -199,7 +199,7 @@ Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback pac
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
 
-When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and the local agent worker receives the owner name and each comment's author role. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner.
+When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and that owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name, each comment's author role, and any owner approval metadata. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner and approve visitor comments for agent handling.
 
 `--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
@@ -267,7 +267,7 @@ In `--live`, comments are not written to markdown and are not restored after res
 
 ## Agent Comment Loop
 
-The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name and each comment's `authorRole`, so host instructions can ask the agent to prefer owner comments or wait for owner approval.
+The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name, each comment's `authorRole`, and owner approval metadata for approved visitor comments. Host instructions can ask the agent to prefer owner comments or wait for owner approval.
 
 If you are already inside an agent session, let the current agent own the loop:
 
@@ -307,13 +307,13 @@ Use `--agent-trigger "@agent"` or another marker when you want stricter sessions
 tunelito ./site --agent codex --agent-trigger "@agent"
 ```
 
-Use `--agent-policy owner` when only owner-authored comments should reach the worker:
+Use `--agent-policy owner` when only owner-authored or owner-approved comments should reach the worker:
 
 ```bash
 tunelito ./site --owner "Chekos" --agent codex --agent-policy owner
 ```
 
-For the recommended owner-led workflow, let owner comments through automatically and let visitors opt in with a marker:
+For the recommended owner-led workflow, let owner-authored or owner-approved comments through automatically and let visitors opt in with a marker:
 
 ```bash
 tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"

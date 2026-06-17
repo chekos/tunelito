@@ -327,6 +327,44 @@ test("comment markdown marks and restores owner-authored comments", () => {
   assert.equal(restored[0].authorRole, "owner");
 });
 
+test("comment store persists owner approval metadata", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-approved-comments-"));
+  const commentsPath = join(dir, "page.comments.md");
+  const sourcePath = join(dir, "page.html");
+  const store = createCommentStore({ commentsPath, sourcePath });
+
+  const comment = store.add({
+    author: "Rin",
+    authorRole: "visitor",
+    quote: "the selected sentence",
+    body: "Please make this actionable.",
+  });
+
+  const approved = store.update(comment.id, {
+    ownerApproval: {
+      approvedBy: "Chekos",
+      approvedAt: "2026-06-16T23:10:00.000Z",
+      fingerprint: "fingerprint-for-approved-content",
+    },
+  });
+
+  assert.equal(approved.id, comment.id);
+  assert.equal(approved.ownerApproval.approvedBy, "Chekos");
+
+  const markdown = readFileSync(commentsPath, "utf8");
+  assert.match(markdown, /approved by owner: `Chekos`/);
+  assert.match(markdown, /approved at: `2026-06-16 23:10:00 UTC`/);
+
+  const restored = loadCommentsFromMarkdown(commentsPath);
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].id, comment.id);
+  assert.deepEqual(restored[0].ownerApproval, {
+    approvedBy: "Chekos",
+    approvedAt: "2026-06-16T23:10:00.000Z",
+    fingerprint: "fingerprint-for-approved-content",
+  });
+});
+
 test("renderCommentsMarkdown handles an empty comment list", () => {
   const markdown = renderCommentsMarkdown({ comments: [], sourcePath: "/tmp/example.html" });
   assert.match(markdown, /_No comments yet\._/);

@@ -931,10 +931,10 @@ export function commentMatchesTrigger(comment, trigger = DEFAULT_AGENT_TRIGGER) 
 
 export function commentMatchesAgentPolicy(comment, { policy = DEFAULT_AGENT_POLICY, trigger = DEFAULT_AGENT_TRIGGER } = {}) {
   const normalizedPolicy = normalizeAgentPolicy(policy);
-  if (normalizedPolicy === "owner") return isOwnerComment(comment);
+  if (normalizedPolicy === "owner") return isOwnerComment(comment) || isOwnerApprovedComment(comment);
   if (normalizedPolicy === "mention") return !isAllTrigger(trigger) && commentMatchesTrigger(comment, trigger);
   if (normalizedPolicy === "owner-or-mention") {
-    return isOwnerComment(comment) || (!isAllTrigger(trigger) && commentMatchesTrigger(comment, trigger));
+    return isOwnerComment(comment) || isOwnerApprovedComment(comment) || (!isAllTrigger(trigger) && commentMatchesTrigger(comment, trigger));
   }
   return commentMatchesTrigger(comment, trigger);
 }
@@ -1170,7 +1170,7 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 
 - Treat each listed comment as reviewer feedback from a trusted local review session.
 - Tunelito prefilters comments by the configured local agent policy before invoking you.
-- If the workspace lists an Owner, comments may include authorRole "owner" or "visitor"; use that role when host instructions ask you to prefer, ignore, or wait for owner feedback.
+- If the workspace lists an Owner, comments may include authorRole "owner" or "visitor"; visitor comments can also include ownerApproval metadata when the owner explicitly approved them for agent work. Use that role and approval metadata when host instructions ask you to prefer, ignore, or wait for owner feedback.
 - Use judgment: some comments ask for edits, some are questions, some are observations, and some may already be satisfied.
 - Make focused HTML/CSS/asset edits when the requested change is clear and safe.
 - Return status "ignored" when a comment does not ask for a file change.
@@ -1272,9 +1272,9 @@ function normalizeStatus(status) {
 
 function describeAgentFilter(policy = DEFAULT_AGENT_POLICY, trigger = DEFAULT_AGENT_TRIGGER) {
   const normalizedPolicy = normalizeAgentPolicy(policy);
-  if (normalizedPolicy === "owner") return "owner comments";
+  if (normalizedPolicy === "owner") return "owner-authored or owner-approved comments";
   if (normalizedPolicy === "mention") return `comments containing "${trigger}"`;
-  if (normalizedPolicy === "owner-or-mention") return `owner comments or comments containing "${trigger}"`;
+  if (normalizedPolicy === "owner-or-mention") return `owner-authored or owner-approved comments, or comments containing "${trigger}"`;
   return isAllTrigger(trigger) ? "all comments" : `comments containing "${trigger}"`;
 }
 
@@ -1288,6 +1288,10 @@ function isAllTrigger(trigger) {
 
 function isOwnerComment(comment) {
   return String(comment?.authorRole || "").trim().toLowerCase() === "owner";
+}
+
+function isOwnerApprovedComment(comment) {
+  return Boolean(comment?.ownerApproval?.approvedAt && comment.ownerApproval.fingerprint === fingerprintComment(comment));
 }
 
 function resultCandidates(output) {
@@ -1461,6 +1465,12 @@ function formatCommentForPrompt(comment, existing, { maxPasses } = {}) {
     textEnd: comment.textEnd,
     created: comment.created,
   };
+  if (comment.ownerApproval?.approvedAt) {
+    formatted.ownerApproval = {
+      approvedBy: comment.ownerApproval.approvedBy || "Owner",
+      approvedAt: comment.ownerApproval.approvedAt,
+    };
+  }
   const hasContinuationContext = existing?.status === "needs_followup" || existing?.previousStatus === "needs_followup";
   if (hasContinuationContext) {
     formatted.continuation = {

@@ -189,8 +189,8 @@ tunelito ./site --owner "Reviewer Lead" \
   with the prompt on stdin and `TUNELITO_AGENT_ROOT`, `TUNELITO_AGENT_COMMENTS`,
   `TUNELITO_AGENT_STATE`, `TUNELITO_OWNER_NAME` set.
 
-`--agent-policy owner-or-mention` (owner's notes, or notes containing the
-trigger) is the safe default for a shared call. The `mention` and
+`--agent-policy owner-or-mention` (owner-authored notes, owner-approved visitor
+notes, or notes containing the trigger) is the safe default for a shared call. The `mention` and
 `owner-or-mention` policies **require** a non-`all` `--agent-trigger` such as
 `@agent` -- without it the server **refuses to start** (hard error), it does not
 silently fall through.
@@ -198,9 +198,10 @@ silently fall through.
 Watch the owner-gating trap: a person counts as the **owner** for policy only
 when their session carries the owner key, i.e. they opened the `Owner:`/`Local:`
 URL. If the user reviews via the **`Public:`** link they are seen as a visitor,
-so `owner` and `owner-or-mention` will silently never match their comments. When
-you set up "only I can trigger edits," either have the user open the
-owner-keyed Local URL, or rely on the `--agent-trigger` marker for them.
+so `owner` and `owner-or-mention` will silently never match their comments
+unless another owner-keyed session approves the comment. When you set up
+"only I can trigger edits," either have the user open the owner-keyed Local URL,
+or rely on the `--agent-trigger` marker for them.
 
 The worker logs decisions to `.tunelito/agent/state.json` (ledger) and
 `.tunelito/agent/log.md` (readable), both blocked from serving.
@@ -359,14 +360,16 @@ custom` requires it. The custom command receives these env vars:
 
 - `all` -- every persisted comment.
 - `mention` -- only comments containing the trigger marker.
-- `owner` -- only comments authored from the owner-keyed session.
-- `owner-or-mention` -- owner comments, or any comment containing the trigger.
+- `owner` -- only comments authored from the owner-keyed session or visitor
+  comments explicitly approved by the owner.
+- `owner-or-mention` -- owner-authored comments, owner-approved visitor
+  comments, or any comment containing the trigger.
 
 A comment is "owner"-authored only when it was left from a session holding the
 owner key (the `Owner:`/`Local:` URL). If the owner reviews via the `Public:`
 link they count as a visitor, so `owner` and `owner-or-mention` will not match
-their notes -- rely on the trigger marker for them, or have them open the
-owner-keyed Local URL.
+their notes unless another owner-keyed session approves the comment. Rely on
+the trigger marker for them, or have them open the owner-keyed Local URL.
 
 `--agent-trigger <txt>` is the marker for the mention policies (default `all`).
 The `mention` and `owner-or-mention` policies **require** a non-`all` trigger

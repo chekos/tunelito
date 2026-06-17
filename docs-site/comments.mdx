@@ -5,7 +5,7 @@ description: "How Tunelito stores reviewer comments and restores live session st
 
 Reviewers can select text and leave anchored comments from the injected Tunelito panel. They can also add unanchored page notes or site-wide notes without selecting text. Comments sync live to connected browsers and are written to Markdown immediately.
 
-Each browser gets a random editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt.
+Each browser gets a random editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Owner-keyed sessions can also approve a visitor comment for agent work from the comments panel.
 
 On mobile, Tunelito keeps the always-visible control small: a compact speech-bubble button with a count badge sits above common bottom navigation. Tap it to open the comments sheet.
 
@@ -116,7 +116,7 @@ For stricter sessions, ask reviewers to include `@agent` in comments they want t
 tunelito ./site --agent claude --agent-trigger "@agent"
 ```
 
-For owner-led sessions, owner comments can be handled automatically while visitor comments require the marker:
+For owner-led sessions, owner-authored and owner-approved comments can be handled automatically while visitor comments can still opt in with the marker:
 
 ```bash
 tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention --agent-trigger "@agent"

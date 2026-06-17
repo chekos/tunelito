@@ -14,6 +14,7 @@ Expected behavior:
 - Live-mode signaling and fallback relay messages stay behind the same WebSocket auth gate.
 - `--no-auth` is explicit and documented.
 - `--owner` uses a separate owner key as an identity label only; do not treat owner labels as access control.
+- Owner approval of visitor comments requires the owner-keyed session, persists only outside `--live`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
 
 Tests should cover both allowed and denied paths.
 

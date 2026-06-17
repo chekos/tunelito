@@ -90,6 +90,9 @@
       } else if (message.type === "comment") {
         addComment(message.comment);
         fetchAgentStatuses();
+      } else if (message.type === "comment-updated") {
+        updateComment(message.comment);
+        fetchAgentStatuses();
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
@@ -345,6 +348,35 @@
           padding-top: 8px;
         }
         .work.visible { display: block; }
+        .approval {
+          display: none;
+          margin-top: 8px;
+          color: #0f766e;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.35;
+          overflow-wrap: anywhere;
+        }
+        .approval.visible { display: block; }
+        .comment-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 9px;
+        }
+        .approve-button {
+          border: 1px solid #99f6e4;
+          border-radius: 7px;
+          background: #f0fdfa;
+          color: #0f766e;
+          cursor: pointer;
+          font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 7px 9px;
+        }
+        .approve-button:hover { border-color: #2dd4bf; background: #ccfbf1; }
+        .approve-button:focus-visible {
+          outline: 2px solid #2dd4bf;
+          outline-offset: 2px;
+        }
         .work-list {
           display: grid;
           gap: 5px;
@@ -529,6 +561,9 @@
             height: 44px;
             box-shadow: 0 8px 22px rgba(15, 23, 42, .2);
           }
+          .launcher.active {
+            display: none;
+          }
           .launcher-glyph {
             transform: scale(.88);
           }
@@ -571,6 +606,10 @@
           }
           button.secondary, button.primary {
             min-height: 42px;
+            padding: 10px 12px;
+          }
+          .approve-button {
+            min-height: 44px;
             padding: 10px 12px;
           }
         }
@@ -860,6 +899,17 @@
     renderComments();
   }
 
+  function updateComment(comment) {
+    if (!comment?.id) return;
+    const index = state.comments.findIndex((existing) => existing.id === comment.id);
+    if (index >= 0) {
+      state.comments[index] = comment;
+    } else {
+      state.comments.push(comment);
+    }
+    renderComments();
+  }
+
   function renderComments() {
     const count = state.comments.length;
     ui.count.textContent = count > 99 ? "99+" : String(count);
@@ -884,8 +934,12 @@
         </div>
         <div class="quote"></div>
         <div class="body"></div>
+        <div class="approval"></div>
         <div class="work" aria-label="Agent work status">
           <ul class="work-list"></ul>
+        </div>
+        <div class="comment-actions">
+          <button class="approve-button" type="button" data-action="approve-agent" hidden>Approve for agent</button>
         </div>
       `;
       const scope = normalizeScope(comment.scope);
@@ -895,6 +949,7 @@
       quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
       quote.classList.toggle("note", !hasQuote);
       item.querySelector(".body").textContent = comment.body;
+      renderCommentApproval(item, comment);
       renderCommentWorkStatus(item, comment);
       item.addEventListener("click", () => scrollToComment(comment));
       ui.comments.appendChild(item);
@@ -926,6 +981,46 @@
       list.appendChild(row);
     }
     work.classList.add("visible");
+  }
+
+  function renderCommentApproval(item, comment) {
+    const approval = ownerApprovalForComment(comment);
+    const approvalLabel = item.querySelector(".approval");
+    if (approval) {
+      approvalLabel.textContent = `Approved for agent by ${approval.approvedBy || "owner"}`;
+      approvalLabel.classList.add("visible");
+    }
+
+    const approveButton = item.querySelector("[data-action='approve-agent']");
+    const canApprove = state.viewerRole === "owner"
+      && !state.liveMode
+      && comment?.authorRole !== "owner"
+      && !approval;
+    item.querySelector(".comment-actions").hidden = !canApprove;
+    approveButton.hidden = !canApprove;
+    approveButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      approveCommentForAgent(comment);
+    });
+  }
+
+  function approveCommentForAgent(comment) {
+    if (!comment?.id) return;
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+      renderStatus("Still connecting; try again in a moment.");
+      return;
+    }
+    state.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: comment.id,
+      approvedBy: currentAuthor(configuredDefaultAuthor || "Owner"),
+    }));
+  }
+
+  function ownerApprovalForComment(comment) {
+    const approval = comment?.ownerApproval;
+    return approval?.approvedAt ? approval : null;
   }
 
   function renderStatus(message, viewerCount) {

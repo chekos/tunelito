@@ -25,6 +25,7 @@ The server owns local IO and transport:
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
 - mark owner-key sessions so owner comments can carry `authorRole: owner`
+- let owner-key sessions approve a specific visitor comment for local-agent handling without changing the source HTML
 - accept WebSocket comment events
 - write/read markdown comments or keep live-mode comments in memory
 - expose a read-only agent status projection for comments when an agent ledger is configured

@@ -773,6 +773,137 @@ test("server assigns owner identity only to owner-key sessions", async () => {
   }
 });
 
+test("server lets owner approve visitor comments for agent work", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-owner-approval-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Approval draft</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    ownerName: "Chekos",
+    ownerKey: "owner-secret",
+  });
+
+  const sockets = [];
+  try {
+    const ownerSocketUrl = new URL(instance.localUrl);
+    ownerSocketUrl.pathname = "/__tunelito/ws";
+    const owner = openJsonSocket(ownerSocketUrl);
+    sockets.push(owner.socket);
+    await waitFor(owner.socket, "open");
+    await waitUntil(() => owner.messages.some((message) => message.type === "hello"));
+
+    const visitorSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
+    visitorSocketUrl.searchParams.set("tunelito_key", "review-secret");
+    const visitor = openJsonSocket(visitorSocketUrl);
+    sockets.push(visitor.socket);
+    await waitFor(visitor.socket, "open");
+    await waitUntil(() => visitor.messages.some((message) => message.type === "hello"));
+
+    visitor.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Visitor",
+        quote: "Approval draft",
+        body: "This should be owner-approved before the agent handles it.",
+        textStart: 0,
+        textEnd: 14,
+        ownerApproval: {
+          approvedBy: "Mallory",
+          approvedAt: "2026-06-16T23:00:00.000Z",
+          fingerprint: "forged",
+        },
+      },
+    }));
+
+    await waitUntil(() => visitor.messages.some((message) => message.type === "comment"));
+    const created = visitor.messages.find((message) => message.type === "comment").comment;
+    assert.equal(created.authorRole, "visitor");
+    assert.equal(created.ownerApproval, undefined);
+
+    visitor.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: created.id,
+      approvedBy: "Visitor",
+    }));
+    await waitUntil(() => visitor.messages.some((message) => message.type === "error" && /Only the owner/.test(message.message)));
+    assert.equal(visitor.messages.some((message) => message.type === "comment-updated"), false);
+
+    owner.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: created.id,
+      approvedBy: "Lead Reviewer",
+    }));
+
+    await waitUntil(() => owner.messages.some((message) => message.type === "comment-updated"));
+    await waitUntil(() => visitor.messages.some((message) => message.type === "comment-updated"));
+    const ownerUpdate = owner.messages.find((message) => message.type === "comment-updated").comment;
+    const visitorUpdate = visitor.messages.find((message) => message.type === "comment-updated").comment;
+    assert.equal(ownerUpdate.id, created.id);
+    assert.equal(visitorUpdate.ownerApproval.approvedBy, "Lead Reviewer");
+    assert.match(visitorUpdate.ownerApproval.approvedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(visitorUpdate.ownerApproval.fingerprint, /^[a-f0-9]{64}$/);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /approved by owner: `Lead Reviewer`/);
+    assert.match(markdown, /This should be owner-approved before the agent handles it\./);
+
+    const fresh = openJsonSocket(visitorSocketUrl);
+    sockets.push(fresh.socket);
+    await waitFor(fresh.socket, "open");
+    await waitUntil(() => fresh.messages.some((message) => message.type === "hello"));
+    const restored = fresh.messages.find((message) => message.type === "hello").comments.find((comment) => comment.id === created.id);
+    assert.equal(restored.ownerApproval.approvedBy, "Lead Reviewer");
+
+    const clientScript = await fetch(new URL("/__tunelito/client.js?tunelito_key=review-secret", instance.originUrl)).then((res) => res.text());
+    assert.match(clientScript, /Approve for agent/);
+    assert.match(clientScript, /comment-updated/);
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server rejects owner approval in live mode", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-live-owner-approval-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>Live approval draft</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    ownerName: "Chekos",
+    ownerKey: "owner-secret",
+    liveMode: true,
+  });
+
+  const ownerSocketUrl = new URL(instance.localUrl);
+  ownerSocketUrl.pathname = "/__tunelito/ws";
+  const owner = openJsonSocket(ownerSocketUrl);
+  try {
+    await waitFor(owner.socket, "open");
+    await waitUntil(() => owner.messages.some((message) => message.type === "hello"));
+
+    owner.socket.send(JSON.stringify({
+      type: "approve-comment",
+      id: "c_live",
+      approvedBy: "Chekos",
+    }));
+
+    await waitUntil(() => owner.messages.some((message) => message.type === "error" && /persistent comments/.test(message.message)));
+  } finally {
+    owner.socket.close();
+    await instance.close();
+  }
+});
+
 test("server closes malformed WebSocket frames without exiting", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-ws-malformed-"));
   const htmlPath = join(dir, "page.html");
