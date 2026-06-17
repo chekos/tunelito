@@ -25,6 +25,7 @@ import {
   recordAgentSessionResult,
   waitForAgentInboxComments,
 } from "../src/agent-worker.js";
+import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
@@ -36,6 +37,7 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
@@ -71,6 +73,7 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
@@ -242,6 +245,10 @@ function validateMentionAgentPolicy(policy, trigger) {
 
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv[0] === "comments") {
+    process.exitCode = runCommentsCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "inbox") {
     process.exitCode = await runInboxCommand(argv.slice(1));
     return;
@@ -425,6 +432,112 @@ async function main() {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function commentsUsage() {
+  return `Tunelito comments -- structured comments inbox tools.
+
+Usage:
+  tunelito comments inspect <page.html|folder|comments.md> [options]
+
+Commands:
+  inspect     Print an index for a Tunelito comments inbox
+  help        Show this message
+
+Options:
+  --out <path>    Markdown comments file for a page or folder target
+  --json          Print the machine-readable tunelito-comments index
+`;
+}
+
+export function parseCommentsArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (command !== "inspect") {
+    throw new Error(`Unknown comments command: ${command}`);
+  }
+
+  const opts = { command, format: "text" };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--out") {
+      opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown comments option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length !== 1 && !opts.help) {
+    throw new Error(`Expected one page, folder, or comments file, got ${positional.length}`);
+  }
+
+  if (positional[0]) {
+    const inputPath = resolve(positional[0]);
+    const inputLooksLikeMarkdown = /\.md$/i.test(positional[0]);
+    if (opts.commentsPath && inputLooksLikeMarkdown) {
+      throw new Error("--out is only supported when inspecting a page or folder target");
+    }
+    if (!opts.commentsPath && inputLooksLikeMarkdown) {
+      opts.commentsPath = inputPath;
+      opts.requireCommentsFile = true;
+    } else {
+      opts.targetPath = inputPath;
+    }
+  }
+
+  return opts;
+}
+
+export function runCommentsCommand(args, { stdout = process.stdout, stderr = process.stderr } = {}) {
+  let opts;
+  try {
+    opts = parseCommentsArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${commentsUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(commentsUsage());
+    return 0;
+  }
+
+  const index = buildCommentsIndex({
+    targetPath: opts.targetPath,
+    commentsPath: opts.commentsPath,
+    requireCommentsFile: opts.requireCommentsFile,
+  });
+  stdout.write(formatCommentsIndex(index, opts.format));
+  return index.ok ? 0 : 1;
+}
+
+function formatCommentsIndex(index, format) {
+  if (format === "json") return `${JSON.stringify(index, null, 2)}\n`;
+  const diagnostics = index.diagnostics.length
+    ? `\nDiagnostics:\n${index.diagnostics.map((item) => `- ${item.severity}: ${item.message}`).join("\n")}\n`
+    : "";
+  return [
+    "Tunelito comments index",
+    `Status:   ${index.ok ? "ok" : "error"}`,
+    `Target:   ${index.targetPath || "(not provided)"}`,
+    `Comments: ${index.commentsPath || "(not provided)"}`,
+    `Total:    ${index.summary.total}`,
+    `Page:     ${index.summary.page}`,
+    `Site:     ${index.summary.site}`,
+    `Owner:    ${index.summary.owner}`,
+    `Visitor:  ${index.summary.visitor}`,
+    `Approved: ${index.summary.ownerApproved}`,
+    diagnostics,
+  ].join("\n");
 }
 
 function inboxUsage() {

@@ -4,10 +4,11 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.12.0
+Tunelito 0.13.0
 
 Usage: tunelito <page.html|folder> [options]
-       tunelito inbox <next|watch|record> <page.html|folder> [options]
+       tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
 Options:
@@ -42,8 +43,10 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
+  inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
                         for a coding agent to install
@@ -79,6 +82,14 @@ Choose the comments file:
 
 ```bash
 tunelito ./page.html --out ./notes/review.md
+```
+
+Inspect the comments inbox as JSON for an agent or diagnostic tool:
+
+```bash
+tunelito comments inspect ./site --json
+tunelito comments inspect ./site --out ./notes/review.md --json
+tunelito comments inspect ./site.comments.md --json
 ```
 
 Label your own comments as the owner:

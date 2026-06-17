@@ -29,6 +29,7 @@ The server owns local IO and transport:
 - accept WebSocket comment events
 - tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
+- build a derived JSON comments index from the markdown inbox for agents and diagnostics
 - expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
@@ -75,6 +76,7 @@ The browser client owns reviewer interaction:
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
+- Keep the `tunelito-comments` JSON index derived from markdown metadata; do not make it durable state.
 - Keep `--live` comments ephemeral; do not write them to markdown.
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.

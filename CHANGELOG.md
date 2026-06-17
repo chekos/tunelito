@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adds `tunelito comments inspect`, a versioned JSON comments index for agents and diagnostics that derives from the existing Markdown inbox.
+
 ## 0.13.0 - 2026-06-17
 
 - Adds owner approval for visitor comments, letting owner-keyed sessions approve a specific visitor comment for local-agent work without rewriting it as an owner comment.

@@ -116,9 +116,10 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.12.0
+Tunelito 0.13.0
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
@@ -154,6 +155,7 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
@@ -263,6 +265,16 @@ _Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 If a site comment is created from selected text, Tunelito keeps the quote for context and highlights it on the origin page only.
 
 Tunelito also stores hidden metadata comments so the live session can be restored after a restart. That metadata includes a stable reviewer identity for new comments, which lets a reviewer rename themselves and update earlier comments from the same browser session. Older comments without reviewer identity metadata are left unchanged during renames instead of being guessed by matching display names.
+
+Agents and tools can read a structured JSON view of the same Markdown inbox:
+
+```bash
+tunelito comments inspect ./site --json
+tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site.comments.md --json
+```
+
+The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file, include agent ledger state, or write to source HTML. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
 
 In `--live`, comments are not written to markdown and are not restored after restart.
 

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseInboxArgs, readBundledSkill, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -172,6 +172,104 @@ test("parseArgs rejects prompt options without an agent", () => {
     () => parseArgs(["site", "--agent-instructions", "Use short copy."]),
     /--agent prompt options require --agent/,
   );
+});
+
+test("parseCommentsArgs supports target and direct comments inspection", () => {
+  const target = parseCommentsArgs(["inspect", "page.html", "--out", "review.md", "--json"]);
+  assert.equal(target.command, "inspect");
+  assert.equal(target.format, "json");
+  assert.equal(target.targetPath, resolve("page.html"));
+  assert.equal(target.commentsPath, resolve("review.md"));
+
+  const direct = parseCommentsArgs(["inspect", "review.md", "--json"]);
+  assert.equal(direct.targetPath, undefined);
+  assert.equal(direct.commentsPath, resolve("review.md"));
+  assert.equal(direct.requireCommentsFile, true);
+
+  assert.throws(
+    () => parseCommentsArgs(["inspect", "review.md", "--out", "other.md"]),
+    /--out is only supported/,
+  );
+});
+
+test("runCommentsCommand prints parseable JSON for a comments inbox", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath,
+    comments: [{
+      id: "c_cli_index",
+      author: "Dana",
+      authorRole: "visitor",
+      scope: "page",
+      quote: "",
+      body: "Index this.",
+      created: "2026-06-17T00:00:00.000Z",
+    }],
+  }));
+
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  const code = runCommentsCommand(["inspect", sourcePath, "--json"], { stdout, stderr });
+  const index = JSON.parse(stdout.text());
+
+  assert.equal(code, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(index.format, "tunelito-comments");
+  assert.equal(index.commentsPath, commentsPath);
+  assert.deepEqual(index.comments.map((comment) => comment.id), ["c_cli_index"]);
+});
+
+test("runCommentsCommand supports custom and direct comments paths", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-custom-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "custom.comments.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath,
+    comments: [{
+      id: "c_cli_custom",
+      author: "Dana",
+      authorRole: "visitor",
+      scope: "page",
+      quote: "",
+      body: "Index custom path.",
+      created: "2026-06-17T00:00:00.000Z",
+    }],
+  }));
+
+  const customOut = streamCollector();
+  const customCode = runCommentsCommand(["inspect", sourcePath, "--out", commentsPath, "--json"], {
+    stdout: customOut,
+    stderr: streamCollector(),
+  });
+  const directOut = streamCollector();
+  const directCode = runCommentsCommand(["inspect", commentsPath, "--json"], {
+    stdout: directOut,
+    stderr: streamCollector(),
+  });
+
+  assert.equal(customCode, 0);
+  assert.equal(JSON.parse(customOut.text()).comments[0].id, "c_cli_custom");
+  assert.equal(directCode, 0);
+  assert.equal(JSON.parse(directOut.text()).comments[0].id, "c_cli_custom");
+});
+
+test("runCommentsCommand returns diagnostics for missing direct comments files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-missing-"));
+  const commentsPath = join(dir, "missing.comments.md");
+  const stdout = streamCollector();
+  const code = runCommentsCommand(["inspect", commentsPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+  });
+  const index = JSON.parse(stdout.text());
+
+  assert.equal(code, 1);
+  assert.equal(index.ok, false);
+  assert.equal(index.diagnostics[0].code, "comments.file-missing");
 });
 
 test("parseInboxArgs supports watch and record options", () => {

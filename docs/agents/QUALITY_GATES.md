@@ -40,6 +40,21 @@ curl -i http://127.0.0.1:4317/
 curl -i 'http://127.0.0.1:4317/?tunelito_key=...'
 ```
 
+## Comments Index or Agent Inbox Changes
+
+Required:
+
+- `test/comments.test.js`
+- `test/cli.test.js`
+- `tunelito comments inspect <target> --json` for a representative target or fixture comments file
+- spoofing or damaged-metadata coverage when parsing/restoration behavior changes
+
+Also update:
+
+- `docs/spec/tunelito-comments.md`
+- `docs/spec/tunelito-comments.schema.json`
+- README and docs-site comments or CLI pages
+
 ## Client/UI Changes
 
 Required:

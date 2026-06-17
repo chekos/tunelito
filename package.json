@@ -12,6 +12,7 @@
     "src/",
     "docs/RELEASING.md",
     "docs/agents/",
+    "docs/spec/",
     "docs-site/",
     "examples/",
     "README.md",

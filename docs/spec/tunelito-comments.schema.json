@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunelito.dev/spec/tunelito-comments.schema.json",
+  "title": "Tunelito comments index",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "targetPath",
+    "commentsPath",
+    "ok",
+    "summary",
+    "comments",
+    "diagnostics"
+  ],
+  "properties": {
+    "format": {
+      "const": "tunelito-comments"
+    },
+    "version": {
+      "const": 1
+    },
+    "targetPath": {
+      "type": ["string", "null"]
+    },
+    "commentsPath": {
+      "type": ["string", "null"]
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "page", "site", "owner", "visitor", "ownerApproved"],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "site": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "owner": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visitor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ownerApproved": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "comments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "authorRole",
+          "reviewerId",
+          "ownerApproval",
+          "scope",
+          "quote",
+          "body",
+          "prefix",
+          "suffix",
+          "path",
+          "pagePath",
+          "textStart",
+          "textEnd",
+          "created"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "authorRole": {
+            "enum": ["owner", "visitor"]
+          },
+          "reviewerId": {
+            "type": ["string", "null"]
+          },
+          "ownerApproval": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": ["approvedBy", "approvedAt", "fingerprint"],
+                "additionalProperties": false,
+                "properties": {
+                  "approvedBy": {
+                    "type": "string"
+                  },
+                  "approvedAt": {
+                    "type": "string"
+                  },
+                  "fingerprint": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "scope": {
+            "enum": ["page", "site"]
+          },
+          "quote": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "suffix": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "pagePath": {
+            "type": "string"
+          },
+          "textStart": {
+            "type": ["integer", "null"]
+          },
+          "textEnd": {
+            "type": ["integer", "null"]
+          },
+          "created": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "properties": {
+          "severity": {
+            "enum": ["info", "warning", "error"]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
