@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCommentStore, loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
+import { buildCommentsIndex } from "../src/comment-index.js";
 
 test("comment store writes readable markdown and restores hidden metadata", () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-"));
@@ -42,6 +43,187 @@ test("comment store writes readable markdown and restores hidden metadata", () =
   assert.equal(restored[0].body, "This should be clearer.");
 });
 
+test("comments index summarizes a single-file default comments inbox", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-file-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  const store = createCommentStore({ commentsPath, sourcePath });
+  const comment = store.add({
+    id: "c_index_file",
+    author: "Jane",
+    authorRole: "visitor",
+    reviewerId: "r_jane",
+    quote: "Page",
+    body: "Clarify this heading.",
+    pagePath: "/",
+    path: "body > h1",
+    textStart: 0,
+    textEnd: 4,
+    created: "2026-06-17T00:00:00.000Z",
+  });
+
+  const index = buildCommentsIndex({ targetPath: sourcePath });
+
+  assert.equal(index.ok, true);
+  assert.equal(index.format, "tunelito-comments");
+  assert.equal(index.version, 1);
+  assert.equal(index.targetPath, sourcePath);
+  assert.equal(index.commentsPath, commentsPath);
+  assert.deepEqual(index.summary, {
+    total: 1,
+    page: 1,
+    site: 0,
+    owner: 0,
+    visitor: 1,
+    ownerApproved: 0,
+  });
+  assert.deepEqual(index.comments[0], {
+    id: comment.id,
+    author: "Jane",
+    authorRole: "visitor",
+    reviewerId: "r_jane",
+    ownerApproval: null,
+    scope: "page",
+    quote: "Page",
+    body: "Clarify this heading.",
+    prefix: "",
+    suffix: "",
+    path: "body > h1",
+    pagePath: "/",
+    textStart: 0,
+    textEnd: 4,
+    created: "2026-06-17T00:00:00.000Z",
+  });
+});
+
+test("comments index supports folder default comments path and owner approvals", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-folder-"));
+  const sitePath = join(dir, "site");
+  const commentsPath = join(dir, "site.comments.md");
+  mkdirSync(sitePath);
+  writeFileSync(join(sitePath, "index.html"), "<!doctype html><h1>Site</h1>");
+  const store = createCommentStore({ commentsPath, sourcePath: sitePath });
+  store.add({
+    id: "c_owner",
+    author: "Chekos",
+    authorRole: "owner",
+    scope: "page",
+    quote: "",
+    body: "Ship this copy.",
+    created: "2026-06-17T00:00:00.000Z",
+  });
+  store.add({
+    id: "c_approved",
+    author: "Rin",
+    authorRole: "visitor",
+    scope: "site",
+    quote: "",
+    body: "Apply this rhythm everywhere.",
+    ownerApproval: {
+      approvedBy: "Chekos",
+      approvedAt: "2026-06-17T00:01:00.000Z",
+      fingerprint: "approved",
+    },
+    created: "2026-06-17T00:01:00.000Z",
+  });
+
+  const index = buildCommentsIndex({ targetPath: sitePath });
+
+  assert.equal(index.ok, true);
+  assert.equal(index.commentsPath, commentsPath);
+  assert.deepEqual(index.summary, {
+    total: 2,
+    page: 1,
+    site: 1,
+    owner: 1,
+    visitor: 1,
+    ownerApproved: 1,
+  });
+  assert.equal(index.comments.find((comment) => comment.id === "c_approved").ownerApproval.approvedBy, "Chekos");
+});
+
+test("comments index supports custom comments paths and direct markdown inspection", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-custom-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "review-notes.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath,
+    comments: [{
+      id: "c_custom",
+      author: "Dana",
+      authorRole: "visitor",
+      scope: "page",
+      quote: "",
+      body: "Use the custom path.",
+      created: "2026-06-17T00:00:00.000Z",
+    }],
+  }));
+
+  const fromTarget = buildCommentsIndex({ targetPath: sourcePath, commentsPath });
+  const direct = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+
+  assert.equal(fromTarget.ok, true);
+  assert.equal(fromTarget.comments[0].id, "c_custom");
+  assert.equal(direct.ok, true);
+  assert.equal(direct.targetPath, null);
+  assert.equal(direct.commentsPath, commentsPath);
+  assert.equal(direct.comments[0].id, "c_custom");
+});
+
+test("comments index returns an empty success for missing target comments files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-missing-"));
+  const sourcePath = join(dir, "page.html");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+
+  const index = buildCommentsIndex({ targetPath: sourcePath });
+
+  assert.equal(index.ok, true);
+  assert.equal(index.summary.total, 0);
+  assert.deepEqual(index.comments, []);
+  assert.equal(index.diagnostics[0].severity, "info");
+  assert.equal(index.diagnostics[0].code, "comments.file-missing");
+});
+
+test("comments index accepts a rendered empty comments inbox", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-empty-rendered-"));
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: join(dir, "page.html"),
+    comments: [],
+  }));
+
+  const index = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+
+  assert.equal(index.ok, true);
+  assert.equal(index.summary.total, 0);
+  assert.deepEqual(index.comments, []);
+});
+
+test("comments index rejects empty or visible-only direct comments files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-visible-only-"));
+  const emptyPath = join(dir, "empty.comments.md");
+  const visibleOnlyPath = join(dir, "visible.comments.md");
+  writeFileSync(emptyPath, "");
+  writeFileSync(visibleOnlyPath, [
+    "# Tunelito comments for `page.html`",
+    "",
+    "## Jane at 2026-06-17 00:00:00 UTC",
+    "",
+    "This visible text has no restorable metadata.",
+    "",
+  ].join("\n"));
+
+  const emptyIndex = buildCommentsIndex({ commentsPath: emptyPath, requireCommentsFile: true });
+  const visibleOnlyIndex = buildCommentsIndex({ commentsPath: visibleOnlyPath, requireCommentsFile: true });
+
+  assert.equal(emptyIndex.ok, false);
+  assert.equal(emptyIndex.diagnostics[0].code, "comments.file-empty");
+  assert.equal(visibleOnlyIndex.ok, false);
+  assert.equal(visibleOnlyIndex.diagnostics[0].code, "comments.file-unrecognized");
+});
+
 test("comment markdown does not restore metadata-looking text from visible comment body", () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-spoof-"));
   const commentsPath = join(dir, "page.comments.md");
@@ -67,6 +249,9 @@ test("comment markdown does not restore metadata-looking text from visible comme
 
   const restored = loadCommentsFromMarkdown(commentsPath);
   assert.deepEqual(restored.map((comment) => comment.id), ["c_real"]);
+  const index = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+  assert.equal(index.ok, true);
+  assert.deepEqual(index.comments.map((comment) => comment.id), ["c_real"]);
   assert.match(markdown, /This should remain visible text only\./);
 });
 
@@ -152,6 +337,41 @@ test("comment loader restores canonical comments with CRLF line endings", () => 
 
   const restored = loadCommentsFromMarkdown(commentsPath);
   assert.deepEqual(restored.map((comment) => comment.id), ["c_crlf"]);
+  const index = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+  assert.equal(index.ok, true);
+  assert.deepEqual(index.comments.map((comment) => comment.id), ["c_crlf"]);
+});
+
+test("comments index reports damaged hidden metadata without crashing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-damaged-"));
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(commentsPath, [
+    "# Tunelito comments for `page.html`",
+    "",
+    "<!-- tunelito-comment: not-base64url -->",
+    "## Broken at 2026-06-17 00:00:00 UTC",
+    "",
+    "This section was hand edited.",
+    "",
+  ].join("\n"));
+
+  const index = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+
+  assert.equal(index.ok, false);
+  assert.deepEqual(index.comments, []);
+  assert.equal(index.diagnostics[0].code, "comments.metadata-invalid");
+  assert.equal(index.diagnostics[0].line, 3);
+});
+
+test("comments index rejects unrecognized direct markdown files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-unrecognized-"));
+  const commentsPath = join(dir, "notes.md");
+  writeFileSync(commentsPath, "# Meeting notes\n\nThis is not a Tunelito inbox.\n");
+
+  const index = buildCommentsIndex({ commentsPath, requireCommentsFile: true });
+
+  assert.equal(index.ok, false);
+  assert.equal(index.diagnostics[0].code, "comments.file-unrecognized");
 });
 
 test("comment loader restores legacy unescaped sections without restoring embedded sections", () => {

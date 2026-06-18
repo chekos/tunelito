@@ -25,7 +25,11 @@ import {
   recordAgentSessionResult,
   waitForAgentInboxComments,
 } from "../src/agent-worker.js";
+import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
+import { buildDoctorReport } from "../src/doctor.js";
+import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
+import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
@@ -36,8 +40,12 @@ function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito doctor [page.html|folder] [options]
+       tunelito mcp
+       tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
-       tunelito skill show
+       tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -71,11 +79,16 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  doctor                Run read-only local setup and safety diagnostics
+  mcp                   Start a stdio MCP server for comments and inbox tools
+  comments inspect      Print a structured JSON index for a Tunelito comments inbox
+  review watch          Wait for a browser Done Reviewing handoff event
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
+  skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
 `;
 }
@@ -242,6 +255,22 @@ function validateMentionAgentPolicy(policy, trigger) {
 
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv[0] === "doctor") {
+    process.exitCode = await runDoctorCommand(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "mcp") {
+    process.exitCode = runMcpCommand(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "comments") {
+    process.exitCode = runCommentsCommand(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "review") {
+    process.exitCode = await runReviewCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "inbox") {
     process.exitCode = await runInboxCommand(argv.slice(1));
     return;
@@ -351,6 +380,9 @@ async function main() {
     agentWorker?.wake("comment");
     agentSessionWatcher?.wake("comment");
   });
+  instance.events.on("review-completed", (event) => {
+    console.log(`Review completed #${event.sequence}: ${event.summary.comments} comment${event.summary.comments === 1 ? "" : "s"}`);
+  });
   instance.events.on("document-changed", () => {
     console.log("HTML changed on disk; connected browsers were asked to reload.");
   });
@@ -358,6 +390,7 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
+  console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
     console.log(`Owner:   ${opts.ownerName}`);
   }
@@ -376,6 +409,7 @@ async function main() {
       maxPasses: opts.agentMaxPasses,
       ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
+      reviewUrl: instance.localUrl,
     });
     console.log(`Agent session: ${agentSessionWatcher.description}`);
     console.log(`Agent session: watching comments in this process`);
@@ -425,6 +459,387 @@ async function main() {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function doctorUsage() {
+  return `Tunelito doctor -- read-only local setup and safety diagnostics.
+
+Usage:
+  tunelito doctor [page.html|folder] [options]
+
+Options:
+  --out <path>              Markdown comments file to inspect
+  --agent-state <path>      Agent resolution ledger to inspect
+  --host <host>             Host to evaluate (default: 127.0.0.1)
+  --port <number>           Port to evaluate (default: 4317)
+  --no-auth                 Evaluate an unauthenticated session shape
+  --no-tunnel               Evaluate a local-only session shape
+  --live                    Evaluate live-mode persistence
+  --agent <codex|claude|custom>
+                            Evaluate local agent worker compatibility
+  --agent-session           Evaluate active-agent session compatibility
+  --agent-policy <mode>     Which comments are actionable: ${AGENT_POLICIES.join("|")} (default: ${DEFAULT_AGENT_POLICY})
+  --agent-trigger <txt>     Marker for mention policies, or "all" (default: ${DEFAULT_AGENT_TRIGGER})
+  --json                    Print the machine-readable tunelito-doctor report
+`;
+}
+
+export function parseDoctorArgs(argv) {
+  const opts = {
+    host: "127.0.0.1",
+    port: 4317,
+    auth: true,
+    tunnel: true,
+    agentPolicy: DEFAULT_AGENT_POLICY,
+    agentTrigger: DEFAULT_AGENT_TRIGGER,
+    format: "text",
+  };
+  const positional = [];
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help" || arg === "help") {
+      opts.help = true;
+    } else if (arg === "--out") {
+      opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--agent-state") {
+      opts.agentStatePath = resolve(requiredValue(argv[++i], "--agent-state"));
+    } else if (arg === "--host") {
+      opts.host = requiredValue(argv[++i], "--host");
+    } else if (arg === "--port") {
+      opts.port = parseIntegerValue(argv[++i], "--port", { min: 0, max: 65535 });
+    } else if (arg === "--no-auth") {
+      opts.auth = false;
+    } else if (arg === "--no-tunnel") {
+      opts.tunnel = false;
+    } else if (arg === "--live") {
+      opts.live = true;
+    } else if (arg === "--agent") {
+      opts.agent = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom").toLowerCase();
+    } else if (arg === "--agent-session") {
+      opts.agentSession = true;
+    } else if (arg === "--agent-policy") {
+      opts.agentPolicy = normalizeAgentPolicy(requiredValue(argv[++i], "--agent-policy"));
+      opts.agentPolicyProvided = true;
+    } else if (arg === "--agent-trigger") {
+      opts.agentTrigger = requiredValue(argv[++i], "--agent-trigger");
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown doctor option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length > 1) {
+    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+  }
+  if (opts.agent && !["codex", "claude", "custom"].includes(opts.agent)) {
+    throw new Error(`Unsupported --agent provider: ${opts.agent}`);
+  }
+  validateMentionAgentPolicy(opts.agentPolicy, opts.agentTrigger);
+  if (positional[0]) opts.targetPath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runDoctorCommand(args, { stdout = process.stdout, stderr = process.stderr, deps = {} } = {}) {
+  let opts;
+  try {
+    opts = parseDoctorArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${doctorUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(doctorUsage());
+    return 0;
+  }
+
+  const report = await buildDoctorReport(opts, deps);
+  stdout.write(formatDoctorReport(report, opts.format));
+  return report.ok ? 0 : 1;
+}
+
+function formatDoctorReport(report, format) {
+  if (format === "json") return `${JSON.stringify(report, null, 2)}\n`;
+  const lines = [
+    "Tunelito doctor",
+    `Status: ${report.ok ? "ok" : "error"}`,
+    `Errors: ${report.summary.errors}`,
+    `Warnings: ${report.summary.warnings}`,
+    `Info: ${report.summary.info}`,
+    "",
+  ];
+  for (const check of report.checks) {
+    lines.push(`[${check.status}] ${check.id}: ${check.message}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function mcpUsage() {
+  return `Tunelito MCP -- stdio Model Context Protocol server.
+
+Usage:
+  tunelito mcp
+
+The MCP server exposes comments and active-agent inbox tools. It does not start
+a review server, tunnel, browser, or local agent worker.
+`;
+}
+
+export function runMcpCommand(args, { stdin = process.stdin, stdout = process.stdout, stderr = process.stderr } = {}) {
+  const sub = args[0];
+  if (sub === "help" || sub === "-h" || sub === "--help") {
+    stdout.write(mcpUsage());
+    return 0;
+  }
+  if (args.length) {
+    stderr.write(`Unknown mcp argument: ${sub}\n\n${mcpUsage()}`);
+    return 1;
+  }
+  createMcpServer({ stdin, stdout, stderr });
+  return 0;
+}
+
+function commentsUsage() {
+  return `Tunelito comments -- structured comments inbox tools.
+
+Usage:
+  tunelito comments inspect <page.html|folder|comments.md> [options]
+
+Commands:
+  inspect     Print an index for a Tunelito comments inbox
+  help        Show this message
+
+Options:
+  --out <path>    Markdown comments file for a page or folder target
+  --json          Print the machine-readable tunelito-comments index
+`;
+}
+
+export function parseCommentsArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (command !== "inspect") {
+    throw new Error(`Unknown comments command: ${command}`);
+  }
+
+  const opts = { command, format: "text" };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--out") {
+      opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown comments option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length !== 1 && !opts.help) {
+    throw new Error(`Expected one page, folder, or comments file, got ${positional.length}`);
+  }
+
+  if (positional[0]) {
+    const inputPath = resolve(positional[0]);
+    const inputLooksLikeMarkdown = /\.md$/i.test(positional[0]);
+    if (opts.commentsPath && inputLooksLikeMarkdown) {
+      throw new Error("--out is only supported when inspecting a page or folder target");
+    }
+    if (!opts.commentsPath && inputLooksLikeMarkdown) {
+      opts.commentsPath = inputPath;
+      opts.requireCommentsFile = true;
+    } else {
+      opts.targetPath = inputPath;
+    }
+  }
+
+  return opts;
+}
+
+export function runCommentsCommand(args, { stdout = process.stdout, stderr = process.stderr } = {}) {
+  let opts;
+  try {
+    opts = parseCommentsArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${commentsUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(commentsUsage());
+    return 0;
+  }
+
+  const index = buildCommentsIndex({
+    targetPath: opts.targetPath,
+    commentsPath: opts.commentsPath,
+    requireCommentsFile: opts.requireCommentsFile,
+  });
+  stdout.write(formatCommentsIndex(index, opts.format));
+  return index.ok ? 0 : 1;
+}
+
+function formatCommentsIndex(index, format) {
+  if (format === "json") return `${JSON.stringify(index, null, 2)}\n`;
+  const diagnostics = index.diagnostics.length
+    ? `\nDiagnostics:\n${index.diagnostics.map((item) => `- ${item.severity}: ${item.message}`).join("\n")}\n`
+    : "";
+  return [
+    "Tunelito comments index",
+    `Status:   ${index.ok ? "ok" : "error"}`,
+    `Target:   ${index.targetPath || "(not provided)"}`,
+    `Comments: ${index.commentsPath || "(not provided)"}`,
+    `Total:    ${index.summary.total}`,
+    `Page:     ${index.summary.page}`,
+    `Site:     ${index.summary.site}`,
+    `Owner:    ${index.summary.owner}`,
+    `Visitor:  ${index.summary.visitor}`,
+    `Approved: ${index.summary.ownerApproved}`,
+    diagnostics,
+  ].join("\n");
+}
+
+function reviewUsage() {
+  return `Tunelito review -- reviewer handoff event commands.
+
+Usage:
+  tunelito review watch [page.html|folder] [options]
+
+Commands:
+  watch       Wait for the next Done Reviewing handoff event
+  help        Show this message
+
+Options:
+  --url <url>        Local Tunelito review URL printed by the running server
+  --timeout <s>      Stop waiting after this many seconds (default: 0, no timeout)
+  --after <n|latest> Replay retained events after this sequence (default: 0)
+  --format <text|json>
+                     Output format (default: text)
+  --json             Print the machine-readable review.completed event
+`;
+}
+
+export function parseReviewArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (command !== "watch") {
+    throw new Error(`Unknown review command: ${command}`);
+  }
+
+  const opts = { command, format: "text", timeoutSeconds: 0, after: 0 };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--url") {
+      opts.url = requiredValue(argv[++i], "--url");
+    } else if (arg === "--timeout") {
+      opts.timeoutSeconds = parseIntegerValue(argv[++i], "--timeout", { min: 0 });
+    } else if (arg === "--after") {
+      opts.after = parseReviewAfterValue(requiredValue(argv[++i], "--after"));
+    } else if (arg === "--format") {
+      opts.format = requiredValue(argv[++i], "--format");
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown review option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length > 1 && !opts.help) {
+    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+  }
+  if (!["text", "json"].includes(opts.format)) {
+    throw new Error("Unsupported --format for review watch: use text or json");
+  }
+  if (positional[0]) opts.targetPath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runReviewCommand(args, { stdout = process.stdout, stderr = process.stderr, fetchFn = globalThis.fetch } = {}) {
+  let opts;
+  try {
+    opts = parseReviewArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${reviewUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(reviewUsage());
+    return 0;
+  }
+
+  try {
+    if (typeof fetchFn !== "function") throw new Error("review watch requires a fetch implementation");
+    const sessionUrl = opts.url || reviewUrlFromSessionFile(opts.targetPath);
+    const response = await fetchFn(buildReviewEventsUrl(sessionUrl, opts), { cache: "no-store" });
+    const body = await response.text();
+    const payload = JSON.parse(body);
+    stdout.write(formatReviewWatchResult(payload, opts.format));
+    return response.ok ? 0 : 1;
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+}
+
+function parseReviewAfterValue(value) {
+  if (value === "latest") return value;
+  return parseIntegerValue(value, "--after", { min: 0 });
+}
+
+function reviewUrlFromSessionFile(targetPath) {
+  if (!targetPath) throw new Error("review watch requires --url or a target with .tunelito/session.json metadata");
+  const sessionPath = join(agentWorkspaceRoot(targetPath), ".tunelito", "session.json");
+  if (!existsSync(sessionPath)) throw new Error(`Review session metadata not found: ${sessionPath}. Pass --url with the running Tunelito Local URL.`);
+  const session = JSON.parse(readFileSync(sessionPath, "utf8"));
+  const url = session.reviewUrl || session.localUrl || session.originUrl;
+  if (!url) throw new Error(`Review session metadata does not include a review URL: ${sessionPath}`);
+  return url;
+}
+
+function buildReviewEventsUrl(sessionUrl, opts) {
+  const source = new URL(sessionUrl);
+  const url = new URL(REVIEW_EVENTS_ROUTE, source.origin);
+  for (const [key, value] of source.searchParams) url.searchParams.set(key, value);
+  url.searchParams.set("after", String(opts.after));
+  if (opts.timeoutSeconds > 0) url.searchParams.set("timeout", String(opts.timeoutSeconds));
+  return url;
+}
+
+function formatReviewWatchResult(payload, format) {
+  if (format === "json") return `${JSON.stringify(payload, null, 2)}\n`;
+  if (payload.type === "review.timeout") {
+    return `Timed out waiting for review.completed after ${payload.timeoutSeconds}s\n`;
+  }
+  const summary = payload.summary || {};
+  return [
+    `Review completed #${payload.sequence}`,
+    `Target:   ${payload.targetPath || "(unknown)"}`,
+    `Comments: ${summary.comments ?? summary.total ?? 0}`,
+    `Page:     ${summary.page ?? 0}`,
+    `Site:     ${summary.site ?? 0}`,
+    `Owner:    ${summary.owner ?? 0}`,
+    `Visitor:  ${summary.visitor ?? 0}`,
+    "",
+  ].join("\n");
 }
 
 function inboxUsage() {
@@ -740,7 +1155,7 @@ function formatInboxRecordResult(recorded, format, { trigger = DEFAULT_AGENT_TRI
   return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n\n${tracker}`;
 }
 
-function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend }) {
+function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend, reviewUrl = "" }) {
   const workspaceRoot = agentWorkspaceRoot(targetPath);
   const sessionPath = join(workspaceRoot, ".tunelito", "session.json");
   mkdirSync(dirname(sessionPath), { recursive: true });
@@ -757,6 +1172,8 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
     maxPasses,
     ownerName: ownerName || "",
     hasInstructions: Boolean(promptAppend),
+    reviewUrl,
+    reviewWatchCommand: reviewUrl ? reviewWatchCommand({ url: reviewUrl }) : "",
     nextCommand: inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }),
     statusCommand: inboxStatusCommand({ targetPath, commentsPath, statePath, policy, trigger }),
     recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }),
@@ -764,6 +1181,17 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
   };
   writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
   return sessionPath;
+}
+
+function reviewWatchCommand({ url }) {
+  return [
+    "tunelito",
+    "review",
+    "watch",
+    "--url",
+    shellQuote(url),
+    "--json",
+  ].join(" ");
 }
 
 function inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }) {
@@ -885,12 +1313,51 @@ Usage: tunelito skill <command>
 
 Commands:
   show        Print the Tunelito agent skill (SKILL.md) to stdout
+  setup       Print no-write setup guidance for common coding agents
   help        Show this message
 
 Install it for your coding agent, for example with Claude Code:
   tunelito skill show > .claude/skills/tunelito/SKILL.md
 
-Or just ask your agent: "run 'npx --yes tunelito skill show' and install the skill it prints."
+For guided setup:
+  tunelito skill setup
+`;
+}
+
+function skillSetupText() {
+  return `Tunelito agent setup
+
+Version: ${VERSION}
+Runtime: Node.js 22 or newer
+
+1. Confirm Tunelito works:
+   npx --yes tunelito --version
+
+2. Print the bundled skill:
+   npx --yes tunelito skill show
+
+3. Install or reference it for your agent:
+
+   Claude Code project skill:
+     mkdir -p .claude/skills/tunelito
+     npx --yes tunelito skill show > .claude/skills/tunelito/SKILL.md
+
+   Codex and other instruction-file agents:
+     Add the Tunelito guidance to the project or agent instructions file that your agent actually loads.
+     Inspect existing instruction files before editing them, and preserve user-specific rules.
+
+   Cursor, Gemini, opencode, Copilot-style assistants:
+     Use the same skill text as an agent instruction block or project rule according to that tool's current docs.
+     Do not assume one global path is writable or loaded across machines.
+
+4. Safety reminders:
+   - This setup command prints guidance only; it does not write files or install packages.
+   - Do not present --no-auth as local-only. For sensitive pages, use --no-tunnel, optionally with --live.
+   - Treat --agent and --agent-session as trusted-session behavior because reviewer comments can become local edit instructions.
+   - Flags change over time; confirm exact options with npx --yes tunelito --help before quoting them.
+
+Full guide: https://tunelito.dev/agent-setup
+Stable skill body: npx --yes tunelito skill show
 `;
 }
 
@@ -909,6 +1376,10 @@ export function runSkillCommand(args, { stdout = process.stdout, stderr = proces
       return 1;
     }
     stdout.write(content.endsWith("\n") ? content : `${content}\n`);
+    return 0;
+  }
+  if (sub === "setup") {
+    stdout.write(skillSetupText());
     return 0;
   }
   stderr.write(`Unknown skill command: ${sub}\n\n`);

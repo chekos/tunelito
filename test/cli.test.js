@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseInboxArgs, readBundledSkill, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -172,6 +172,264 @@ test("parseArgs rejects prompt options without an agent", () => {
     () => parseArgs(["site", "--agent-instructions", "Use short copy."]),
     /--agent prompt options require --agent/,
   );
+});
+
+test("parseDoctorArgs supports read-only diagnostic options", () => {
+  const opts = parseDoctorArgs([
+    "site",
+    "--out",
+    "site.comments.md",
+    "--agent-state",
+    "state.json",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "0",
+    "--no-auth",
+    "--no-tunnel",
+    "--live",
+    "--agent-session",
+    "--agent-policy",
+    "owner",
+    "--json",
+  ]);
+
+  assert.equal(opts.targetPath, resolve("site"));
+  assert.equal(opts.commentsPath, resolve("site.comments.md"));
+  assert.equal(opts.agentStatePath, resolve("state.json"));
+  assert.equal(opts.host, "0.0.0.0");
+  assert.equal(opts.port, 0);
+  assert.equal(opts.auth, false);
+  assert.equal(opts.tunnel, false);
+  assert.equal(opts.live, true);
+  assert.equal(opts.agentSession, true);
+  assert.equal(opts.agentPolicy, "owner");
+  assert.equal(opts.format, "json");
+});
+
+test("runDoctorCommand prints parseable JSON and returns nonzero for errors", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-doctor-cli-"));
+  const targetPath = join(dir, "notes.txt");
+  writeFileSync(targetPath, "not html");
+
+  const stdout = streamCollector();
+  const code = await runDoctorCommand([targetPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+    deps: {
+      checkPort: async () => ({ available: true }),
+      commandExists: () => false,
+    },
+  });
+  const report = JSON.parse(stdout.text());
+
+  assert.equal(code, 1);
+  assert.equal(report.format, "tunelito-doctor");
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.some((check) => check.id === "target.file" && check.status === "fail"), true);
+});
+
+test("mcp help is side-effect free and unknown arguments fail", () => {
+  const helpOut = streamCollector();
+  const helpCode = runMcpCommand(["--help"], {
+    stdout: helpOut,
+    stderr: streamCollector(),
+  });
+  assert.equal(helpCode, 0);
+  assert.match(helpOut.text(), /Tunelito MCP/);
+  assert.match(helpOut.text(), /does not start/);
+
+  const stderr = streamCollector();
+  const badCode = runMcpCommand(["serve"], {
+    stdout: streamCollector(),
+    stderr,
+  });
+  assert.equal(badCode, 1);
+  assert.match(stderr.text(), /Unknown mcp argument/);
+});
+
+test("review watch parses options and prints handoff events", async () => {
+  const opts = parseReviewArgs([
+    "watch",
+    "site",
+    "--url",
+    "http://127.0.0.1:4317/?tunelito_key=secret",
+    "--after",
+    "latest",
+    "--timeout",
+    "5",
+    "--json",
+  ]);
+  assert.equal(opts.command, "watch");
+  assert.equal(opts.targetPath, resolve("site"));
+  assert.equal(opts.url, "http://127.0.0.1:4317/?tunelito_key=secret");
+  assert.equal(opts.after, "latest");
+  assert.equal(opts.timeoutSeconds, 5);
+  assert.equal(opts.format, "json");
+
+  const stdout = streamCollector();
+  const urls = [];
+  const code = await runReviewCommand([
+    "watch",
+    "--url",
+    "http://127.0.0.1:4317/?tunelito_key=secret",
+    "--timeout",
+    "5",
+    "--json",
+  ], {
+    stdout,
+    stderr: streamCollector(),
+    fetchFn: async (url) => {
+      urls.push(url.toString());
+      return new Response(`${JSON.stringify({
+        type: "review.completed",
+        sequence: 3,
+        targetPath: "/tmp/site",
+        summary: { comments: 2, page: 1, site: 1, owner: 0, visitor: 2 },
+      })}\n`, { status: 200 });
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.match(urls[0], /\/__tunelito\/review-events\?/);
+  assert.match(urls[0], /tunelito_key=secret/);
+  assert.match(urls[0], /timeout=5/);
+  assert.equal(JSON.parse(stdout.text()).sequence, 3);
+});
+
+test("review watch can read session metadata and returns nonzero on timeout", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-review-session-"));
+  mkdirSync(join(siteDir, ".tunelito"), { recursive: true });
+  writeFileSync(join(siteDir, ".tunelito", "session.json"), `${JSON.stringify({
+    version: 1,
+    reviewUrl: "http://127.0.0.1:4317/?tunelito_key=session-secret",
+  })}\n`);
+
+  const eventOut = streamCollector();
+  const eventCode = await runReviewCommand(["watch", siteDir, "--json"], {
+    stdout: eventOut,
+    stderr: streamCollector(),
+    fetchFn: async (url) => {
+      assert.match(url.toString(), /tunelito_key=session-secret/);
+      return new Response(`${JSON.stringify({
+        type: "review.completed",
+        sequence: 1,
+        targetPath: siteDir,
+        summary: { comments: 1, page: 1, site: 0, owner: 0, visitor: 1 },
+      })}\n`, { status: 200 });
+    },
+  });
+  assert.equal(eventCode, 0);
+  assert.equal(JSON.parse(eventOut.text()).type, "review.completed");
+
+  const timeoutOut = streamCollector();
+  const timeoutCode = await runReviewCommand(["watch", "--url", "http://127.0.0.1:4317/", "--timeout", "1"], {
+    stdout: timeoutOut,
+    stderr: streamCollector(),
+    fetchFn: async () => new Response(`${JSON.stringify({ type: "review.timeout", after: 0, timeoutSeconds: 1 })}\n`, { status: 408 }),
+  });
+  assert.equal(timeoutCode, 1);
+  assert.match(timeoutOut.text(), /Timed out waiting for review\.completed/);
+
+  assert.throws(() => parseReviewArgs(["watch", "site", "--format", "yaml"]), /Unsupported --format/);
+});
+
+test("parseCommentsArgs supports target and direct comments inspection", () => {
+  const target = parseCommentsArgs(["inspect", "page.html", "--out", "review.md", "--json"]);
+  assert.equal(target.command, "inspect");
+  assert.equal(target.format, "json");
+  assert.equal(target.targetPath, resolve("page.html"));
+  assert.equal(target.commentsPath, resolve("review.md"));
+
+  const direct = parseCommentsArgs(["inspect", "review.md", "--json"]);
+  assert.equal(direct.targetPath, undefined);
+  assert.equal(direct.commentsPath, resolve("review.md"));
+  assert.equal(direct.requireCommentsFile, true);
+
+  assert.throws(
+    () => parseCommentsArgs(["inspect", "review.md", "--out", "other.md"]),
+    /--out is only supported/,
+  );
+});
+
+test("runCommentsCommand prints parseable JSON for a comments inbox", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath,
+    comments: [{
+      id: "c_cli_index",
+      author: "Dana",
+      authorRole: "visitor",
+      scope: "page",
+      quote: "",
+      body: "Index this.",
+      created: "2026-06-17T00:00:00.000Z",
+    }],
+  }));
+
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  const code = runCommentsCommand(["inspect", sourcePath, "--json"], { stdout, stderr });
+  const index = JSON.parse(stdout.text());
+
+  assert.equal(code, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(index.format, "tunelito-comments");
+  assert.equal(index.commentsPath, commentsPath);
+  assert.deepEqual(index.comments.map((comment) => comment.id), ["c_cli_index"]);
+});
+
+test("runCommentsCommand supports custom and direct comments paths", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-custom-"));
+  const sourcePath = join(dir, "page.html");
+  const commentsPath = join(dir, "custom.comments.md");
+  writeFileSync(sourcePath, "<!doctype html><h1>Page</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath,
+    comments: [{
+      id: "c_cli_custom",
+      author: "Dana",
+      authorRole: "visitor",
+      scope: "page",
+      quote: "",
+      body: "Index custom path.",
+      created: "2026-06-17T00:00:00.000Z",
+    }],
+  }));
+
+  const customOut = streamCollector();
+  const customCode = runCommentsCommand(["inspect", sourcePath, "--out", commentsPath, "--json"], {
+    stdout: customOut,
+    stderr: streamCollector(),
+  });
+  const directOut = streamCollector();
+  const directCode = runCommentsCommand(["inspect", commentsPath, "--json"], {
+    stdout: directOut,
+    stderr: streamCollector(),
+  });
+
+  assert.equal(customCode, 0);
+  assert.equal(JSON.parse(customOut.text()).comments[0].id, "c_cli_custom");
+  assert.equal(directCode, 0);
+  assert.equal(JSON.parse(directOut.text()).comments[0].id, "c_cli_custom");
+});
+
+test("runCommentsCommand returns diagnostics for missing direct comments files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-cli-missing-"));
+  const commentsPath = join(dir, "missing.comments.md");
+  const stdout = streamCollector();
+  const code = runCommentsCommand(["inspect", commentsPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+  });
+  const index = JSON.parse(stdout.text());
+
+  assert.equal(code, 1);
+  assert.equal(index.ok, false);
+  assert.equal(index.diagnostics[0].code, "comments.file-missing");
 });
 
 test("parseInboxArgs supports watch and record options", () => {
@@ -448,6 +706,35 @@ test("skill with no subcommand prints install help", () => {
   const code = runSkillCommand([], { stdout, stderr: streamCollector() });
   assert.equal(code, 0);
   assert.match(stdout.text(), /tunelito skill show/);
+  assert.match(stdout.text(), /tunelito skill setup/);
+});
+
+test("skill setup prints no-write cross-agent onboarding guidance", () => {
+  const cwd = process.cwd();
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-skill-setup-"));
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  try {
+    process.chdir(dir);
+    const before = readdirSync(dir);
+    const code = runSkillCommand(["setup"], { stdout, stderr });
+    const after = readdirSync(dir);
+
+    assert.equal(code, 0);
+    assert.equal(stderr.text(), "");
+    assert.deepEqual(after, before);
+    assert.match(stdout.text(), /Tunelito agent setup/);
+    assert.match(stdout.text(), /npx --yes tunelito skill show/);
+    assert.match(stdout.text(), /mkdir -p \.claude\/skills\/tunelito/);
+    assert.match(stdout.text(), /Codex and other instruction-file agents/);
+    assert.match(stdout.text(), /Inspect existing instruction files before editing them/);
+    assert.match(stdout.text(), /does not write files or install packages/);
+    assert.match(stdout.text(), /Do not present --no-auth as local-only/);
+    assert.match(stdout.text(), /--no-tunnel/);
+    assert.match(stdout.text(), /https:\/\/tunelito\.dev\/agent-setup/);
+  } finally {
+    process.chdir(cwd);
+  }
 });
 
 test("skill rejects an unknown subcommand with a nonzero exit", () => {

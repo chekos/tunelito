@@ -40,6 +40,70 @@ curl -i http://127.0.0.1:4317/
 curl -i 'http://127.0.0.1:4317/?tunelito_key=...'
 ```
 
+## Comments Index or Agent Inbox Changes
+
+Required:
+
+- `test/comments.test.js`
+- `test/cli.test.js`
+- `tunelito comments inspect <target> --json` for a representative target or fixture comments file
+- spoofing or damaged-metadata coverage when parsing/restoration behavior changes
+
+Also update:
+
+- `docs/spec/tunelito-comments.md`
+- `docs/spec/tunelito-comments.schema.json`
+- README and docs-site comments or CLI pages
+
+## Doctor or Diagnostic Changes
+
+Required:
+
+- `test/doctor.test.js`
+- `test/cli.test.js`
+- `tunelito doctor <target> --json` for a representative target
+- read-only coverage proving no comments file, agent state, server, tunnel, or browser is created
+
+Also update:
+
+- README and docs-site CLI reference
+- `docs/agents/START_HERE.md`
+- `docs/agents/SECURITY_REVIEW.md` when safety checks change
+
+## MCP Changes
+
+Required:
+
+- `test/mcp.test.js`
+- `test/agent-worker.test.js` when claim, watch, record, status, policy, or continuation behavior changes
+- `test/cli.test.js` when command routing or help changes
+- `npm run ci`
+
+Also update:
+
+- README and docs-site CLI or agent workflow pages
+- `docs/agents/ARCHITECTURE.md`
+- `docs/agents/SECURITY_REVIEW.md`
+
+## Review Handoff Changes
+
+Required:
+
+- `test/server.test.js`
+- `test/cli.test.js`
+- timeout coverage for `tunelito review watch`
+- persistent coverage proving handoff does not corrupt comments markdown or source HTML
+- live-mode coverage proving handoff does not create a comments file
+- browser or screenshot verification for the `Done Reviewing` panel control
+- `npm run ci`
+
+Also update:
+
+- README and docs-site CLI or agent workflow pages
+- bundled `docs-site/skill.md` when agents should use the wait command
+- `docs/agents/ARCHITECTURE.md`
+- `docs/agents/SECURITY_REVIEW.md`
+
 ## Client/UI Changes
 
 Required:

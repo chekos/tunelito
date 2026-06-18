@@ -37,6 +37,8 @@
     pendingLaserPointer: null,
     laserPointerTimer: null,
     comments: [],
+    handoffPending: false,
+    reviewCompleted: null,
     agentStatusUrl: "",
     agentStatuses: {},
     agentStatusFingerprint: "",
@@ -112,6 +114,8 @@
         fetchAgentStatuses();
       } else if (message.type === "reviewer-renamed") {
         handleReviewerRenamed(message);
+      } else if (message.type === "review-completed") {
+        handleReviewCompleted(message.event);
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
@@ -126,6 +130,8 @@
       } else if (message.type === "live-event") {
         if (message.from !== state.peerId) handleLiveEvent(message.from, message.event);
       } else if (message.type === "error") {
+        state.handoffPending = false;
+        updateHandoffUi();
         renderStatus(message.message);
       }
     });
@@ -338,6 +344,22 @@
         }
         .note-actions button[hidden] {
           display: none;
+        }
+        .handoff {
+          display: grid;
+          gap: 6px;
+          padding: 10px 14px;
+          border-bottom: 1px solid #eef2f7;
+          background: #fff;
+        }
+        .handoff-button {
+          width: 100%;
+        }
+        .handoff-status {
+          min-height: 16px;
+          color: #64748b;
+          font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          overflow-wrap: anywhere;
         }
         .pointer-button {
           display: inline-flex;
@@ -796,6 +818,10 @@
             <span>Pointer</span>
           </button>
         </div>
+        <div class="handoff">
+          <button class="primary handoff-button" data-action="done-reviewing" type="button">Done Reviewing</button>
+          <span class="handoff-status" aria-live="polite"></span>
+        </div>
         <div class="comments"></div>
         <div class="footer">
           <a class="link" href="/__tunelito/comments.md" target="_blank" rel="noreferrer">Open markdown</a>
@@ -816,6 +842,7 @@
     const identityForm = shadow.querySelector(".identity-form");
     const name = shadow.querySelector(".name");
     const laserToggle = shadow.querySelector("[data-action='laser-pointer']");
+    const handoffButton = shadow.querySelector("[data-action='done-reviewing']");
     const markdownLink = shadow.querySelector(".link");
     shadow.querySelector(".title strong").textContent = sourceName;
     markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
@@ -841,6 +868,7 @@
     });
     shadow.querySelector("[data-action='page-note']").addEventListener("click", () => openNoteComposer("page"));
     shadow.querySelector("[data-action='site-note']").addEventListener("click", () => openNoteComposer("site"));
+    handoffButton.addEventListener("click", sendReviewCompleted);
     laserToggle.addEventListener("click", () => setLaserPointerEnabled(!state.laserPointerEnabled));
     for (const button of composer.querySelectorAll("[data-scope]")) {
       button.addEventListener("click", () => setComposerScope(button.dataset.scope));
@@ -870,6 +898,8 @@
       identityForm,
       name,
       laserToggle,
+      handoffButton,
+      handoffStatus: shadow.querySelector(".handoff-status"),
     };
   }
 
@@ -982,6 +1012,34 @@
       type: "rename-reviewer",
       author: pending.author,
     }));
+  }
+
+  function sendReviewCompleted() {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+      renderStatus("Still connecting; try again in a moment.");
+      return;
+    }
+    state.handoffPending = true;
+    updateHandoffUi();
+    state.socket.send(JSON.stringify({
+      type: "review-completed",
+      overallComment: "",
+    }));
+  }
+
+  function handleReviewCompleted(event) {
+    state.handoffPending = false;
+    state.reviewCompleted = event || null;
+    updateHandoffUi();
+    if (event?.sequence) renderStatus(`Review sent #${event.sequence}`);
+  }
+
+  function updateHandoffUi() {
+    ui.handoffButton.disabled = state.handoffPending;
+    ui.handoffButton.textContent = state.handoffPending ? "Sending..." : "Done Reviewing";
+    ui.handoffStatus.textContent = state.reviewCompleted?.sequence
+      ? `Sent #${state.reviewCompleted.sequence}`
+      : "";
   }
 
   function handleReviewerRenamed(message) {

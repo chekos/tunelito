@@ -86,6 +86,20 @@ _Context: scope: `site` · page: `/day-03.html` · id: `c_...`_
 
 Tunelito also stores hidden metadata comments. Do not delete that metadata if you want Tunelito to restore the live sidebar after a restart. New comments include a stable reviewer identity in that metadata, so renaming yourself updates earlier comments from the same browser session. Older comments without reviewer identity metadata stay unchanged during renames instead of being guessed by display name.
 
+## JSON index
+
+Agents and tools can inspect the Markdown inbox as a versioned JSON index:
+
+```bash
+tunelito comments inspect ./site --json
+tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site.comments.md --json
+```
+
+The index has `format: "tunelito-comments"` and `version: 1`. It includes absolute target and comments paths, summary counts, normalized comments, and diagnostics. The durable source of truth remains `*.comments.md`; JSON is a derived integration view and does not include `.tunelito/agent/state.json`.
+
+For page or folder targets, a missing default comments file returns an empty successful index. When inspecting a Markdown file directly, the file must exist and look like a Tunelito comments inbox.
+
 ## Agent inbox workflow
 
 The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to inspect the comments file, edit the matching source HTML for page comments, apply clearly relevant changes across the folder for site comments, and report which visible comment IDs were addressed.

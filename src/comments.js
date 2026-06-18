@@ -207,23 +207,74 @@ export function renderCommentsMarkdown({ comments, sourcePath }) {
 }
 
 export function loadCommentsFromMarkdown(commentsPath) {
-  if (!commentsPath || !existsSync(commentsPath)) return [];
+  return inspectCommentsMarkdown(commentsPath).comments;
+}
+
+export function inspectCommentsMarkdown(commentsPath) {
+  if (!commentsPath || !existsSync(commentsPath)) {
+    return {
+      exists: false,
+      raw: "",
+      hasTunelitoHeader: false,
+      metadataCount: 0,
+      comments: [],
+      diagnostics: [],
+    };
+  }
   const raw = readFileSync(commentsPath, "utf8");
   const comments = [];
+  const diagnostics = [];
   const pattern = /^<!--[ \t]*tunelito-comment:[ \t]*([A-Za-z0-9_-]+)[ \t]*-->[ \t]*$/gm;
   let match;
+  let metadataCount = 0;
   while ((match = pattern.exec(raw))) {
+    metadataCount += 1;
     try {
       const comment = normalizeComment(decodeComment(match[1]), new Date(0));
       const sectionEnd = renderedCommentSectionEndOffset(raw, match.index, match[0], comment);
-      if (sectionEnd === null) continue;
+      if (sectionEnd === null) {
+        diagnostics.push(createCommentsDiagnostic({
+          code: "comments.metadata-section-mismatch",
+          message: "Hidden Tunelito comment metadata does not match its rendered Markdown section.",
+          offset: match.index,
+          raw,
+        }));
+        continue;
+      }
       comments.push(comment);
       pattern.lastIndex = Math.max(pattern.lastIndex, sectionEnd);
     } catch {
+      diagnostics.push(createCommentsDiagnostic({
+        code: "comments.metadata-invalid",
+        message: "Hidden Tunelito comment metadata could not be decoded.",
+        offset: match.index,
+        raw,
+      }));
       // Ignore stale or hand-edited metadata; the readable markdown still remains.
     }
   }
-  return comments;
+  return {
+    exists: true,
+    raw,
+    hasTunelitoHeader: /^# Tunelito comments for `/m.test(raw),
+    metadataCount,
+    comments,
+    diagnostics,
+  };
+}
+
+function createCommentsDiagnostic({ code, message, offset, raw, severity = "error" }) {
+  return {
+    severity,
+    code,
+    message,
+    offset,
+    line: lineNumberAt(raw, offset),
+  };
+}
+
+function lineNumberAt(raw, offset) {
+  return raw.slice(0, offset).split(/\r\n|\r|\n/).length;
 }
 
 function renderCommentMarkdownLines(comment, options = {}) {

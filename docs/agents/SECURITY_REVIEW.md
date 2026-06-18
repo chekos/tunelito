@@ -47,6 +47,7 @@ Expected behavior:
 - Fall back to `npx cloudflared@latest`.
 - Print clear failure guidance when no tunnel can start.
 - Stop the tunnel process on shutdown.
+- `tunelito doctor` may report `cloudflared` availability and tunnel/auth risks, but it must not start a tunnel or install packages.
 
 ## Agent Guardrails
 
@@ -57,11 +58,16 @@ Product-level local agent worker behavior:
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
 - Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
 - Active-agent inbox commands (`tunelito inbox next/watch/record`) use the same trust boundary: selected reviewer comments become instructions to the current local agent session.
+- `Done Reviewing` handoff emits an in-memory `review.completed` event only. It may expose reviewer-authored summary context to authenticated CLI waiters, but it must not write source HTML, comments markdown, or agent state.
+- `tunelito review watch` must use the same review-key gate as the browser session and must time out cleanly without starting a server, tunnel, browser, worker, or editor.
+- `tunelito mcp` exposes the same comments and inbox primitives to MCP-capable agents. Read-only tools must stay read-only; claim tools may mutate `.tunelito/agent/state.json`, and record tools may mutate `.tunelito/agent/state.json` plus append `.tunelito/agent/log.md`.
+- MCP must not spawn local agent CLIs, start a Tunelito review server, start Cloudflare Tunnel, open a browser, or edit served HTML files.
 - `--agent-trigger "<marker>"` is the stricter opt-in marker mode for less trusted sessions.
 - Resolution state belongs in `.tunelito/agent/state.json`, not the comments markdown that the server rewrites.
 - Inbox claims must expire so a crashed or abandoned active-agent session does not permanently hide a pending comment.
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.
+- `tunelito doctor` may inspect agent ledger JSON, but it must not create, delete, or rewrite `.tunelito/agent/state.json`.
 - Agent output must be structured by comment ID so handled comments are not retried indefinitely.
 - `needs_followup` continuations must stay bounded by `--agent-max-passes` and stop if a follow-up pass reports no observable progress.
 

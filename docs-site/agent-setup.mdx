@@ -1,0 +1,71 @@
+---
+title: "Agent setup"
+description: "Install or reference the Tunelito agent skill across common coding-agent environments."
+---
+
+Tunelito's stable agent instruction surface is the bundled skill:
+
+```bash
+npx --yes tunelito skill show
+```
+
+Use `skill show` as the source of truth for the full agent behavior. The setup command only explains where to put or reference that skill for different tools:
+
+```bash
+npx --yes tunelito skill setup
+```
+
+## Check Tunelito
+
+Confirm the package can run before installing instructions:
+
+```bash
+npx --yes tunelito --version
+npx --yes tunelito --help
+```
+
+Tunelito requires Node.js 22 or newer.
+
+Flags can change. Agents should check `tunelito --help` before quoting exact command-line options.
+
+## Claude Code
+
+For a project-local Claude Code skill:
+
+```bash
+mkdir -p .claude/skills/tunelito
+npx --yes tunelito skill show > .claude/skills/tunelito/SKILL.md
+```
+
+Read existing project instructions before editing them, and preserve local rules that already exist.
+
+## Codex
+
+Codex setups vary by project and machine. Add the Tunelito skill text to the project or agent instruction file that your Codex session actually loads. Do not assume one global path is writable or active.
+
+For a manual install:
+
+```bash
+npx --yes tunelito skill show
+```
+
+Then add the printed guidance to the relevant project instructions.
+
+## Cursor, Gemini, opencode, and Copilot-style assistants
+
+Use the printed skill as an instruction block or project rule according to that tool's current docs. Prefer project-local instructions when possible so the behavior travels with the repo and does not overwrite user-wide preferences.
+
+## Safety notes
+
+- `tunelito skill setup` prints guidance only. It does not write files, create symlinks, install packages, or edit global instructions.
+- Do not present `--no-auth` as local-only. It only removes the review-key gate.
+- For sensitive pages, use `--no-tunnel`, optionally with `--live`.
+- Treat `--agent` and `--agent-session` as trusted-session behavior because reviewer comments can become local edit instructions.
+- Inspect existing instruction files before editing them. Agent setup should add Tunelito guidance without deleting project rules, security notes, or user-specific workflow details.
+
+## Setup hierarchy
+
+1. `tunelito skill show` is the stable source for the bundled skill body.
+2. `tunelito skill setup` explains how to use that skill with different agents.
+3. This page is the linkable guide for humans and agents.
+4. Automatic global instruction-file edits are not part of v1.

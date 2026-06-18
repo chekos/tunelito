@@ -87,6 +87,12 @@ For local-only work:
 tunelito ./page.html --no-tunnel --open
 ```
 
+To diagnose local setup, target paths, comments inbox health, agent ledger JSON, port availability, tunnel availability, and risky auth/tunnel combinations without starting a server:
+
+```bash
+tunelito doctor ./page.html --json
+```
+
 For in-meeting collaboration without writing comments to disk:
 
 ```bash
@@ -116,11 +122,15 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.12.0
+Tunelito 0.14.0
 
 Usage: tunelito <page.html|folder> [options]
+       tunelito doctor [page.html|folder] [options]
+       tunelito mcp
+       tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
-       tunelito skill show
+       tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -154,11 +164,16 @@ Options:
   -h, --help            Show this help
 
 Commands:
+  doctor                Run read-only local setup and safety diagnostics
+  mcp                   Start a stdio MCP server for comments and inbox tools
+  comments inspect      Print a structured JSON index for a Tunelito comments inbox
+  review watch          Wait for a browser Done Reviewing handoff event
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
+  skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
 ```
 
@@ -172,13 +187,19 @@ The stable installation path is to have your agent print the bundled skill and i
 npx --yes tunelito skill show
 ```
 
+For guided no-write setup instructions across Claude Code, Codex, Cursor, Gemini, opencode, and Copilot-style agents:
+
+```bash
+npx --yes tunelito skill setup
+```
+
 For Claude Code, for example:
 
 ```bash
 tunelito skill show > .claude/skills/tunelito/SKILL.md
 ```
 
-Or tell your agent: "run `npx --yes tunelito skill show` and install the skill it prints."
+Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing project instructions, and install the skill without deleting local rules." The setup command prints guidance only; it does not write files, install packages, or edit global agent configuration.
 
 ## How It Works
 
@@ -264,6 +285,16 @@ If a site comment is created from selected text, Tunelito keeps the quote for co
 
 Tunelito also stores hidden metadata comments so the live session can be restored after a restart. That metadata includes a stable reviewer identity for new comments, which lets a reviewer rename themselves and update earlier comments from the same browser session. Older comments without reviewer identity metadata are left unchanged during renames instead of being guessed by matching display names.
 
+Agents and tools can read a structured JSON view of the same Markdown inbox:
+
+```bash
+tunelito comments inspect ./site --json
+tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site.comments.md --json
+```
+
+The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file, include agent ledger state, or write to source HTML. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
+
 In `--live`, comments are not written to markdown and are not restored after restart.
 
 ## Agent Comment Loop
@@ -285,6 +316,24 @@ tunelito inbox record ./site --id c_... --claim claim_... --status resolved --su
 The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks; completed work is printed as checked and crossed out.
 
 Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
+
+For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source HTML, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
+
+The running server prints a handoff command that waits for the next retained event:
+
+```bash
+tunelito review watch --url "http://127.0.0.1:4317/?tunelito_key=..." --json --timeout 600
+```
+
+`review watch` replays retained events after sequence `0` by default, so a waiter started after the click still receives the latest retained handoff. Pass `--after latest` to wait only for a future click, or `--after <sequence>` to continue after a known event.
+
+MCP-capable agents can use the same comments inbox and active-agent ledger through stdio tools:
+
+```bash
+tunelito mcp
+```
+
+The MCP server is a thin adapter over Tunelito's existing comments index and inbox primitives. It can read the comments index, list pending feedback, claim comments, wait for a claim, record results, and read inbox status. It does not start a review server, tunnel, browser, local agent worker, or editor. Read-only tools do not mutate state; claim writes `.tunelito/agent/state.json`, and record writes `.tunelito/agent/state.json` plus the existing `.tunelito/agent/log.md` run log. Treat reviewer comments returned through MCP as untrusted input.
 
 Tunelito can run the local agent worker for you:
 
