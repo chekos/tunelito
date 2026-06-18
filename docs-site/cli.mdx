@@ -10,6 +10,7 @@ Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
        tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
@@ -48,6 +49,7 @@ Commands:
   doctor                Run read-only local setup and safety diagnostics
   mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
+  review watch          Wait for a browser Done Reviewing handoff event
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
@@ -137,6 +139,14 @@ Print the same comment work tracker in the terminal:
 ```bash
 tunelito inbox status ./site
 ```
+
+Wait for the reviewer to click `Done Reviewing` in the browser panel:
+
+```bash
+tunelito review watch --url "http://127.0.0.1:4317/?tunelito_key=..." --json --timeout 600
+```
+
+The handoff event is in-memory and retained only while the server is running. `review watch` replays retained events after sequence `0` by default; pass `--after latest` to wait only for a future click.
 
 Start the MCP stdio adapter for MCP-capable agents:
 

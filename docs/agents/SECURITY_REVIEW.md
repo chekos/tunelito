@@ -58,6 +58,8 @@ Product-level local agent worker behavior:
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
 - Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
 - Active-agent inbox commands (`tunelito inbox next/watch/record`) use the same trust boundary: selected reviewer comments become instructions to the current local agent session.
+- `Done Reviewing` handoff emits an in-memory `review.completed` event only. It may expose reviewer-authored summary context to authenticated CLI waiters, but it must not write source HTML, comments markdown, or agent state.
+- `tunelito review watch` must use the same review-key gate as the browser session and must time out cleanly without starting a server, tunnel, browser, worker, or editor.
 - `tunelito mcp` exposes the same comments and inbox primitives to MCP-capable agents. Read-only tools must stay read-only; claim tools may mutate `.tunelito/agent/state.json`, and record tools may mutate `.tunelito/agent/state.json` plus append `.tunelito/agent/log.md`.
 - MCP must not spawn local agent CLIs, start a Tunelito review server, start Cloudflare Tunnel, open a browser, or edit served HTML files.
 - `--agent-trigger "<marker>"` is the stricter opt-in marker mode for less trusted sessions.

@@ -122,3 +122,41 @@ Verification:
 - `git diff --check` passed.
 - Multi-agent adversarial verification ran in two passes. The first security/persistence reviewer found three issues: record side effects needed to disclose the existing log append, required inbox tools needed target validation before derived comments/state reads, and more tool descriptions needed untrusted-input warnings. The first protocol/docs reviewer also found the string `ENOENT` JSON-RPC code problem. All were fixed with code, docs, and tests. The re-check from both reviewers reported clean: no security/persistence blockers, no MCP protocol/docs blockers, and no path that starts a server, tunnel, browser, worker, editor, or HTML edit.
 - No UI changed, so the `visual-qa-hig` equivalent was not applicable for this issue.
+
+## Issue #51: Add an explicit Done Reviewing handoff event for review sessions
+
+Status: implemented, verified, committed, and closed. The exact commit SHA is recorded on GitHub issue #51.
+
+Priority: major workflow/UI, because review-call users need an explicit batch-finished signal before an agent starts work.
+
+Decision:
+
+- Added a browser `Done Reviewing` action and a server-side in-memory `review.completed` event queue.
+- Kept the v1 handoff event ephemeral and session-scoped. It is retained only while the server process is running and does not survive restart.
+- Implemented `tunelito review watch` as the CLI wait primitive. It can wait against a printed `--url`, or use `.tunelito/session.json` metadata when an active-agent session has written a review URL.
+- Chose replay-after-zero as the default so a CLI waiter started just after the reviewer clicks still receives the retained event. `--after latest` intentionally waits only for future events, and `--after <sequence>` continues from a known event.
+- Included sequence, timestamp, target path, persistent comments path when available, live/directory mode flags, summary counts, optional event-only overall comment, and reviewer metadata in the event.
+- Kept overall comments event-only for v1. No persistent handoff note is written as a page/site comment.
+- Did not add `--agent-session --wait-for-review-complete` in this slice. The core event and wait command are complete, and automatic claiming after handoff is a larger product surface.
+- Kept existing incremental flows intact: `--agent`, `--agent-session`, `tunelito inbox watch`, and MCP inbox tools continue to work independently.
+
+What changed:
+
+- `src/server.js`: added the review handoff queue, WebSocket `review-completed` handling, protected `/__tunelito/review-events` wait route, timeout handling, retained replay, and summary generation.
+- `src/client.js`: added the `Done Reviewing` panel action and acknowledged `Sent #<sequence>` state.
+- `src/inject.js`: exported the review-events route constant.
+- `bin/tunelito.js`: added `tunelito review watch`, top-level help, text/JSON output, timeout/after options, server-printed handoff command, and `.tunelito/session.json` review URL metadata.
+- `test/server.test.js`: covered WebSocket handoff events, CLI-visible waits, increasing sequences, retained replay, timeout, persistent comments markdown safety, source HTML safety, live-mode handoff without comments-file writes, and injected client coverage for the control.
+- `test/cli.test.js`: covered review command parsing, URL/query preservation, JSON output, session metadata discovery, timeout exit codes, and format validation.
+- `README.md`, `docs-site/cli.mdx`, `docs-site/agent-worker.mdx`, `docs-site/skill.md`, `docs/agents/ARCHITECTURE.md`, `docs/agents/QUALITY_GATES.md`, `docs/agents/SECURITY_REVIEW.md`, and `CHANGELOG.md`: documented the handoff workflow, replay semantics, live-mode ephemerality, security boundary, and quality gate.
+
+Verification:
+
+- `npm run check` passed.
+- `node --test test/server.test.js test/cli.test.js` passed: 66 tests.
+- `npm run docs:check` passed.
+- Browser visual/HIG QA passed on `examples/project-brief.html` at desktop `1440x1000` and mobile `390x844`: the button fit, acknowledged as `Sent #1`, no horizontal overflow was measured, mobile button height was 44px, and no text/control overlap was visible. The only console error was the fixture's existing missing `favicon.ico` 404.
+- Real CLI wait passed against a live local server: `node bin/tunelito.js review watch --url http://127.0.0.1:4317/ --json --timeout 1` returned the retained `review.completed` payload.
+- `npm run ci` passed: check, agent config, docs check, 153 tests, smoke check, and package smoke check.
+- `git diff --check` passed.
+- Multi-agent adversarial verification was clean. The security/persistence reviewer confirmed route auth, timeout behavior, no durable event writes, no comments/source corruption, and no server/tunnel/browser/worker/editor spawn from `review watch`. The UI/docs reviewer confirmed the browser action, acknowledged state, desktop/mobile layout probes, CLI replay, docs coverage, and no leftover QA artifacts.

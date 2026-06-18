@@ -6,7 +6,7 @@ import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
@@ -29,6 +29,7 @@ export async function createTunelitoServer(options) {
   const liveMode = Boolean(options.liveMode || options.live);
   const commentsPath = liveMode ? null : resolve(options.commentsPath || defaultCommentsPath(targetPath));
   const comments = liveMode ? createMemoryCommentStore() : createCommentStore({ commentsPath, sourcePath: targetPath });
+  const reviewEvents = createReviewEventQueue({ now: typeof options.now === "function" ? options.now : () => new Date() });
   const agentStatePath = options.agentStatePath && !liveMode ? resolve(options.agentStatePath) : "";
   const blockedPaths = [
     ...blockedCommentPaths(commentsPath),
@@ -55,6 +56,7 @@ export async function createTunelitoServer(options) {
       sourceName,
       comments,
       commentsPath,
+      reviewEvents,
       agentStatePath,
       blockedPaths,
       liveMode,
@@ -259,6 +261,22 @@ export async function createTunelitoServer(options) {
       } catch (error) {
         client.send({ type: "error", message: error.message });
       }
+    } else if (event.type === "review-completed") {
+      try {
+        const completed = reviewEvents.push({
+          targetPath,
+          commentsPath,
+          directoryMode,
+          liveMode,
+          comments: comments.all(),
+          overallComment: event.overallComment,
+          peer,
+        });
+        events.emit("review-completed", completed);
+        hub.broadcast({ type: "review-completed", event: completed });
+      } catch (error) {
+        client.send({ type: "error", message: error.message });
+      }
     } else if (liveMode && event.type === "signal") {
       const target = findPeerClient(peers, event.to, peer?.pagePath);
       if (target && peer) {
@@ -307,10 +325,12 @@ export async function createTunelitoServer(options) {
     liveMode,
     originUrl,
     localUrl,
+    reviewEventsUrl: new URL(REVIEW_EVENTS_ROUTE, localUrl).toString(),
     ownerName,
     ownerSessionId,
     async close() {
       clearTimeout(watchTimer);
+      reviewEvents.close();
       watcher.close();
       hub.close();
       const closing = new Promise((resolveClose) => server.close(resolveClose));
@@ -320,7 +340,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -373,6 +393,15 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       ? comments.all().filter((comment) => isSiteComment(comment) || normalizePagePath(comment.pagePath) === pagePath)
       : comments.all();
     sendJson(res, 200, agentStatusSnapshot({ agentStatePath, comments: visibleComments }), req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === REVIEW_EVENTS_ROUTE) {
+    if (req.method !== "GET") {
+      sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, responseHeaders);
+      return;
+    }
+    handleReviewEventsRequest({ res, url, reviewEvents, responseHeaders });
     return;
   }
 
@@ -524,6 +553,30 @@ function sendText(res, status, body, contentType = "text/plain; charset=utf-8", 
 
 function sendJson(res, status, payload, method = "GET", extraHeaders = {}) {
   sendText(res, status, `${JSON.stringify(payload)}\n`, "application/json; charset=utf-8", method, extraHeaders);
+}
+
+function handleReviewEventsRequest({ res, url, reviewEvents, responseHeaders }) {
+  let waitOptions;
+  try {
+    waitOptions = parseReviewWaitOptions(url, reviewEvents);
+  } catch (error) {
+    sendJson(res, 400, { type: "review.wait_error", message: error.message }, "GET", responseHeaders);
+    return;
+  }
+
+  reviewEvents.wait(waitOptions).then((result) => {
+    if (result.timeout) {
+      sendJson(res, 408, {
+        type: "review.timeout",
+        after: waitOptions.after,
+        timeoutSeconds: waitOptions.timeoutSeconds,
+      }, "GET", responseHeaders);
+      return;
+    }
+    sendJson(res, 200, result.event, "GET", responseHeaders);
+  }).catch((error) => {
+    sendJson(res, 500, { type: "review.wait_error", message: error.message }, "GET", responseHeaders);
+  });
 }
 
 function sendRedirect(res, location, extraHeaders = {}) {
@@ -681,6 +734,123 @@ function findPeerClient(peers, peerId, pagePath = "") {
     if (peer.id === peerId && (!pagePath || peer.pagePath === pagePath)) return client;
   }
   return null;
+}
+
+function createReviewEventQueue({ now = () => new Date(), limit = 100 } = {}) {
+  let sequence = 0;
+  const retained = [];
+  const waiters = new Set();
+
+  function push({ targetPath, commentsPath, directoryMode, liveMode, comments = [], overallComment = "", peer = null } = {}) {
+    const event = {
+      type: "review.completed",
+      sequence: sequence + 1,
+      createdAt: now().toISOString(),
+      targetPath,
+      commentsPath: commentsPath || null,
+      directoryMode: Boolean(directoryMode),
+      liveMode: Boolean(liveMode),
+      summary: reviewSummary(comments),
+      overallComment: cleanOverallComment(overallComment),
+      reviewer: peer ? {
+        id: peer.reviewerId || "",
+        authorRole: peer.authorRole || "visitor",
+        pagePath: peer.pagePath || "/",
+      } : null,
+    };
+    sequence = event.sequence;
+    retained.push(event);
+    while (retained.length > limit) retained.shift();
+    for (const waiter of Array.from(waiters)) {
+      if (event.sequence <= waiter.after) continue;
+      waiters.delete(waiter);
+      clearTimeout(waiter.timer);
+      waiter.resolve({ event });
+    }
+    return event;
+  }
+
+  function wait({ after = 0, timeoutSeconds = 0 } = {}) {
+    const replay = retained.find((event) => event.sequence > after);
+    if (replay) return Promise.resolve({ event: replay });
+
+    return new Promise((resolve) => {
+      const waiter = {
+        after,
+        resolve,
+        timer: null,
+      };
+      waiters.add(waiter);
+      if (timeoutSeconds > 0) {
+        waiter.timer = setTimeout(() => {
+          waiters.delete(waiter);
+          resolve({ timeout: true });
+        }, timeoutSeconds * 1000);
+        waiter.timer.unref?.();
+      }
+    });
+  }
+
+  function close() {
+    for (const waiter of Array.from(waiters)) {
+      waiters.delete(waiter);
+      clearTimeout(waiter.timer);
+      waiter.resolve({ timeout: true });
+    }
+  }
+
+  return {
+    push,
+    wait,
+    close,
+    latestSequence: () => sequence,
+    recent: () => retained.slice(),
+  };
+}
+
+function parseReviewWaitOptions(url, reviewEvents) {
+  const timeoutSeconds = parseNonNegativeSeconds(url.searchParams.get("timeout"), 0, "timeout");
+  const afterParam = url.searchParams.get("after");
+  const after = afterParam === "latest"
+    ? reviewEvents.latestSequence()
+    : parseNonNegativeSeconds(afterParam, 0, "after");
+  return { after, timeoutSeconds };
+}
+
+function parseNonNegativeSeconds(value, fallback, name) {
+  if (value == null || value === "") return fallback;
+  if (!/^\d+$/.test(String(value))) throw new Error(`${name} must be a non-negative integer`);
+  const number = Number(value);
+  if (!Number.isSafeInteger(number)) throw new Error(`${name} is too large`);
+  return number;
+}
+
+function reviewSummary(comments) {
+  const summary = {
+    total: 0,
+    comments: 0,
+    page: 0,
+    site: 0,
+    owner: 0,
+    visitor: 0,
+    ownerApproved: 0,
+    pending: 0,
+  };
+  for (const comment of comments || []) {
+    summary.total += 1;
+    summary.comments += 1;
+    if (comment?.scope === "site") summary.site += 1;
+    else summary.page += 1;
+    if (comment?.authorRole === "owner") summary.owner += 1;
+    else summary.visitor += 1;
+    if (comment?.ownerApproval?.approvedAt) summary.ownerApproved += 1;
+    summary.pending += 1;
+  }
+  return summary;
+}
+
+function cleanOverallComment(value) {
+  return String(value || "").replace(/\u0000/g, "").trim().slice(0, 2000);
 }
 
 function createWatcher({ path, recursive, filename: expectedFilename, onChange }) {

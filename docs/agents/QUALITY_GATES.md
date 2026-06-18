@@ -85,6 +85,25 @@ Also update:
 - `docs/agents/ARCHITECTURE.md`
 - `docs/agents/SECURITY_REVIEW.md`
 
+## Review Handoff Changes
+
+Required:
+
+- `test/server.test.js`
+- `test/cli.test.js`
+- timeout coverage for `tunelito review watch`
+- persistent coverage proving handoff does not corrupt comments markdown or source HTML
+- live-mode coverage proving handoff does not create a comments file
+- browser or screenshot verification for the `Done Reviewing` panel control
+- `npm run ci`
+
+Also update:
+
+- README and docs-site CLI or agent workflow pages
+- bundled `docs-site/skill.md` when agents should use the wait command
+- `docs/agents/ARCHITECTURE.md`
+- `docs/agents/SECURITY_REVIEW.md`
+
 ## Client/UI Changes
 
 Required:

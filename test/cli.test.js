@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -246,6 +246,92 @@ test("mcp help is side-effect free and unknown arguments fail", () => {
   });
   assert.equal(badCode, 1);
   assert.match(stderr.text(), /Unknown mcp argument/);
+});
+
+test("review watch parses options and prints handoff events", async () => {
+  const opts = parseReviewArgs([
+    "watch",
+    "site",
+    "--url",
+    "http://127.0.0.1:4317/?tunelito_key=secret",
+    "--after",
+    "latest",
+    "--timeout",
+    "5",
+    "--json",
+  ]);
+  assert.equal(opts.command, "watch");
+  assert.equal(opts.targetPath, resolve("site"));
+  assert.equal(opts.url, "http://127.0.0.1:4317/?tunelito_key=secret");
+  assert.equal(opts.after, "latest");
+  assert.equal(opts.timeoutSeconds, 5);
+  assert.equal(opts.format, "json");
+
+  const stdout = streamCollector();
+  const urls = [];
+  const code = await runReviewCommand([
+    "watch",
+    "--url",
+    "http://127.0.0.1:4317/?tunelito_key=secret",
+    "--timeout",
+    "5",
+    "--json",
+  ], {
+    stdout,
+    stderr: streamCollector(),
+    fetchFn: async (url) => {
+      urls.push(url.toString());
+      return new Response(`${JSON.stringify({
+        type: "review.completed",
+        sequence: 3,
+        targetPath: "/tmp/site",
+        summary: { comments: 2, page: 1, site: 1, owner: 0, visitor: 2 },
+      })}\n`, { status: 200 });
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.match(urls[0], /\/__tunelito\/review-events\?/);
+  assert.match(urls[0], /tunelito_key=secret/);
+  assert.match(urls[0], /timeout=5/);
+  assert.equal(JSON.parse(stdout.text()).sequence, 3);
+});
+
+test("review watch can read session metadata and returns nonzero on timeout", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-review-session-"));
+  mkdirSync(join(siteDir, ".tunelito"), { recursive: true });
+  writeFileSync(join(siteDir, ".tunelito", "session.json"), `${JSON.stringify({
+    version: 1,
+    reviewUrl: "http://127.0.0.1:4317/?tunelito_key=session-secret",
+  })}\n`);
+
+  const eventOut = streamCollector();
+  const eventCode = await runReviewCommand(["watch", siteDir, "--json"], {
+    stdout: eventOut,
+    stderr: streamCollector(),
+    fetchFn: async (url) => {
+      assert.match(url.toString(), /tunelito_key=session-secret/);
+      return new Response(`${JSON.stringify({
+        type: "review.completed",
+        sequence: 1,
+        targetPath: siteDir,
+        summary: { comments: 1, page: 1, site: 0, owner: 0, visitor: 1 },
+      })}\n`, { status: 200 });
+    },
+  });
+  assert.equal(eventCode, 0);
+  assert.equal(JSON.parse(eventOut.text()).type, "review.completed");
+
+  const timeoutOut = streamCollector();
+  const timeoutCode = await runReviewCommand(["watch", "--url", "http://127.0.0.1:4317/", "--timeout", "1"], {
+    stdout: timeoutOut,
+    stderr: streamCollector(),
+    fetchFn: async () => new Response(`${JSON.stringify({ type: "review.timeout", after: 0, timeoutSeconds: 1 })}\n`, { status: 408 }),
+  });
+  assert.equal(timeoutCode, 1);
+  assert.match(timeoutOut.text(), /Timed out waiting for review\.completed/);
+
+  assert.throws(() => parseReviewArgs(["watch", "site", "--format", "yaml"]), /Unsupported --format/);
 });
 
 test("parseCommentsArgs supports target and direct comments inspection", () => {

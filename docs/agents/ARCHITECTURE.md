@@ -32,6 +32,8 @@ The server owns local IO and transport:
 - tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
 - build a derived JSON comments index from the markdown inbox for agents and diagnostics
+- emit in-memory `review.completed` handoff events when a reviewer clicks `Done Reviewing`
+- expose a protected long-poll route for waiting on retained handoff events
 - expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
@@ -57,6 +59,14 @@ The active-agent inbox owns comment handoff when `--agent-session` or `tunelito 
 - record outcomes through `tunelito inbox record` rather than direct ledger edits
 - write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, tracker, and record commands
 
+The review handoff event queue owns batch-finished signals when `Done Reviewing` or `tunelito review watch` is used:
+
+- keep `review.completed` events in memory only, retained for the current server process
+- include sequence id, created timestamp, target path, comments path when persistent, live mode, directory mode, summary counts, and optional event-only overall comment
+- replay retained events after sequence `0` by default; allow callers to wait for future events with `--after latest`
+- never write handoff events to source HTML, comments Markdown, or `.tunelito/agent/state.json`
+- keep `--live` handoff events ephemeral and avoid creating a comments file
+
 The MCP adapter owns structured agent access when `tunelito mcp` is used:
 
 - run over stdio only
@@ -72,6 +82,7 @@ The browser client owns reviewer interaction:
 - capture text selections
 - create unanchored page notes and site-wide notes
 - render comment controls
+- render a `Done Reviewing` handoff action with acknowledged status
 - submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
@@ -90,6 +101,7 @@ The browser client owns reviewer interaction:
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep the `tunelito-comments` JSON index derived from markdown metadata; do not make it durable state.
 - Keep `--live` comments ephemeral; do not write them to markdown.
+- Keep review handoff events ephemeral; do not write them to source HTML, comments markdown, or agent state.
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as comment metadata, not authentication; the review key remains the access gate.

@@ -128,6 +128,7 @@ Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
        tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
@@ -166,6 +167,7 @@ Commands:
   doctor                Run read-only local setup and safety diagnostics
   mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
+  review watch          Wait for a browser Done Reviewing handoff event
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
@@ -307,6 +309,16 @@ tunelito inbox record ./site --id c_... --claim claim_... --status resolved --su
 The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks; completed work is printed as checked and crossed out.
 
 Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
+
+For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source HTML, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
+
+The running server prints a handoff command that waits for the next retained event:
+
+```bash
+tunelito review watch --url "http://127.0.0.1:4317/?tunelito_key=..." --json --timeout 600
+```
+
+`review watch` replays retained events after sequence `0` by default, so a waiter started after the click still receives the latest retained handoff. Pass `--after latest` to wait only for a future click, or `--after <sequence>` to continue after a known event.
 
 MCP-capable agents can use the same comments inbox and active-agent ledger through stdio tools:
 

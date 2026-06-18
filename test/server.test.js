@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OWNER_KEY_PARAM, createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE } from "../src/inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
@@ -287,6 +287,9 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /laser-pointer/);
     assert.match(clientScript, /\.laser,\s+\.peer-laser \{/);
     assert.match(clientScript, /pointer-events: none/);
+    assert.match(clientScript, /Done Reviewing/);
+    assert.match(clientScript, /review-completed/);
+    assert.match(clientScript, /handoff-status/);
     assert.match(clientScript, /hasFinePointer/);
     assert.match(clientScript, /width: 44px;\s+height: 44px;/);
     assert.match(clientScript, /button\.secondary, button\.primary \{\s+min-height: 44px;/);
@@ -382,6 +385,124 @@ test("server exposes agent work status for browser comment cards", async () => {
     assert.equal(rawState.status, 404);
   } finally {
     for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("server emits Done Reviewing handoff events and replays them to waiters", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-review-handoff-"));
+  const htmlPath = join(dir, "page.html");
+  const commentsPath = join(dir, "page.comments.md");
+  const sourceHtml = "<!doctype html><html><body><main>Handoff draft</main></body></html>";
+  writeFileSync(htmlPath, sourceHtml);
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    now: () => new Date("2026-06-17T12:00:00.000Z"),
+  });
+
+  const socket = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+  try {
+    await waitFor(socket.socket, "open");
+    await waitUntil(() => socket.messages.some((message) => message.type === "hello"));
+
+    socket.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Dana",
+        scope: "page",
+        quote: "Handoff draft",
+        body: "Tighten the headline.",
+        textStart: 0,
+        textEnd: 13,
+      },
+    }));
+    await waitUntil(() => socket.messages.some((message) => message.type === "comment"));
+
+    socket.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Dana",
+        scope: "site",
+        quote: "",
+        body: "Use a consistent CTA label.",
+      },
+    }));
+    await waitUntil(() => socket.messages.filter((message) => message.type === "comment").length >= 2);
+
+    const waitUrl = new URL(REVIEW_EVENTS_ROUTE, instance.localUrl);
+    waitUrl.searchParams.set("timeout", "2");
+    const waiting = fetch(waitUrl);
+
+    socket.socket.send(JSON.stringify({
+      type: "review-completed",
+      overallComment: "Start with the homepage copy.",
+    }));
+
+    const waitResponse = await waiting;
+    assert.equal(waitResponse.status, 200);
+    const event = await waitResponse.json();
+    assert.equal(event.type, "review.completed");
+    assert.equal(event.sequence, 1);
+    assert.equal(event.createdAt, "2026-06-17T12:00:00.000Z");
+    assert.equal(event.targetPath, htmlPath);
+    assert.equal(event.commentsPath, commentsPath);
+    assert.equal(event.summary.comments, 2);
+    assert.equal(event.summary.page, 1);
+    assert.equal(event.summary.site, 1);
+    assert.equal(event.summary.visitor, 2);
+    assert.equal(event.summary.pending, 2);
+    assert.equal(event.overallComment, "Start with the homepage copy.");
+
+    await waitUntil(() => socket.messages.some((message) => message.type === "review-completed"));
+    const browserAck = socket.messages.find((message) => message.type === "review-completed").event;
+    assert.equal(browserAck.sequence, 1);
+
+    socket.socket.send(JSON.stringify({ type: "review-completed" }));
+    await waitUntil(() => socket.messages.filter((message) => message.type === "review-completed").length >= 2);
+    const secondAck = socket.messages.filter((message) => message.type === "review-completed")[1].event;
+    assert.equal(secondAck.sequence, 2);
+
+    const replayUrl = new URL(REVIEW_EVENTS_ROUTE, instance.localUrl);
+    replayUrl.searchParams.set("after", "1");
+    const replay = await fetch(replayUrl).then((res) => res.json());
+    assert.equal(replay.sequence, 2);
+
+    const markdown = readFileSync(commentsPath, "utf8");
+    assert.match(markdown, /Tighten the headline\./);
+    assert.match(markdown, /Use a consistent CTA label\./);
+    assert.doesNotMatch(markdown, /review\.completed/);
+    assert.equal(readFileSync(htmlPath, "utf8"), sourceHtml);
+  } finally {
+    socket.socket.close();
+    await instance.close();
+  }
+});
+
+test("review handoff wait route times out cleanly", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-review-timeout-"));
+  const htmlPath = join(dir, "page.html");
+  writeFileSync(htmlPath, "<!doctype html><html><body><main>No handoff yet</main></body></html>");
+
+  const instance = await createTunelitoServer({
+    filePath: htmlPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const waitUrl = new URL(REVIEW_EVENTS_ROUTE, instance.localUrl);
+    waitUrl.searchParams.set("after", "latest");
+    waitUrl.searchParams.set("timeout", "1");
+    const response = await fetch(waitUrl);
+    const payload = await response.json();
+    assert.equal(response.status, 408);
+    assert.equal(payload.type, "review.timeout");
+    assert.equal(payload.timeoutSeconds, 1);
+  } finally {
     await instance.close();
   }
 });
@@ -553,6 +674,15 @@ test("live mode keeps comments in memory and relays peer signaling", async () =>
     const renameUpdate = second.messages.find((message) => message.type === "comment-updated" && message.comment.id === "c_live_1").comment;
     assert.equal(renameUpdate.author, "Ada Lovelace");
     assert.equal(renameUpdate.reviewerId, firstHello.reviewerId);
+    assert.equal(existsSync(commentsPath), false);
+
+    first.socket.send(JSON.stringify({ type: "review-completed" }));
+    await waitUntil(() => first.messages.some((message) => message.type === "review-completed"));
+    const handoff = first.messages.find((message) => message.type === "review-completed").event;
+    assert.equal(handoff.type, "review.completed");
+    assert.equal(handoff.commentsPath, null);
+    assert.equal(handoff.liveMode, true);
+    assert.equal(handoff.summary.comments, 1);
     assert.equal(existsSync(commentsPath), false);
   } finally {
     for (const socket of sockets) socket.close();

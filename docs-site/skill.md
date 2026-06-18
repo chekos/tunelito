@@ -173,6 +173,19 @@ the same `--agent-policy`,
 `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and
 `--agent-max-passes` semantics as `--agent`.
 
+When the reviewer wants to finish a batch before the agent starts, use the
+server-printed handoff command:
+
+```bash
+tunelito review watch --url "http://127.0.0.1:4317/?tunelito_key=..." --json --timeout 600
+```
+
+This waits for the browser panel's `Done Reviewing` action and prints the
+in-memory `review.completed` event. The event is retained only while the server
+is running, does not rewrite comments Markdown, and does not write agent state.
+By default the command replays retained events after sequence `0`; pass
+`--after latest` to wait only for a future click.
+
 If the current agent supports MCP tools, `tunelito mcp` exposes the same
 comments index, pending feedback, claim, watch, record, and status primitives
 over stdio. It does not start a review server, tunnel, browser, or local worker.

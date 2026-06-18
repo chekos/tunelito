@@ -28,6 +28,7 @@ import {
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { buildDoctorReport } from "../src/doctor.js";
+import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
@@ -42,6 +43,7 @@ Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
        tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
+       tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
 
@@ -80,6 +82,7 @@ Commands:
   doctor                Run read-only local setup and safety diagnostics
   mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
+  review watch          Wait for a browser Done Reviewing handoff event
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
@@ -263,6 +266,10 @@ async function main() {
     process.exitCode = runCommentsCommand(argv.slice(1));
     return;
   }
+  if (argv[0] === "review") {
+    process.exitCode = await runReviewCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "inbox") {
     process.exitCode = await runInboxCommand(argv.slice(1));
     return;
@@ -372,6 +379,9 @@ async function main() {
     agentWorker?.wake("comment");
     agentSessionWatcher?.wake("comment");
   });
+  instance.events.on("review-completed", (event) => {
+    console.log(`Review completed #${event.sequence}: ${event.summary.comments} comment${event.summary.comments === 1 ? "" : "s"}`);
+  });
   instance.events.on("document-changed", () => {
     console.log("HTML changed on disk; connected browsers were asked to reload.");
   });
@@ -379,6 +389,7 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
+  console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
     console.log(`Owner:   ${opts.ownerName}`);
   }
@@ -397,6 +408,7 @@ async function main() {
       maxPasses: opts.agentMaxPasses,
       ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
+      reviewUrl: instance.localUrl,
     });
     console.log(`Agent session: ${agentSessionWatcher.description}`);
     console.log(`Agent session: watching comments in this process`);
@@ -694,6 +706,138 @@ function formatCommentsIndex(index, format) {
     `Visitor:  ${index.summary.visitor}`,
     `Approved: ${index.summary.ownerApproved}`,
     diagnostics,
+  ].join("\n");
+}
+
+function reviewUsage() {
+  return `Tunelito review -- reviewer handoff event commands.
+
+Usage:
+  tunelito review watch [page.html|folder] [options]
+
+Commands:
+  watch       Wait for the next Done Reviewing handoff event
+  help        Show this message
+
+Options:
+  --url <url>        Local Tunelito review URL printed by the running server
+  --timeout <s>      Stop waiting after this many seconds (default: 0, no timeout)
+  --after <n|latest> Replay retained events after this sequence (default: 0)
+  --format <text|json>
+                     Output format (default: text)
+  --json             Print the machine-readable review.completed event
+`;
+}
+
+export function parseReviewArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (command !== "watch") {
+    throw new Error(`Unknown review command: ${command}`);
+  }
+
+  const opts = { command, format: "text", timeoutSeconds: 0, after: 0 };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--url") {
+      opts.url = requiredValue(argv[++i], "--url");
+    } else if (arg === "--timeout") {
+      opts.timeoutSeconds = parseIntegerValue(argv[++i], "--timeout", { min: 0 });
+    } else if (arg === "--after") {
+      opts.after = parseReviewAfterValue(requiredValue(argv[++i], "--after"));
+    } else if (arg === "--format") {
+      opts.format = requiredValue(argv[++i], "--format");
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown review option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  if (positional.length > 1 && !opts.help) {
+    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+  }
+  if (!["text", "json"].includes(opts.format)) {
+    throw new Error("Unsupported --format for review watch: use text or json");
+  }
+  if (positional[0]) opts.targetPath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runReviewCommand(args, { stdout = process.stdout, stderr = process.stderr, fetchFn = globalThis.fetch } = {}) {
+  let opts;
+  try {
+    opts = parseReviewArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${reviewUsage()}`);
+    return 1;
+  }
+
+  if (opts.help) {
+    stdout.write(reviewUsage());
+    return 0;
+  }
+
+  try {
+    if (typeof fetchFn !== "function") throw new Error("review watch requires a fetch implementation");
+    const sessionUrl = opts.url || reviewUrlFromSessionFile(opts.targetPath);
+    const response = await fetchFn(buildReviewEventsUrl(sessionUrl, opts), { cache: "no-store" });
+    const body = await response.text();
+    const payload = JSON.parse(body);
+    stdout.write(formatReviewWatchResult(payload, opts.format));
+    return response.ok ? 0 : 1;
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+}
+
+function parseReviewAfterValue(value) {
+  if (value === "latest") return value;
+  return parseIntegerValue(value, "--after", { min: 0 });
+}
+
+function reviewUrlFromSessionFile(targetPath) {
+  if (!targetPath) throw new Error("review watch requires --url or a target with .tunelito/session.json metadata");
+  const sessionPath = join(agentWorkspaceRoot(targetPath), ".tunelito", "session.json");
+  if (!existsSync(sessionPath)) throw new Error(`Review session metadata not found: ${sessionPath}. Pass --url with the running Tunelito Local URL.`);
+  const session = JSON.parse(readFileSync(sessionPath, "utf8"));
+  const url = session.reviewUrl || session.localUrl || session.originUrl;
+  if (!url) throw new Error(`Review session metadata does not include a review URL: ${sessionPath}`);
+  return url;
+}
+
+function buildReviewEventsUrl(sessionUrl, opts) {
+  const source = new URL(sessionUrl);
+  const url = new URL(REVIEW_EVENTS_ROUTE, source.origin);
+  for (const [key, value] of source.searchParams) url.searchParams.set(key, value);
+  url.searchParams.set("after", String(opts.after));
+  if (opts.timeoutSeconds > 0) url.searchParams.set("timeout", String(opts.timeoutSeconds));
+  return url;
+}
+
+function formatReviewWatchResult(payload, format) {
+  if (format === "json") return `${JSON.stringify(payload, null, 2)}\n`;
+  if (payload.type === "review.timeout") {
+    return `Timed out waiting for review.completed after ${payload.timeoutSeconds}s\n`;
+  }
+  const summary = payload.summary || {};
+  return [
+    `Review completed #${payload.sequence}`,
+    `Target:   ${payload.targetPath || "(unknown)"}`,
+    `Comments: ${summary.comments ?? summary.total ?? 0}`,
+    `Page:     ${summary.page ?? 0}`,
+    `Site:     ${summary.site ?? 0}`,
+    `Owner:    ${summary.owner ?? 0}`,
+    `Visitor:  ${summary.visitor ?? 0}`,
+    "",
   ].join("\n");
 }
 
@@ -1010,7 +1154,7 @@ function formatInboxRecordResult(recorded, format, { trigger = DEFAULT_AGENT_TRI
   return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n\n${tracker}`;
 }
 
-function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend }) {
+function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend, reviewUrl = "" }) {
   const workspaceRoot = agentWorkspaceRoot(targetPath);
   const sessionPath = join(workspaceRoot, ".tunelito", "session.json");
   mkdirSync(dirname(sessionPath), { recursive: true });
@@ -1027,6 +1171,8 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
     maxPasses,
     ownerName: ownerName || "",
     hasInstructions: Boolean(promptAppend),
+    reviewUrl,
+    reviewWatchCommand: reviewUrl ? reviewWatchCommand({ url: reviewUrl }) : "",
     nextCommand: inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }),
     statusCommand: inboxStatusCommand({ targetPath, commentsPath, statePath, policy, trigger }),
     recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }),
@@ -1034,6 +1180,17 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
   };
   writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
   return sessionPath;
+}
+
+function reviewWatchCommand({ url }) {
+  return [
+    "tunelito",
+    "review",
+    "watch",
+    "--url",
+    shellQuote(url),
+    "--json",
+  ].join(" ");
 }
 
 function inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }) {
