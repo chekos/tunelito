@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 - 2026-06-18
 
 - Adds `tunelito skill setup`, a no-write onboarding guide for installing or referencing the bundled skill across common coding agents.
 - Adds a browser `Done Reviewing` handoff action plus `tunelito review watch` for waiting on in-memory `review.completed` events.

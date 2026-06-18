@@ -197,3 +197,20 @@ Verification:
 - `npm run ci` passed: check, agent config, docs check, 154 tests, smoke check, and package smoke check.
 - `git diff --check` passed.
 - Multi-agent adversarial verification found one blocker: setup initially said Node.js 20 or newer, while the package requires Node.js 22 or newer. The CLI output and hosted docs were corrected to Node.js 22, focused checks were rerun, and the re-check reported clean with no remaining CLI/docs/package blockers.
+
+## Release Prep: 0.14.0
+
+Status: version prepared on the backlog-drain branch.
+
+Decision:
+
+- Release as `0.14.0` because the drained backlog adds multiple user-facing feature surfaces: comments index, doctor diagnostics, MCP, Done Reviewing handoff, and guided agent setup.
+- Move the prior `Unreleased` changelog entries under `0.14.0 - 2026-06-18`.
+- Keep the release on npm `latest`; `npm run release:check -- 0.14.0` resolved the stable dist-tag and confirmed the version is not already published.
+
+Verification:
+
+- `npm run release:check -- 0.14.0` passed.
+- `npm run ci` passed: check, agent config, docs check, 154 tests, smoke check, and package smoke check.
+- `npm run pack:check` passed against `tunelito@0.14.0`.
+- `git diff --check` passed.
