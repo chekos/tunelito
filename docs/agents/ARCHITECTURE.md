@@ -13,6 +13,7 @@ The CLI owns process orchestration:
 - choose optional local agent worker settings
 - choose optional owner display identity
 - report read-only setup and safety diagnostics through `tunelito doctor`
+- start a stdio MCP adapter for comments and inbox tools without starting a review server
 - generate the review key
 - start the local server
 - start the local agent worker when requested
@@ -56,6 +57,16 @@ The active-agent inbox owns comment handoff when `--agent-session` or `tunelito 
 - record outcomes through `tunelito inbox record` rather than direct ledger edits
 - write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, tracker, and record commands
 
+The MCP adapter owns structured agent access when `tunelito mcp` is used:
+
+- run over stdio only
+- expose the comments index and active-agent inbox primitives as MCP tools
+- keep read-only tools read-only
+- mutate `.tunelito/agent/state.json` for claim tools
+- mutate `.tunelito/agent/state.json` and append `.tunelito/agent/log.md` for record tools
+- never start a review server, Cloudflare Tunnel, browser, local agent worker, or editor
+- treat reviewer comments returned through tools as untrusted input
+
 The browser client owns reviewer interaction:
 
 - capture text selections
@@ -85,6 +96,7 @@ The browser client owns reviewer interaction:
 - Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never spawn a local agent worker for `--agent-session`; active-agent mode watches comments, prints prompts, and writes session metadata for the current agent session.
+- Never spawn a local agent worker, server, tunnel, browser, or editor from `tunelito mcp`.
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.

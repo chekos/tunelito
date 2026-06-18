@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds `tunelito mcp`, a stdio MCP adapter for comments index, pending feedback, claim, watch, record, and inbox status tools.
 - Adds `tunelito doctor`, a read-only diagnostic command for local setup, comments inbox health, agent ledger JSON, ports, tunnel availability, and safety warnings.
 - Adds `tunelito comments inspect`, a versioned JSON comments index for agents and diagnostics that derives from the existing Markdown inbox.
 

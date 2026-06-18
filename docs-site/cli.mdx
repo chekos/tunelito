@@ -8,6 +8,7 @@ Tunelito 0.13.0
 
 Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
+       tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
@@ -45,6 +46,7 @@ Options:
 
 Commands:
   doctor                Run read-only local setup and safety diagnostics
+  mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
@@ -135,6 +137,14 @@ Print the same comment work tracker in the terminal:
 ```bash
 tunelito inbox status ./site
 ```
+
+Start the MCP stdio adapter for MCP-capable agents:
+
+```bash
+tunelito mcp
+```
+
+The MCP server exposes comments index, pending feedback, claim, watch, record, and status tools. It does not start a review server, tunnel, browser, or local agent worker.
 
 Allow broad comments to continue for up to five passes:
 

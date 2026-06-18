@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -227,6 +227,25 @@ test("runDoctorCommand prints parseable JSON and returns nonzero for errors", as
   assert.equal(report.format, "tunelito-doctor");
   assert.equal(report.ok, false);
   assert.equal(report.checks.some((check) => check.id === "target.file" && check.status === "fail"), true);
+});
+
+test("mcp help is side-effect free and unknown arguments fail", () => {
+  const helpOut = streamCollector();
+  const helpCode = runMcpCommand(["--help"], {
+    stdout: helpOut,
+    stderr: streamCollector(),
+  });
+  assert.equal(helpCode, 0);
+  assert.match(helpOut.text(), /Tunelito MCP/);
+  assert.match(helpOut.text(), /does not start/);
+
+  const stderr = streamCollector();
+  const badCode = runMcpCommand(["serve"], {
+    stdout: streamCollector(),
+    stderr,
+  });
+  assert.equal(badCode, 1);
+  assert.match(stderr.text(), /Unknown mcp argument/);
 });
 
 test("parseCommentsArgs supports target and direct comments inspection", () => {

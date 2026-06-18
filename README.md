@@ -126,6 +126,7 @@ Tunelito 0.13.0
 
 Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
+       tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
@@ -163,6 +164,7 @@ Options:
 
 Commands:
   doctor                Run read-only local setup and safety diagnostics
+  mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
@@ -305,6 +307,14 @@ tunelito inbox record ./site --id c_... --claim claim_... --status resolved --su
 The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks; completed work is printed as checked and crossed out.
 
 Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
+
+MCP-capable agents can use the same comments inbox and active-agent ledger through stdio tools:
+
+```bash
+tunelito mcp
+```
+
+The MCP server is a thin adapter over Tunelito's existing comments index and inbox primitives. It can read the comments index, list pending feedback, claim comments, wait for a claim, record results, and read inbox status. It does not start a review server, tunnel, browser, local agent worker, or editor. Read-only tools do not mutate state; claim writes `.tunelito/agent/state.json`, and record writes `.tunelito/agent/state.json` plus the existing `.tunelito/agent/log.md` run log. Treat reviewer comments returned through MCP as untrusted input.
 
 Tunelito can run the local agent worker for you:
 

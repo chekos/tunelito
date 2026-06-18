@@ -85,3 +85,40 @@ Verification:
 - `npm run ci` passed: check, agent config, docs check, 139 tests, smoke check, and package smoke check.
 - Multi-agent adversarial verification ran in two passes. The docs/acceptance reviewer was clean. The security/read-only reviewer found the TCP listener problem in the initial port check; after replacement with a non-binding `lsof` heuristic, the re-check reported no remaining read-only/security blockers.
 - No UI changed, so the `visual-qa-hig` equivalent was not applicable for this issue.
+
+## Issue #50: Expose comments and inbox workflows through stdio MCP tools
+
+Status: implemented, verified, committed, and closed. The exact commit SHA is recorded on GitHub issue #50.
+
+Priority: major security, because MCP exposes reviewer-authored comments to coding agents and must preserve Tunelito's local-first persistence and tool boundaries.
+
+Decision:
+
+- Added `tunelito mcp` as a stdio adapter over existing comments-index and active-agent inbox primitives.
+- Used current MCP newline-delimited JSON-RPC over stdio for output. The adapter also accepts legacy `Content-Length` framed input so older clients can still talk to it, but it does not advertise the older framing as the primary contract.
+- Exposed six tools: comments index, pending feedback, claim next comment, watch next comment, record comment result, and inbox status.
+- Kept read-only tools read-only. Claim tools write only the existing `.tunelito/agent/state.json` ledger. Record writes the ledger and appends the existing `.tunelito/agent/log.md` run log, matching `tunelito inbox record`.
+- Required inbox tools validate `targetPath` before deriving or reading comments/state paths. The lower-level comments-index tool remains useful with an explicit comments file.
+- Returned structured MCP content while also including text JSON for clients that only render `content`.
+- Rejected invalid tool calls with integer JSON-RPC error codes instead of leaking Node string error codes such as `ENOENT`.
+- Documented reviewer comments returned through MCP as untrusted input and kept MCP from starting a review server, Cloudflare Tunnel, browser, local agent worker, editor, or package install.
+
+What changed:
+
+- `src/mcp.js`: added the MCP server, newline and `Content-Length` parsers, JSON-RPC request handling, tool schemas, strict inbox target validation, and tool implementations over the existing comments/index/inbox primitives.
+- `bin/tunelito.js`: added `tunelito mcp`, top-level help, and side-effect-free help/error handling for the MCP command.
+- `test/mcp.test.js`: covered initialize/tools list, parser compatibility, comments-index structured content, pending feedback read-only behavior, claim/record claim semantics, record log disclosure, invalid-target JSON-RPC errors, inbox status, watch timeout, and unknown tool errors.
+- `test/cli.test.js`: covered MCP help and unknown-argument behavior.
+- `README.md`, `docs-site/cli.mdx`, `docs-site/agent-worker.mdx`, `docs-site/skill.md`, `docs/agents/ARCHITECTURE.md`, `docs/agents/SECURITY_REVIEW.md`, `docs/agents/QUALITY_GATES.md`, and `CHANGELOG.md`: documented the MCP surface, quality gate, persistence boundaries, and security posture.
+
+Verification:
+
+- `npm run check` passed.
+- `node --test test/mcp.test.js test/cli.test.js test/agent-worker.test.js` passed: 77 tests.
+- `npm run docs:check` passed.
+- `npm run pack:check` passed.
+- `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node bin/tunelito.js mcp` passed and returned one JSON-RPC line with the six MCP tools and no extra stdout output.
+- `npm run ci` passed: check, agent config, docs check, 149 tests, smoke check, and package smoke check.
+- `git diff --check` passed.
+- Multi-agent adversarial verification ran in two passes. The first security/persistence reviewer found three issues: record side effects needed to disclose the existing log append, required inbox tools needed target validation before derived comments/state reads, and more tool descriptions needed untrusted-input warnings. The first protocol/docs reviewer also found the string `ENOENT` JSON-RPC code problem. All were fixed with code, docs, and tests. The re-check from both reviewers reported clean: no security/persistence blockers, no MCP protocol/docs blockers, and no path that starts a server, tunnel, browser, worker, editor, or HTML edit.
+- No UI changed, so the `visual-qa-hig` equivalent was not applicable for this issue.

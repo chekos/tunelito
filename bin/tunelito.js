@@ -28,6 +28,7 @@ import {
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { buildDoctorReport } from "../src/doctor.js";
+import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
@@ -39,6 +40,7 @@ function usage() {
 
 Usage: tunelito <page.html|folder> [options]
        tunelito doctor [page.html|folder] [options]
+       tunelito mcp
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
        tunelito skill show
@@ -76,6 +78,7 @@ Options:
 
 Commands:
   doctor                Run read-only local setup and safety diagnostics
+  mcp                   Start a stdio MCP server for comments and inbox tools
   comments inspect      Print a structured JSON index for a Tunelito comments inbox
   inbox next            Claim the next pending comment and print an agent prompt
   inbox watch           Wait for the next pending comment, then print an agent prompt
@@ -250,6 +253,10 @@ async function main() {
   const argv = process.argv.slice(2);
   if (argv[0] === "doctor") {
     process.exitCode = await runDoctorCommand(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "mcp") {
+    process.exitCode = runMcpCommand(argv.slice(1));
     return;
   }
   if (argv[0] === "comments") {
@@ -557,6 +564,31 @@ function formatDoctorReport(report, format) {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function mcpUsage() {
+  return `Tunelito MCP -- stdio Model Context Protocol server.
+
+Usage:
+  tunelito mcp
+
+The MCP server exposes comments and active-agent inbox tools. It does not start
+a review server, tunnel, browser, or local agent worker.
+`;
+}
+
+export function runMcpCommand(args, { stdin = process.stdin, stdout = process.stdout, stderr = process.stderr } = {}) {
+  const sub = args[0];
+  if (sub === "help" || sub === "-h" || sub === "--help") {
+    stdout.write(mcpUsage());
+    return 0;
+  }
+  if (args.length) {
+    stderr.write(`Unknown mcp argument: ${sub}\n\n${mcpUsage()}`);
+    return 1;
+  }
+  createMcpServer({ stdin, stdout, stderr });
+  return 0;
 }
 
 function commentsUsage() {

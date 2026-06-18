@@ -70,6 +70,21 @@ Also update:
 - `docs/agents/START_HERE.md`
 - `docs/agents/SECURITY_REVIEW.md` when safety checks change
 
+## MCP Changes
+
+Required:
+
+- `test/mcp.test.js`
+- `test/agent-worker.test.js` when claim, watch, record, status, policy, or continuation behavior changes
+- `test/cli.test.js` when command routing or help changes
+- `npm run ci`
+
+Also update:
+
+- README and docs-site CLI or agent workflow pages
+- `docs/agents/ARCHITECTURE.md`
+- `docs/agents/SECURITY_REVIEW.md`
+
 ## Client/UI Changes
 
 Required:
