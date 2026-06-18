@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.1 - 2026-06-18
+
+- Publishes a patch package for the current bundled Tunelito agent skill after syncing the saved BNS marketplace copy.
+
 ## 0.14.0 - 2026-06-18
 
 - Adds `tunelito skill setup`, a no-write onboarding guide for installing or referencing the bundled skill across common coding agents.
