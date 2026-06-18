@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -706,6 +706,35 @@ test("skill with no subcommand prints install help", () => {
   const code = runSkillCommand([], { stdout, stderr: streamCollector() });
   assert.equal(code, 0);
   assert.match(stdout.text(), /tunelito skill show/);
+  assert.match(stdout.text(), /tunelito skill setup/);
+});
+
+test("skill setup prints no-write cross-agent onboarding guidance", () => {
+  const cwd = process.cwd();
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-skill-setup-"));
+  const stdout = streamCollector();
+  const stderr = streamCollector();
+  try {
+    process.chdir(dir);
+    const before = readdirSync(dir);
+    const code = runSkillCommand(["setup"], { stdout, stderr });
+    const after = readdirSync(dir);
+
+    assert.equal(code, 0);
+    assert.equal(stderr.text(), "");
+    assert.deepEqual(after, before);
+    assert.match(stdout.text(), /Tunelito agent setup/);
+    assert.match(stdout.text(), /npx --yes tunelito skill show/);
+    assert.match(stdout.text(), /mkdir -p \.claude\/skills\/tunelito/);
+    assert.match(stdout.text(), /Codex and other instruction-file agents/);
+    assert.match(stdout.text(), /Inspect existing instruction files before editing them/);
+    assert.match(stdout.text(), /does not write files or install packages/);
+    assert.match(stdout.text(), /Do not present --no-auth as local-only/);
+    assert.match(stdout.text(), /--no-tunnel/);
+    assert.match(stdout.text(), /https:\/\/tunelito\.dev\/agent-setup/);
+  } finally {
+    process.chdir(cwd);
+  }
 });
 
 test("skill rejects an unknown subcommand with a nonzero exit", () => {

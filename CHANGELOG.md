@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds `tunelito skill setup`, a no-write onboarding guide for installing or referencing the bundled skill across common coding agents.
 - Adds a browser `Done Reviewing` handoff action plus `tunelito review watch` for waiting on in-memory `review.completed` events.
 - Adds `tunelito mcp`, a stdio MCP adapter for comments index, pending feedback, claim, watch, record, and inbox status tools.
 - Adds `tunelito doctor`, a read-only diagnostic command for local setup, comments inbox health, agent ledger JSON, ports, tunnel availability, and safety warnings.

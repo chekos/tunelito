@@ -160,3 +160,40 @@ Verification:
 - `npm run ci` passed: check, agent config, docs check, 153 tests, smoke check, and package smoke check.
 - `git diff --check` passed.
 - Multi-agent adversarial verification was clean. The security/persistence reviewer confirmed route auth, timeout behavior, no durable event writes, no comments/source corruption, and no server/tunnel/browser/worker/editor spawn from `review watch`. The UI/docs reviewer confirmed the browser action, acknowledged state, desktop/mobile layout probes, CLI replay, docs coverage, and no leftover QA artifacts.
+
+## Issue #53: Improve agent setup UX with guided cross-agent onboarding
+
+Status: implemented, verified, committed, and closed. The exact commit SHA is recorded on GitHub issue #53.
+
+Priority: minor onboarding/docs, because the existing `skill show` primitive worked but needed clearer setup guidance for multiple agent products.
+
+Decision:
+
+- Kept `tunelito skill show` unchanged as the stable source of truth for the bundled skill body.
+- Added `tunelito skill setup` under the existing `skill` namespace instead of adding a top-level `agent` command. That avoids reserving `agent` as a command and preserves the ability to serve a folder literally named `agent`.
+- Made setup v1 no-write: it prints guidance only and does not create files, install packages, edit global instructions, or create symlinks.
+- Included Claude Code project-skill commands, Codex/instruction-file guidance without assuming one global path, Cursor/Gemini/opencode/Copilot-style guidance, and explicit warnings to inspect existing instruction files before editing.
+- Included tunnel safety guidance: `--no-auth` is not local-only, and sensitive pages should use `--no-tunnel`, optionally with `--live`.
+- Added linkable hosted docs at `/agent-setup` and kept docs hierarchy explicit: `skill show` is the skill body, `skill setup` is usage guidance, hosted docs are linkable human/agent guidance, automatic global edits are not part of v1.
+
+What changed:
+
+- `bin/tunelito.js`: added `tunelito skill setup`, top-level/skill help text updates, and no-write onboarding output with version and Node 22 runtime requirement.
+- `test/cli.test.js`: added coverage that setup exits 0, prints the expected onboarding guidance, and leaves a fresh temp directory unchanged.
+- `docs-site/agent-setup.mdx`: added the hosted setup guide.
+- `docs-site/docs.json`: added the setup guide to docs navigation.
+- `README.md` and `docs-site/cli.mdx`: documented `skill setup` near the agent skill and CLI surfaces.
+- `docs/agents/SKILLS.md`: documented the public setup surface and stable `skill show` hierarchy.
+- `scripts/package-smoke-check.mjs`: added a tarball-installed `tunelito skill setup` assertion so setup guidance ships in the npm package.
+- `CHANGELOG.md`: recorded the user-facing setup command.
+
+Verification:
+
+- `npm run check` passed.
+- `node --test test/cli.test.js` passed: 46 tests.
+- `npm run docs:check` passed.
+- `npm run pack:check` passed.
+- `node bin/tunelito.js skill setup` printed the expected no-write setup guide.
+- `npm run ci` passed: check, agent config, docs check, 154 tests, smoke check, and package smoke check.
+- `git diff --check` passed.
+- Multi-agent adversarial verification found one blocker: setup initially said Node.js 20 or newer, while the package requires Node.js 22 or newer. The CLI output and hosted docs were corrected to Node.js 22, focused checks were rerun, and the re-check reported clean with no remaining CLI/docs/package blockers.

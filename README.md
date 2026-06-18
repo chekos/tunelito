@@ -130,7 +130,7 @@ Usage: tunelito <page.html|folder> [options]
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
-       tunelito skill show
+       tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -173,6 +173,7 @@ Commands:
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
+  skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
 ```
 
@@ -186,13 +187,19 @@ The stable installation path is to have your agent print the bundled skill and i
 npx --yes tunelito skill show
 ```
 
+For guided no-write setup instructions across Claude Code, Codex, Cursor, Gemini, opencode, and Copilot-style agents:
+
+```bash
+npx --yes tunelito skill setup
+```
+
 For Claude Code, for example:
 
 ```bash
 tunelito skill show > .claude/skills/tunelito/SKILL.md
 ```
 
-Or tell your agent: "run `npx --yes tunelito skill show` and install the skill it prints."
+Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing project instructions, and install the skill without deleting local rules." The setup command prints guidance only; it does not write files, install packages, or edit global agent configuration.
 
 ## How It Works
 

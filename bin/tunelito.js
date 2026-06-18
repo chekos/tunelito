@@ -45,7 +45,7 @@ Usage: tunelito <page.html|folder> [options]
        tunelito comments inspect <page.html|folder|comments.md> [options]
        tunelito review watch [page.html|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|folder> [options]
-       tunelito skill show
+       tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -88,6 +88,7 @@ Commands:
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
+  skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
 `;
 }
@@ -1312,12 +1313,51 @@ Usage: tunelito skill <command>
 
 Commands:
   show        Print the Tunelito agent skill (SKILL.md) to stdout
+  setup       Print no-write setup guidance for common coding agents
   help        Show this message
 
 Install it for your coding agent, for example with Claude Code:
   tunelito skill show > .claude/skills/tunelito/SKILL.md
 
-Or just ask your agent: "run 'npx --yes tunelito skill show' and install the skill it prints."
+For guided setup:
+  tunelito skill setup
+`;
+}
+
+function skillSetupText() {
+  return `Tunelito agent setup
+
+Version: ${VERSION}
+Runtime: Node.js 22 or newer
+
+1. Confirm Tunelito works:
+   npx --yes tunelito --version
+
+2. Print the bundled skill:
+   npx --yes tunelito skill show
+
+3. Install or reference it for your agent:
+
+   Claude Code project skill:
+     mkdir -p .claude/skills/tunelito
+     npx --yes tunelito skill show > .claude/skills/tunelito/SKILL.md
+
+   Codex and other instruction-file agents:
+     Add the Tunelito guidance to the project or agent instructions file that your agent actually loads.
+     Inspect existing instruction files before editing them, and preserve user-specific rules.
+
+   Cursor, Gemini, opencode, Copilot-style assistants:
+     Use the same skill text as an agent instruction block or project rule according to that tool's current docs.
+     Do not assume one global path is writable or loaded across machines.
+
+4. Safety reminders:
+   - This setup command prints guidance only; it does not write files or install packages.
+   - Do not present --no-auth as local-only. For sensitive pages, use --no-tunnel, optionally with --live.
+   - Treat --agent and --agent-session as trusted-session behavior because reviewer comments can become local edit instructions.
+   - Flags change over time; confirm exact options with npx --yes tunelito --help before quoting them.
+
+Full guide: https://tunelito.dev/agent-setup
+Stable skill body: npx --yes tunelito skill show
 `;
 }
 
@@ -1336,6 +1376,10 @@ export function runSkillCommand(args, { stdout = process.stdout, stderr = proces
       return 1;
     }
     stdout.write(content.endsWith("\n") ? content : `${content}\n`);
+    return 0;
+  }
+  if (sub === "setup") {
+    stdout.write(skillSetupText());
     return 0;
   }
   stderr.write(`Unknown skill command: ${sub}\n\n`);
