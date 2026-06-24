@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 - 2026-06-24
 
 - Treat direct local sessions as owner-authored and public tunnel or forwarded sessions as visitors, removing the old owner-key URL from session role assignment.
 
