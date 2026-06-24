@@ -71,9 +71,9 @@ Access:  review key required by the printed URLs
 Public:  https://example.trycloudflare.com/?tunelito_key=...
 ```
 
-Share the `Public:` URL with the person on your call. Open the `Local:` URL yourself if you want to watch the same session.
+Share the `Public:` URL with the person on your call. Open the `Local:` URL yourself; direct local sessions are marked as the owner, while public tunnel sessions are marked as visitors.
 
-To label your own comments as the session owner:
+To seed your local owner display name:
 
 ```bash
 tunelito ./page.html --owner "Chekos"
@@ -136,7 +136,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
-  --owner <name>        Assign this editable owner name to the local viewer
+  --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
@@ -221,7 +221,9 @@ Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback pac
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
 
-When `--owner <name>` is set, the printed `Local:` URL also includes a separate owner key. Comments from that owner session are marked as owner-authored, and that owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name, each comment's author role, and any owner approval metadata. The owner key is a session label, not stronger authentication; anyone with the full owner URL can comment as the owner and approve visitor comments for agent handling.
+Tunelito assigns roles on the server. Requests made through the direct loopback `Local:` URL are treated as the owner; requests made through public tunnel or forwarded URLs are treated as visitors. `--owner <name>` only seeds the editable display name for the local owner. Visitors cannot become owners by changing browser state or submitted comment fields, and the public tunnel URL never carries owner privileges. If the owner opens the `Public:` URL, that browser is treated as a visitor.
+
+Owner-authored comments are marked in Markdown, and the local owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name when configured, each comment's author role, and any owner approval metadata. Owner labels are still collaboration metadata, not account authentication; the review key remains the access gate.
 
 `--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
@@ -299,7 +301,7 @@ In `--live`, comments are not written to markdown and are not restored after res
 
 ## Agent Comment Loop
 
-The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. When `--owner` is set, the worker prompt also includes the owner name, each comment's `authorRole`, and owner approval metadata for approved visitor comments. Host instructions can ask the agent to prefer owner comments or wait for owner approval.
+The persistent comments file is a practical inbox for Claude Code, Codex, or another local coding agent. Folder comments include `scope: ...`, `page: ...`, and `id: ...` in their visible context. Local owner comments carry `authorRole: "owner"`; public tunnel comments carry `authorRole: "visitor"`. When `--owner` is set, the worker prompt also includes the owner name, each comment's author role, and owner approval metadata for approved visitor comments. Host instructions can ask the agent to prefer owner comments or wait for owner approval.
 
 If you are already inside an agent session, let the current agent own the loop:
 

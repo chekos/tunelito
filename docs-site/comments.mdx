@@ -5,7 +5,7 @@ description: "How Tunelito stores reviewer comments and restores live session st
 
 Reviewers can select text and leave anchored comments from the injected Tunelito panel. They can also add unanchored page notes or site-wide notes without selecting text. Comments sync live to connected browsers and are written to Markdown immediately.
 
-Each browser gets a friendly editable display name by default. Use `--owner <name>` when starting Tunelito to seed the local viewer with an owner name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Owner-keyed sessions can also approve a visitor comment for agent work from the comments panel.
+Each browser gets a friendly editable display name by default. Direct loopback `Local:` sessions are marked as owner-authored, while public tunnel sessions are marked as visitors. Use `--owner <name>` to seed the local owner display name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Direct local owner sessions can also approve a visitor comment for agent work from the comments panel.
 
 On fine-pointer devices, reviewers can toggle `Pointer` to show a local red halo while presenting. In `--live`, that pointer halo is shared to peers as ephemeral session UI and is never written to Markdown.
 

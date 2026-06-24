@@ -14,9 +14,10 @@ Expected behavior:
 - Live-mode signaling and fallback relay messages stay behind the same WebSocket auth gate.
 - Live pointer halo events are ephemeral UI only; they must stay behind the WebSocket auth gate and must not be written to comments markdown.
 - `--no-auth` is explicit and documented.
-- `--owner` uses a separate owner key as an identity label only; do not treat owner labels as access control.
+- Direct loopback `Local:` sessions are marked as owners on the server; public tunnel or forwarded sessions are marked as visitors.
+- `--owner` seeds the local owner display name only; do not treat owner labels as access control.
 - Reviewer IDs support display-name rename behavior only; do not treat them as authentication or authorization.
-- Owner approval of visitor comments requires the owner-keyed session, persists only outside `--live`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
+- Owner approval of visitor comments requires the direct local owner session, persists only outside `--live`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
 
 Tests should cover both allowed and denied paths.
 

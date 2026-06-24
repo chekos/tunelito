@@ -26,8 +26,9 @@ The server owns local IO and transport:
 - serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
-- mark owner-key sessions so owner comments can carry `authorRole: owner`
-- let owner-key sessions approve a specific visitor comment for local-agent handling without changing the source HTML
+- mark direct loopback local sessions as owners so local comments carry `authorRole: owner`
+- mark public tunnel or forwarded sessions as visitors even when they carry the review key
+- let direct local owner sessions approve a specific visitor comment for local-agent handling without changing the source HTML
 - accept WebSocket comment events
 - tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
@@ -88,7 +89,7 @@ The browser client owns reviewer interaction:
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
 - render peer cursors and live selection highlights in `--live`
 - render optional pointer halos locally, and broadcast them as ephemeral live events in `--live`
-- assign friendly editable visitor names, or seed the owner name for owner-key sessions
+- assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to
 
@@ -104,7 +105,7 @@ The browser client owns reviewer interaction:
 - Keep review handoff events ephemeral; do not write them to source HTML, comments markdown, or agent state.
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
-- Treat owner identity as comment metadata, not authentication; the review key remains the access gate.
+- Treat owner identity as server-assigned request metadata, not authentication; direct loopback local sessions are owners, public tunnel or forwarded sessions are visitors, and the review key remains the access gate.
 - Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never spawn a local agent worker for `--agent-session`; active-agent mode watches comments, prints prompts, and writes session metadata for the current agent session.

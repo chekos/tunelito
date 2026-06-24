@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Treat direct local sessions as owner-authored and public tunnel or forwarded sessions as visitors, removing the old owner-key URL from session role assignment.
+
 ## 0.14.1 - 2026-06-18
 
 - Publishes a patch package for the current bundled Tunelito agent skill after syncing the saved BNS marketplace copy.
