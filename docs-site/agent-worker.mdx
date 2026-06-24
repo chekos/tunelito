@@ -92,7 +92,7 @@ You can also use another marker:
 npx --yes tunelito ./site --agent claude --agent-trigger "@fix"
 ```
 
-If you start the session with `--owner <name>`, the worker prompt includes the owner name, each comment's `authorRole`, and owner approval metadata for approved visitor comments. You can combine that with prompt guidance when you want the agent to prefer owner comments or wait for owner approval:
+Direct loopback `Local:` sessions are marked as owner-authored, while public tunnel sessions are marked as visitors. If you start the session with `--owner <name>`, the worker prompt includes that owner display name, each comment's `authorRole`, and owner approval metadata for approved visitor comments. You can combine that with prompt guidance when you want the agent to prefer owner comments or wait for owner approval:
 
 ```bash
 npx --yes tunelito ./site --owner "Chekos" --agent codex --agent-policy owner

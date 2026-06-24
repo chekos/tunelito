@@ -5,7 +5,7 @@ import { connect } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { OWNER_KEY_PARAM, createTunelitoServer, isIgnoredWatchFilename } from "../src/server.js";
+import { createTunelitoServer, isIgnoredWatchFilename, isLocalOwnerRequest } from "../src/server.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -453,7 +453,8 @@ test("server emits Done Reviewing handoff events and replays them to waiters", a
     assert.equal(event.summary.comments, 2);
     assert.equal(event.summary.page, 1);
     assert.equal(event.summary.site, 1);
-    assert.equal(event.summary.visitor, 2);
+    assert.equal(event.summary.owner, 2);
+    assert.equal(event.summary.visitor, 0);
     assert.equal(event.summary.pending, 2);
     assert.equal(event.overallComment, "Start with the homepage copy.");
 
@@ -835,7 +836,7 @@ test("server can require a review access key", async () => {
   }
 });
 
-test("server assigns owner identity only to owner-key sessions", async () => {
+test("server assigns owner identity to direct local sessions and visitor identity to tunnel-shaped sessions", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-owner-"));
   const htmlPath = join(dir, "page.html");
   const commentsPath = join(dir, "page.comments.md");
@@ -848,31 +849,32 @@ test("server assigns owner identity only to owner-key sessions", async () => {
     port: 0,
     accessKey: "review-secret",
     ownerName: "Chekos",
-    ownerKey: "owner-secret",
     ownerSessionId: "owner-session",
   });
 
   const sockets = [];
   try {
     assert.match(instance.localUrl, /tunelito_key=review-secret/);
-    assert.match(instance.localUrl, new RegExp(`${OWNER_KEY_PARAM}=owner-secret`));
+    assert.doesNotMatch(instance.localUrl, /tunelito_owner_key=/);
 
     const ownerHtmlResponse = await fetch(instance.localUrl);
     const ownerHtml = await ownerHtmlResponse.text();
     assert.match(ownerHtml, /data-default-author="Chekos"/);
     assert.match(ownerHtml, /data-viewer-role="owner"/);
     assert.match(ownerHtml, /data-owner-session="owner-session"/);
-    assert.match(ownerHtmlResponse.headers.get("set-cookie"), /tunelito_owner_key=owner-secret/);
 
-    const visitorUrl = new URL(instance.originUrl);
-    visitorUrl.searchParams.set("tunelito_key", "review-secret");
-    const visitorHtml = await fetch(visitorUrl).then((res) => res.text());
-    assert.doesNotMatch(visitorHtml, /data-default-author="Chekos"/);
-    assert.doesNotMatch(visitorHtml, /data-viewer-role="owner"/);
+    const visitorHtml = await rawGet(instance.originUrl, "/?tunelito_key=review-secret", {
+      host: "shared.trycloudflare.com",
+      "cf-connecting-ip": "203.0.113.10",
+      "x-forwarded-for": "203.0.113.10",
+      "x-forwarded-proto": "https",
+    });
+    assert.equal(visitorHtml.statusCode, 200);
+    assert.doesNotMatch(visitorHtml.body, /data-default-author="Chekos"/);
+    assert.doesNotMatch(visitorHtml.body, /data-viewer-role="owner"/);
 
     const ownerSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
     ownerSocketUrl.searchParams.set("tunelito_key", "review-secret");
-    ownerSocketUrl.searchParams.set(OWNER_KEY_PARAM, "owner-secret");
     const owner = openJsonSocket(ownerSocketUrl);
     sockets.push(owner.socket);
     await waitFor(owner.socket, "open");
@@ -899,18 +901,23 @@ test("server assigns owner identity only to owner-key sessions", async () => {
     assert.equal(ownerComment.author, "Edited Owner");
     assert.equal(ownerComment.authorRole, "owner");
 
-    const visitorSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
-    visitorSocketUrl.searchParams.set("tunelito_key", "review-secret");
-    const visitor = openJsonSocket(visitorSocketUrl);
+    const visitorSocketUrl = new URL("/__tunelito/ws?tunelito_key=review-secret", instance.originUrl);
+    const visitor = await openRawJsonSocket(visitorSocketUrl, {
+      host: "shared.trycloudflare.com",
+      headers: {
+        "CF-Connecting-IP": "203.0.113.10",
+        "X-Forwarded-For": "203.0.113.10",
+        "X-Forwarded-Proto": "https",
+      },
+    });
     sockets.push(visitor.socket);
-    await waitFor(visitor.socket, "open");
     await waitUntil(() => visitor.messages.some((message) => message.type === "hello"));
     const visitorHello = visitor.messages.find((message) => message.type === "hello");
     assert.equal(visitorHello.authorRole, "visitor");
     assert.equal(visitorHello.defaultAuthor, "");
     assert.equal(visitorHello.ownerSession, "");
 
-    visitor.socket.send(JSON.stringify({
+    visitor.send({
       type: "create-comment",
       comment: {
         author: "Visitor",
@@ -920,7 +927,7 @@ test("server assigns owner identity only to owner-key sessions", async () => {
         textStart: 0,
         textEnd: 11,
       },
-    }));
+    });
 
     await waitUntil(() => visitor.messages.some((message) => message.type === "comment" && message.comment.body === "A visitor cannot self-mark owner."));
     const visitorComment = visitor.messages.find((message) => message.type === "comment" && message.comment.body === "A visitor cannot self-mark owner.").comment;
@@ -934,6 +941,36 @@ test("server assigns owner identity only to owner-key sessions", async () => {
     for (const socket of sockets) socket.close();
     await instance.close();
   }
+});
+
+test("local owner classification requires loopback access without forwarding headers", () => {
+  assert.equal(isLocalOwnerRequest({
+    headers: { host: "127.0.0.1:4317" },
+    socket: { remoteAddress: "::ffff:127.0.0.1" },
+  }), true);
+  assert.equal(isLocalOwnerRequest({
+    headers: { host: "localhost:4317" },
+    socket: { remoteAddress: "::1" },
+  }), true);
+  assert.equal(isLocalOwnerRequest({
+    headers: {
+      host: "shared.trycloudflare.com",
+      "cf-connecting-ip": "203.0.113.10",
+      "x-forwarded-for": "203.0.113.10",
+    },
+    socket: { remoteAddress: "127.0.0.1" },
+  }), false);
+  assert.equal(isLocalOwnerRequest({
+    headers: {
+      host: "127.0.0.1:4317",
+      "x-forwarded-proto": "https",
+    },
+    socket: { remoteAddress: "127.0.0.1" },
+  }), false);
+  assert.equal(isLocalOwnerRequest({
+    headers: { host: "127.0.0.1:4317" },
+    socket: { remoteAddress: "192.168.1.22" },
+  }), false);
 });
 
 test("server renames prior comments by reviewer identity instead of display name", async () => {
@@ -952,23 +989,27 @@ test("server renames prior comments by reviewer identity instead of display name
 
   const sockets = [];
   try {
-    const firstSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    const firstSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
     firstSocketUrl.searchParams.set("tunelito_reviewer_id", "r_first");
-    const first = openJsonSocket(firstSocketUrl);
+    const first = await openRawJsonSocket(firstSocketUrl, {
+      host: "shared.trycloudflare.com",
+      headers: { "CF-Connecting-IP": "203.0.113.10" },
+    });
     sockets.push(first.socket);
-    await waitFor(first.socket, "open");
     await waitUntil(() => first.messages.some((message) => message.type === "hello"));
     const firstHello = first.messages.find((message) => message.type === "hello");
     assert.equal(firstHello.reviewerId, "r_first");
 
-    const secondSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    const secondSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
     secondSocketUrl.searchParams.set("tunelito_reviewer_id", "r_second");
-    const second = openJsonSocket(secondSocketUrl);
+    const second = await openRawJsonSocket(secondSocketUrl, {
+      host: "shared.trycloudflare.com",
+      headers: { "CF-Connecting-IP": "203.0.113.11" },
+    });
     sockets.push(second.socket);
-    await waitFor(second.socket, "open");
     await waitUntil(() => second.messages.some((message) => message.type === "hello"));
 
-    first.socket.send(JSON.stringify({
+    first.send({
       type: "create-comment",
       comment: {
         author: "Clear Harbor",
@@ -978,12 +1019,12 @@ test("server renames prior comments by reviewer identity instead of display name
         textStart: 0,
         textEnd: 12,
       },
-    }));
+    });
     await waitUntil(() => first.messages.some((message) => message.type === "comment" && message.comment.body === "First reviewer feedback."));
     const firstComment = first.messages.find((message) => message.type === "comment" && message.comment.body === "First reviewer feedback.").comment;
     assert.equal(firstComment.reviewerId, "r_first");
 
-    second.socket.send(JSON.stringify({
+    second.send({
       type: "create-comment",
       comment: {
         author: "Clear Harbor",
@@ -992,16 +1033,16 @@ test("server renames prior comments by reviewer identity instead of display name
         textStart: 0,
         textEnd: 12,
       },
-    }));
+    });
     await waitUntil(() => second.messages.some((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback."));
     const secondComment = second.messages.find((message) => message.type === "comment" && message.comment.body === "Second reviewer feedback.").comment;
     assert.equal(secondComment.reviewerId, "r_second");
 
-    first.socket.send(JSON.stringify({
+    first.send({
       type: "rename-reviewer",
       reviewerId: "r_second",
       author: "chekos",
-    }));
+    });
 
     await waitUntil(() => first.messages.some((message) => message.type === "reviewer-renamed" && message.author === "chekos"));
     await waitUntil(() => first.messages.some((message) => message.type === "comment-updated" && message.comment.id === firstComment.id));
@@ -1019,9 +1060,11 @@ test("server renames prior comments by reviewer identity instead of display name
     assert.match(markdown, /reviewer: `r_first`/);
     assert.match(markdown, /reviewer: `r_second`/);
 
-    const fresh = openJsonSocket(firstSocketUrl);
+    const fresh = await openRawJsonSocket(firstSocketUrl, {
+      host: "shared.trycloudflare.com",
+      headers: { "CF-Connecting-IP": "203.0.113.10" },
+    });
     sockets.push(fresh.socket);
-    await waitFor(fresh.socket, "open");
     await waitUntil(() => fresh.messages.some((message) => message.type === "hello"));
     const restored = fresh.messages.find((message) => message.type === "hello").comments;
     assert.equal(restored.find((comment) => comment.id === firstComment.id).author, "chekos");
@@ -1046,7 +1089,6 @@ test("server lets owner approve visitor comments for agent work", async () => {
     port: 0,
     accessKey: "review-secret",
     ownerName: "Chekos",
-    ownerKey: "owner-secret",
   });
 
   const sockets = [];
@@ -1060,12 +1102,14 @@ test("server lets owner approve visitor comments for agent work", async () => {
 
     const visitorSocketUrl = new URL("/__tunelito/ws", instance.originUrl);
     visitorSocketUrl.searchParams.set("tunelito_key", "review-secret");
-    const visitor = openJsonSocket(visitorSocketUrl);
+    const visitor = await openRawJsonSocket(visitorSocketUrl, {
+      host: "shared.trycloudflare.com",
+      headers: { "CF-Connecting-IP": "203.0.113.10" },
+    });
     sockets.push(visitor.socket);
-    await waitFor(visitor.socket, "open");
     await waitUntil(() => visitor.messages.some((message) => message.type === "hello"));
 
-    visitor.socket.send(JSON.stringify({
+    visitor.send({
       type: "create-comment",
       comment: {
         author: "Visitor",
@@ -1079,18 +1123,18 @@ test("server lets owner approve visitor comments for agent work", async () => {
           fingerprint: "forged",
         },
       },
-    }));
+    });
 
     await waitUntil(() => visitor.messages.some((message) => message.type === "comment"));
     const created = visitor.messages.find((message) => message.type === "comment").comment;
     assert.equal(created.authorRole, "visitor");
     assert.equal(created.ownerApproval, undefined);
 
-    visitor.socket.send(JSON.stringify({
+    visitor.send({
       type: "approve-comment",
       id: created.id,
       approvedBy: "Visitor",
-    }));
+    });
     await waitUntil(() => visitor.messages.some((message) => message.type === "error" && /Only the owner/.test(message.message)));
     assert.equal(visitor.messages.some((message) => message.type === "comment-updated"), false);
 
@@ -1140,7 +1184,6 @@ test("server rejects owner approval in live mode", async () => {
     port: 0,
     accessKey: "review-secret",
     ownerName: "Chekos",
-    ownerKey: "owner-secret",
     liveMode: true,
   });
 
@@ -1262,7 +1305,7 @@ async function waitUntil(predicate, timeout = 1500) {
   throw new Error("Timed out waiting for condition");
 }
 
-function rawGet(baseUrl, path) {
+function rawGet(baseUrl, path, headers = {}) {
   const url = new URL(baseUrl);
   return new Promise((resolve, reject) => {
     const req = request({
@@ -1270,6 +1313,7 @@ function rawGet(baseUrl, path) {
       port: url.port,
       path,
       method: "GET",
+      headers,
     }, (res) => {
       let body = "";
       res.setEncoding("utf8");
@@ -1279,6 +1323,106 @@ function rawGet(baseUrl, path) {
     req.on("error", reject);
     req.end();
   });
+}
+
+function openRawJsonSocket(baseUrl, { host, headers = {} } = {}) {
+  const url = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const socket = connect(Number(url.port), url.hostname);
+    const messages = [];
+    let buffer = Buffer.alloc(0);
+    let connected = false;
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("Timed out waiting for raw WebSocket upgrade"));
+    }, 1000);
+    socket.close = () => socket.end();
+
+    socket.on("connect", () => {
+      socket.write([
+        `GET ${url.pathname}${url.search} HTTP/1.1`,
+        `Host: ${host || url.host}`,
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+        ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
+        "",
+        "",
+      ].join("\r\n"));
+    });
+    socket.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      if (!connected) {
+        const split = buffer.indexOf("\r\n\r\n");
+        if (split === -1) return;
+        const response = buffer.subarray(0, split).toString("utf8");
+        if (!response.startsWith("HTTP/1.1 101")) {
+          clearTimeout(timer);
+          socket.destroy();
+          reject(new Error(`Unexpected WebSocket upgrade response: ${response.split(/\r?\n/, 1)[0]}`));
+          return;
+        }
+        connected = true;
+        clearTimeout(timer);
+        buffer = buffer.subarray(split + 4);
+        resolve({
+          socket,
+          messages,
+          send(data) {
+            socket.write(encodeClientTextFrame(JSON.stringify(data)));
+          },
+        });
+      }
+      buffer = consumeServerTextFrames(buffer, messages);
+    });
+    socket.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+function encodeClientTextFrame(text) {
+  const payload = Buffer.from(text, "utf8");
+  const mask = Buffer.from([0x12, 0x34, 0x56, 0x78]);
+  let header;
+  if (payload.length < 126) {
+    header = Buffer.from([0x81, 0x80 | payload.length]);
+  } else {
+    header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 0x80 | 126;
+    header.writeUInt16BE(payload.length, 2);
+  }
+  const masked = Buffer.from(payload);
+  for (let i = 0; i < masked.length; i += 1) masked[i] ^= mask[i % mask.length];
+  return Buffer.concat([header, mask, masked]);
+}
+
+function consumeServerTextFrames(buffer, messages) {
+  let remaining = buffer;
+  while (remaining.length >= 2) {
+    const opcode = remaining[0] & 0x0f;
+    let length = remaining[1] & 0x7f;
+    let offset = 2;
+    if (length === 126) {
+      if (remaining.length < 4) return remaining;
+      length = remaining.readUInt16BE(2);
+      offset = 4;
+    } else if (length === 127) {
+      if (remaining.length < 10) return remaining;
+      const bigLength = remaining.readBigUInt64BE(2);
+      if (bigLength > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Server WebSocket frame too large");
+      length = Number(bigLength);
+      offset = 10;
+    }
+    if (remaining.length < offset + length) return remaining;
+    const payload = remaining.subarray(offset, offset + length);
+    remaining = remaining.subarray(offset + length);
+    if (opcode === 0x1) messages.push(JSON.parse(payload.toString("utf8")));
+  }
+  return remaining;
 }
 
 function rawWebSocket(baseUrl) {

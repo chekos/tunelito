@@ -51,7 +51,7 @@ Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
-  --owner <name>        Assign this editable owner name to the local viewer
+  --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments

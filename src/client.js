@@ -8,7 +8,6 @@
   const endpointBase = "/__tunelito";
   const locationParams = new URLSearchParams(location.search);
   const accessKey = locationParams.get("tunelito_key") || "";
-  const ownerKey = locationParams.get("tunelito_owner_key") || "";
   const pagePath = script?.dataset?.pagePath || location.pathname || "/";
   const initialIdentity = createInitialIdentity(configuredDefaultAuthor, configuredViewerRole, configuredOwnerSession);
   const state = {
@@ -63,7 +62,6 @@
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const socketUrl = new URL(`${protocol}//${location.host}${endpointBase}/ws`);
     if (accessKey) socketUrl.searchParams.set("tunelito_key", accessKey);
-    if (ownerKey) socketUrl.searchParams.set("tunelito_owner_key", ownerKey);
     socketUrl.searchParams.set("tunelito_page", state.pagePath);
     if (state.reviewerId) socketUrl.searchParams.set("tunelito_reviewer_id", state.reviewerId);
     const socket = new WebSocket(socketUrl);

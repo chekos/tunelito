@@ -12,11 +12,9 @@ import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
 export const ACCESS_KEY_PARAM = "tunelito_key";
-export const OWNER_KEY_PARAM = "tunelito_owner_key";
 export const PAGE_PARAM = "tunelito_page";
 const REVIEWER_ID_PARAM = "tunelito_reviewer_id";
 const ACCESS_KEY_COOKIE = "tunelito_key";
-const OWNER_KEY_COOKIE = "tunelito_owner_key";
 
 export async function createTunelitoServer(options) {
   const targetPath = resolve(options.filePath);
@@ -41,8 +39,7 @@ export async function createTunelitoServer(options) {
   const peers = new Map();
   const accessKey = options.accessKey ? String(options.accessKey) : "";
   const ownerName = cleanOwnerName(options.ownerName);
-  const ownerKey = ownerName ? String(options.ownerKey || randomBytes(18).toString("base64url")) : "";
-  const ownerSessionId = ownerName ? String(options.ownerSessionId || randomBytes(9).toString("base64url")) : "";
+  const ownerSessionId = String(options.ownerSessionId || randomBytes(9).toString("base64url"));
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -62,7 +59,6 @@ export async function createTunelitoServer(options) {
       liveMode,
       accessKey,
       ownerName,
-      ownerKey,
       ownerSessionId,
     });
   });
@@ -87,7 +83,7 @@ export async function createTunelitoServer(options) {
       rejectUpgrade(socket, 401, "Unauthorized");
       return;
     }
-    req.tunelitoAuthorRole = authorizeOwnerRequest(req, url, ownerKey).ok ? "owner" : "visitor";
+    req.tunelitoAuthorRole = isLocalOwnerRequest(req) ? "owner" : "visitor";
     req.tunelitoPagePath = normalizePagePath(url.searchParams.get(PAGE_PARAM));
     req.tunelitoReviewerId = req.tunelitoAuthorRole === "owner"
       ? ownerSessionId
@@ -313,7 +309,7 @@ export async function createTunelitoServer(options) {
   const requestedPort = options.port ?? 4317;
   const { port } = await listenOnFirstAvailable(server, host, requestedPort);
   const originUrl = `http://${host}:${port}/`;
-  const localUrl = withSessionKeys(originUrl, { accessKey, ownerKey });
+  const localUrl = withSessionKeys(originUrl, { accessKey });
 
   return {
     server,
@@ -340,7 +336,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerKey, ownerSessionId }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -355,13 +351,13 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     sendText(res, 401, "Tunelito review link is missing or invalid.", "text/plain; charset=utf-8", req.method);
     return;
   }
-  const owner = authorizeOwnerRequest(req, url, ownerKey);
-  const responseHeaders = mergeHeaders(auth.headers, owner.headers);
+  const owner = isLocalOwnerRequest(req);
+  const responseHeaders = auth.headers;
   const injectOptions = {
     liveMode,
-    defaultAuthor: owner.ok ? ownerName : "",
-    viewerRole: owner.ok ? "owner" : "",
-    ownerSession: owner.ok ? ownerSessionId : "",
+    defaultAuthor: owner ? ownerName : "",
+    viewerRole: owner ? "owner" : "",
+    ownerSession: owner ? ownerSessionId : "",
   };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -628,32 +624,8 @@ function authorizeRequest(req, url, accessKey) {
   return { ok: false, headers: {} };
 }
 
-function authorizeOwnerRequest(req, url, ownerKey) {
-  if (!ownerKey) return { ok: false, headers: {} };
-
-  const queryKey = url.searchParams.get(OWNER_KEY_PARAM);
-  if (sameSecret(queryKey, ownerKey)) {
-    return {
-      ok: true,
-      headers: {
-        "set-cookie": ownerCookie(ownerKey, req),
-      },
-    };
-  }
-
-  if (sameSecret(readCookie(req.headers.cookie, OWNER_KEY_COOKIE), ownerKey)) {
-    return { ok: true, headers: {} };
-  }
-
-  return { ok: false, headers: {} };
-}
-
 function accessCookie(accessKey, req) {
   return sessionCookie(ACCESS_KEY_COOKIE, accessKey, req);
-}
-
-function ownerCookie(ownerKey, req) {
-  return sessionCookie(OWNER_KEY_COOKIE, ownerKey, req);
 }
 
 function sessionCookie(name, value, req) {
@@ -714,6 +686,50 @@ function isTrustedOrigin(req) {
   } catch {
     return false;
   }
+}
+
+export function isLocalOwnerRequest(req) {
+  return isLoopbackRemoteAddress(req?.socket?.remoteAddress)
+    && isLoopbackHostHeader(req?.headers?.host)
+    && !hasForwardingHeaders(req?.headers);
+}
+
+function isLoopbackHostHeader(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return false;
+  try {
+    return isLoopbackHost(new URL(`http://${raw}`).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackRemoteAddress(value) {
+  const address = String(value || "").toLowerCase();
+  return address === "::1"
+    || address.startsWith("127.")
+    || address.startsWith("::ffff:127.");
+}
+
+function isLoopbackHost(value) {
+  const host = String(value || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  return host === "localhost"
+    || host === "::1"
+    || host === "0.0.0.0"
+    || /^127(?:\.\d{1,3}){3}$/.test(host);
+}
+
+function hasForwardingHeaders(headers = {}) {
+  return [
+    "cf-connecting-ip",
+    "cf-ray",
+    "cf-visitor",
+    "forwarded",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip",
+  ].some((name) => Boolean(headers[name]));
 }
 
 function rejectUpgrade(socket, status, message) {
@@ -983,10 +999,9 @@ function isBlockedPath(realPath, blockedPaths) {
   return false;
 }
 
-function withSessionKeys(url, { accessKey, ownerKey } = {}) {
+function withSessionKeys(url, { accessKey } = {}) {
   const parsed = new URL(url);
   if (accessKey) parsed.searchParams.set(ACCESS_KEY_PARAM, accessKey);
-  if (ownerKey) parsed.searchParams.set(OWNER_KEY_PARAM, ownerKey);
   return parsed.toString();
 }
 
