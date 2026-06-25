@@ -819,6 +819,13 @@ test("agent inbox claims and records comments without spawning a worker", () => 
   const claim = loadAgentState(statePath).comments.c_active.claim;
   assert.equal(claim.owner, "codex-session");
   assert.match(claimed.prompt, new RegExp(`--claim ${claim.id}`));
+  const claimedTracker = formatAgentTodoTracker({
+    commentsPath,
+    targetPath: siteDir,
+    statePath,
+    now: () => new Date("2026-06-10T00:00:30.000Z"),
+  });
+  assert.match(claimedTracker, new RegExp(`Claim: ${claim.id} by codex-session \\(active`));
 
   const second = claimNextAgentComments({
     commentsPath,
@@ -853,14 +860,14 @@ test("agent inbox claims and records comments without spawning a worker", () => 
         summary: "Made the active-agent workflow clear.",
       },
     }),
-    /not claimed by claim_wrong/,
+    /not claimed by claim_wrong; current claim is .* by codex-session/,
   );
 
   const recorded = recordAgentSessionResult({
     commentsPath,
     targetPath: siteDir,
     statePath,
-    claimId: claim.id,
+    claimId: "auto",
     result: {
       id: "c_active",
       status: "resolved",

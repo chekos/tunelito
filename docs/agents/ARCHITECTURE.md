@@ -32,13 +32,13 @@ The server owns local IO and transport:
 - accept WebSocket comment events
 - tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
-- build a derived JSON comments index from the markdown inbox for agents and diagnostics
+- build a derived JSON comments index from the markdown inbox for agents and diagnostics, optionally enriched with processing status from the agent ledger
 - emit in-memory `review.completed` handoff events when a reviewer clicks `Done Reviewing`
 - expose a protected long-poll route for waiting on retained handoff events
 - expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
-- broadcast reload events when source HTML changes
+- broadcast reload events when source HTML changes; browser clients defer the actual reload while a comment composer is open
 
 The local agent worker owns comment follow-up when `--agent` is enabled:
 
@@ -91,7 +91,7 @@ The browser client owns reviewer interaction:
 - render optional pointer halos locally, and broadcast them as ephemeral live events in `--live`
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
-- reconnect/reload when the server says to
+- reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
 
 ## Invariants
 
@@ -100,7 +100,7 @@ The browser client owns reviewer interaction:
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
-- Keep the `tunelito-comments` JSON index derived from markdown metadata; do not make it durable state.
+- Keep the `tunelito-comments` JSON index derived from markdown metadata plus optional agent-ledger status; do not make it durable state.
 - Keep `--live` comments ephemeral; do not write them to markdown.
 - Keep review handoff events ephemeral; do not write them to source HTML, comments markdown, or agent state.
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
