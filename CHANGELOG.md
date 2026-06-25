@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Clarifies that the bundled Tunelito agent skill defaults to the rolling `--agent-session` review loop, with batch `Done Reviewing` and spawned `--agent` worker modes as explicit opt-ins.
+
 ## 0.16.0 - 2026-06-25
 
 - Keeps live reload from clearing an open reviewer comment composer; reload is queued until the draft is submitted or closed.
