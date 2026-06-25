@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 - 2026-06-25
 
 - Keeps live reload from clearing an open reviewer comment composer; reload is queued until the draft is submitted or closed.
 - Adds agent-processing status to the `tunelito comments inspect` JSON index, including pending, unhandled, completed, and per-comment claim details when a ledger is available.
