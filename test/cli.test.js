@@ -692,6 +692,8 @@ test("skill show prints the bundled skill to stdout", () => {
   assert.equal(code, 0);
   assert.match(stdout.text(), /^---\nname: tunelito/);
   assert.match(stdout.text(), /## Step 3 -- Process the comments/);
+  assert.match(stdout.text(), /Default to the rolling active-agent loop/);
+  assert.match(stdout.text(), /Batch review is an explicit opt-in/);
   assert.equal(stderr.text(), "");
 });
 
