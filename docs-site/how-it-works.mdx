@@ -64,7 +64,7 @@ site.comments.md
 
 The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart and tie new comments to a stable reviewer identity for renames. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML file and treat site feedback as applying across the folder.
 
-`tunelito comments inspect` reads that same hidden metadata and prints a derived `tunelito-comments` JSON index for agents and diagnostics. The command does not write to the comments file or source HTML, and it does not mix in local-agent ledger state.
+`tunelito comments inspect` reads that same hidden metadata and prints a derived `tunelito-comments` JSON index for agents and diagnostics. The command does not write to the comments file or source HTML. When an agent ledger path is known, the index also includes the same pending, claimed, resolved, and follow-up status used by `inbox status` and browser comment-card badges.
 
 The local agent worker and active-agent inbox commands do not edit this Markdown file. They treat comments as an append-only inbox and write resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices. It also stores continuation state for comments that need multiple bounded passes, so the next agent prompt can continue from saved remaining tasks instead of redoing completed work.
 

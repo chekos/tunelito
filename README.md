@@ -4,7 +4,7 @@
 
 Tunelito turns any local HTML file or folder of HTML files into a temporary live review room.
 
-Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the HTML in your normal editor; connected browsers reload when files change. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
+Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the HTML in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
 
 Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
@@ -292,10 +292,11 @@ Agents and tools can read a structured JSON view of the same Markdown inbox:
 ```bash
 tunelito comments inspect ./site --json
 tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```
 
-The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file, include agent ledger state, or write to source HTML. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
+The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file or write to source HTML. For page or folder targets, the index also includes per-comment agent status from `.tunelito/agent/state.json` when a ledger is available, plus top-level pending, unhandled, and completed counts. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
 
 In `--live`, comments are not written to markdown and are not restored after restart.
 
@@ -315,9 +316,9 @@ Tunelito serves the review room, writes `.tunelito/session.json` beside the serv
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated the hero copy." --file index.html
 ```
 
-The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks; completed work is printed as checked and crossed out.
+The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks, claimed work includes the active claim id, and completed work is printed as checked and crossed out.
 
-Use `tunelito inbox next ./site` for a non-waiting manual check, or `tunelito inbox watch ./site` when you need the one-shot primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox watcher per served workspace; claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock for multiple simultaneous watchers. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
+Use repeated `tunelito inbox next ./site` calls for non-blocking manual checks from an agent shell, or `tunelito inbox watch ./site` when you need the one-shot waiting primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox claimer per served workspace; a foreground `inbox next/watch` call against a workspace already served with `--agent-session` is another claimer. Claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock. If a foreground record needs to resolve the currently owning claim, pass `--claim auto` instead of opening `.tunelito/agent/state.json`. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
 
 For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source HTML, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
 
@@ -404,7 +405,7 @@ Quick walkthrough:
 3. The local worker invokes Codex for new unresolved comments.
 4. Codex edits the source HTML file named by a page-scoped comment's `page: ...` context, or the relevant files for a site-scoped comment.
 5. If Codex returns `needs_followup`, Tunelito sends the same comment again with completed and remaining tasks on the next pass.
-6. Tunelito reloads connected browsers after saved HTML changes.
+6. Tunelito reloads connected browsers after saved HTML changes, deferring the reload when a reviewer has an open comment composer so unsubmitted text is not lost.
 
 ## Live Mode
 

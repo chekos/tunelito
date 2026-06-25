@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Keeps live reload from clearing an open reviewer comment composer; reload is queued until the draft is submitted or closed.
+- Adds agent-processing status to the `tunelito comments inspect` JSON index, including pending, unhandled, completed, and per-comment claim details when a ledger is available.
+- Makes active-agent claim recovery easier by showing claim ids in `inbox status`, distinguishing foreground inbox claims from `--agent-session` claims, and allowing `inbox record --claim auto`.
+- Updates the bundled Tunelito agent skill with active-agent loop guidance for stable review URLs, non-blocking inbox checks, single-claimer discipline, and zero-pending verification.
+
 ## 0.15.0 - 2026-06-24
 
 - Treat direct local sessions as owner-authored and public tunnel or forwarded sessions as visitors, removing the old owner-key URL from session role assignment.

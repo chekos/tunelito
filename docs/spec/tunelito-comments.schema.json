@@ -8,8 +8,10 @@
     "version",
     "targetPath",
     "commentsPath",
+    "agentStatePath",
     "ok",
     "summary",
+    "agentStatus",
     "comments",
     "diagnostics"
   ],
@@ -18,7 +20,7 @@
       "const": "tunelito-comments"
     },
     "version": {
-      "const": 1
+      "const": 2
     },
     "targetPath": {
       "type": ["string", "null"]
@@ -26,12 +28,15 @@
     "commentsPath": {
       "type": ["string", "null"]
     },
+    "agentStatePath": {
+      "type": ["string", "null"]
+    },
     "ok": {
       "type": "boolean"
     },
     "summary": {
       "type": "object",
-      "required": ["total", "page", "site", "owner", "visitor", "ownerApproved"],
+      "required": ["total", "page", "site", "owner", "visitor", "ownerApproved", "pending", "unhandled", "completed"],
       "additionalProperties": false,
       "properties": {
         "total": {
@@ -57,8 +62,30 @@
         "ownerApproved": {
           "type": "integer",
           "minimum": 0
+        },
+        "pending": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "unhandled": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "completed": {
+          "type": ["integer", "null"],
+          "minimum": 0
         }
       }
+    },
+    "agentStatus": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/agentStatusSnapshot"
+        }
+      ]
     },
     "comments": {
       "type": "array",
@@ -79,7 +106,8 @@
           "pagePath",
           "textStart",
           "textEnd",
-          "created"
+          "created",
+          "agentStatus"
         ],
         "additionalProperties": false,
         "properties": {
@@ -147,6 +175,16 @@
           },
           "created": {
             "type": "string"
+          },
+          "agentStatus": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/$defs/agentCommentStatus"
+              }
+            ]
           }
         }
       }
@@ -174,6 +212,132 @@
             "type": "integer",
             "minimum": 1
           }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "agentStatusSnapshot": {
+      "type": "object",
+      "required": ["version", "updatedAt", "generatedAt", "comments", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "updatedAt": {
+          "type": ["string", "null"]
+        },
+        "generatedAt": {
+          "type": "string"
+        },
+        "comments": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/agentCommentStatus"
+          }
+        },
+        "summary": {
+          "type": "object",
+          "required": ["total", "pending", "unhandled", "completed", "byStatus"],
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pending": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unhandled": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "byStatus": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentCommentStatus": {
+      "type": "object",
+      "required": ["id", "status", "label", "tone", "done", "todo", "summary", "filesChanged", "updatedAt", "completedAt", "claim"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "tone": {
+          "type": "string"
+        },
+        "done": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "todo": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "filesChanged": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": ["string", "null"]
+        },
+        "claim": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": ["id", "owner", "expiresAt", "active"],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "expiresAt": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
         }
       }
     }

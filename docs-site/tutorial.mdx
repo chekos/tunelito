@@ -121,7 +121,7 @@ review-site/
     log.md
 ```
 
-When the agent saves HTML changes, Tunelito asks connected browsers to reload. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page.
+When the agent saves HTML changes, Tunelito asks connected browsers to reload. If a reviewer has an open comment composer, the reload is queued until the draft is submitted or closed so unsubmitted text is not lost. Page-scoped comments point the agent at one page. Site-scoped comments tell it to inspect the folder and update every clearly relevant page.
 
 If a selected-text comment, page note, or site note needs more than one pass, the agent can return `needs_followup` with completed and remaining tasks. Tunelito stores that continuation in the state file and sends the same comment again on the next wake or fallback poll. If the agent reaches `--agent-max-passes` or stops making progress, Tunelito marks the comment `partial`.
 

@@ -830,11 +830,17 @@ export function recordAgentSessionResult({
 
   const finishedAtDate = now();
   const existing = state.comments[comment.id] || {};
-  if (existing.claim && hasActiveClaim(existing, finishedAtDate) && !claimId) {
+  const activeClaim = existing.claim && hasActiveClaim(existing, finishedAtDate) ? existing.claim : null;
+  const effectiveClaimId = claimId === "auto" ? (activeClaim?.id || "") : claimId;
+  if (activeClaim && !effectiveClaimId) {
     throw new Error(`Comment ${comment.id} is claimed by ${existing.claim.owner}; rerun inbox watch or pass --claim ${existing.claim.id}`);
   }
-  if (claimId && existing.claim?.id !== claimId) {
-    throw new Error(`Comment ${comment.id} is not claimed by ${claimId}`);
+  if (effectiveClaimId && existing.claim?.id !== effectiveClaimId) {
+    const owner = existing.claim?.owner || "unknown owner";
+    const current = existing.claim?.id
+      ? `; current claim is ${existing.claim.id} by ${owner}`
+      : "; it is not currently claimed";
+    throw new Error(`Comment ${comment.id} is not claimed by ${effectiveClaimId}${current}`);
   }
 
   const finishedAt = finishedAtDate.toISOString();
@@ -891,6 +897,12 @@ export function formatAgentTodoTracker({
 
   for (const item of visible) {
     lines.push("", `## ${item.id} - ${item.status}`);
+    if (item.claim?.id) {
+      const claimState = item.claim.active ? "active" : "expired";
+      const owner = item.claim.owner || "unknown owner";
+      const expires = item.claim.expiresAt ? `; expires ${item.claim.expiresAt}` : "";
+      lines.push(`Claim: ${item.claim.id} by ${owner} (${claimState}${expires})`);
+    }
     for (const done of item.done) lines.push(`- [x] ~~${done}~~`);
     for (const todo of item.todo) lines.push(`- [ ] ${todo}`);
   }
@@ -909,6 +921,26 @@ export function buildAgentStatusSnapshot({ comments = [], state = emptyAgentStat
     updatedAt: state.updatedAt || null,
     generatedAt: checkedAt.toISOString(),
     comments: statuses,
+  };
+}
+
+export function summarizeAgentStatusSnapshot(snapshot) {
+  const comments = snapshot?.comments && typeof snapshot.comments === "object" ? snapshot.comments : {};
+  const byStatus = {};
+  let unhandled = 0;
+  let completed = 0;
+  for (const item of Object.values(comments)) {
+    const status = item?.status || "pending";
+    byStatus[status] = (byStatus[status] || 0) + 1;
+    if (isTerminalStatus(status)) completed += 1;
+    else unhandled += 1;
+  }
+  return {
+    total: Object.keys(comments).length,
+    pending: byStatus.pending || 0,
+    unhandled,
+    completed,
+    byStatus,
   };
 }
 
@@ -1237,6 +1269,7 @@ function formatAgentWorkStatus(comment, existing, checkedAt) {
     updatedAt: existing?.updatedAt || "",
     completedAt: existing?.completedAt || null,
     claim: existing?.claim ? {
+      id: existing.claim.id || "",
       owner: existing.claim.owner || "",
       expiresAt: existing.claim.expiresAt || "",
       active: hasActiveClaim(existing, checkedAt),

@@ -19,7 +19,7 @@ The same Tunelito process serves the room, watches the persistent comments inbox
 npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
 
-Use `inbox next` for a non-waiting manual check, or `inbox watch` when you need the one-shot primitive without a running `--agent-session` server. The active-agent loop and inbox commands use the same comment parser, policy filters, max-pass continuation state, and resolution ledger as the spawned worker.
+Use repeated `inbox next` calls for non-waiting manual checks from an agent shell. Use `inbox watch` when you need the one-shot waiting primitive without a running `--agent-session` server, and make sure the host command timeout is longer than the `--timeout` value. A foreground `inbox next/watch` call against a workspace already served with `--agent-session` is another claimer; use one active claimer per workspace unless you are deliberately recovering. The active-agent loop and inbox commands use the same comment parser, policy filters, max-pass continuation state, and resolution ledger as the spawned worker.
 
 ## Wait for Done Reviewing
 
@@ -190,7 +190,9 @@ Use the tracker command to inspect the same current work in the terminal without
 npx --yes tunelito inbox status ./site
 ```
 
-The tracker prints pending and claimed comment work as unchecked tasks. Completed work from `completedTasks` or the recorded summary is checked and crossed out, and `needs_followup` comments show completed tasks beside the remaining tasks.
+The tracker prints pending and claimed comment work as unchecked tasks, including the active claim id for claimed comments. Completed work from `completedTasks` or the recorded summary is checked and crossed out, and `needs_followup` comments show completed tasks beside the remaining tasks.
+
+When you intentionally need to record the result for the comment currently owned by that visible claim, pass `--claim auto` to `inbox record` rather than editing `.tunelito/agent/state.json` directly.
 
 Statuses include:
 

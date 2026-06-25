@@ -1,6 +1,12 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  buildAgentStatusSnapshot,
+  defaultAgentStatePath,
+  loadAgentState,
+  summarizeAgentStatusSnapshot,
+} from "./agent-worker.js";
+import {
   defaultCommentsPath,
   inspectCommentsMarkdown,
   normalizeAuthorRole,
@@ -8,11 +14,12 @@ import {
 } from "./comments.js";
 
 export const COMMENTS_INDEX_FORMAT = "tunelito-comments";
-export const COMMENTS_INDEX_VERSION = 1;
+export const COMMENTS_INDEX_VERSION = 2;
 
-export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFile = false } = {}) {
+export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFile = false, agentStatePath = null, includeAgentStatus = true, now = () => new Date() } = {}) {
   const diagnostics = [];
   const resolvedTargetPath = targetPath ? resolve(targetPath) : null;
+  let targetExists = false;
   const resolvedCommentsPath = commentsPath
     ? resolve(commentsPath)
     : resolvedTargetPath
@@ -24,7 +31,7 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
       code: "comments.input-missing",
       message: "Provide a target path or comments Markdown path.",
     }));
-    return indexResult({ targetPath: null, commentsPath: null, comments: [], diagnostics });
+    return indexResult({ targetPath: null, commentsPath: null, agentStatePath: null, comments: [], diagnostics, now });
   }
 
   if (resolvedTargetPath) {
@@ -34,6 +41,7 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
         message: `Target path does not exist: ${resolvedTargetPath}`,
       }));
     } else {
+      targetExists = true;
       const targetStat = statSync(resolvedTargetPath);
       if (!targetStat.isFile() && !targetStat.isDirectory()) {
         diagnostics.push(diagnostic({
@@ -49,8 +57,10 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
       code: "comments.path-missing",
       message: "Could not derive a comments Markdown path.",
     }));
-    return indexResult({ targetPath: resolvedTargetPath, commentsPath: null, comments: [], diagnostics });
+    return indexResult({ targetPath: resolvedTargetPath, commentsPath: null, agentStatePath: resolveAgentStatePath(), comments: [], diagnostics, now });
   }
+
+  const resolvedAgentStatePath = resolveAgentStatePath();
 
   if (!existsSync(resolvedCommentsPath)) {
     diagnostics.push(diagnostic({
@@ -63,8 +73,10 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
     return indexResult({
       targetPath: resolvedTargetPath,
       commentsPath: resolvedCommentsPath,
+      agentStatePath: resolvedAgentStatePath,
       comments: [],
       diagnostics,
+      now,
     });
   }
 
@@ -77,8 +89,10 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
     return indexResult({
       targetPath: resolvedTargetPath,
       commentsPath: resolvedCommentsPath,
+      agentStatePath: resolvedAgentStatePath,
       comments: [],
       diagnostics,
+      now,
     });
   }
 
@@ -99,25 +113,40 @@ export function buildCommentsIndex({ targetPath, commentsPath, requireCommentsFi
   return indexResult({
     targetPath: resolvedTargetPath,
     commentsPath: resolvedCommentsPath,
+    agentStatePath: resolvedAgentStatePath,
     comments: inspection.comments.map(indexComment),
     diagnostics,
+    now,
   });
+
+  function resolveAgentStatePath() {
+    if (!includeAgentStatus) return null;
+    if (agentStatePath) return resolve(agentStatePath);
+    return resolvedTargetPath && targetExists ? defaultAgentStatePath(resolvedTargetPath) : null;
+  }
 }
 
-function indexResult({ targetPath, commentsPath, comments, diagnostics }) {
+function indexResult({ targetPath, commentsPath, agentStatePath, comments, diagnostics, now }) {
+  const agent = buildIndexAgentStatus({ comments, agentStatePath, diagnostics, now });
+  const agentSummary = agent?.summary || null;
   return {
     format: COMMENTS_INDEX_FORMAT,
     version: COMMENTS_INDEX_VERSION,
     targetPath,
     commentsPath,
+    agentStatePath,
     ok: !diagnostics.some((item) => item.severity === "error"),
-    summary: summarizeComments(comments),
-    comments,
+    summary: summarizeComments(comments, agentSummary),
+    agentStatus: agent,
+    comments: comments.map((comment) => ({
+      ...comment,
+      agentStatus: agent?.comments?.[comment.id] || null,
+    })),
     diagnostics,
   };
 }
 
-export function summarizeComments(comments) {
+export function summarizeComments(comments, agentSummary = null) {
   const summary = {
     total: comments.length,
     page: 0,
@@ -125,6 +154,9 @@ export function summarizeComments(comments) {
     owner: 0,
     visitor: 0,
     ownerApproved: 0,
+    pending: agentSummary ? agentSummary.pending : null,
+    unhandled: agentSummary ? agentSummary.unhandled : null,
+    completed: agentSummary ? agentSummary.completed : null,
   };
 
   for (const comment of comments) {
@@ -138,6 +170,28 @@ export function summarizeComments(comments) {
   }
 
   return summary;
+}
+
+function buildIndexAgentStatus({ comments, agentStatePath, diagnostics, now }) {
+  if (!agentStatePath) return null;
+  try {
+    const snapshot = buildAgentStatusSnapshot({
+      comments,
+      state: loadAgentState(agentStatePath),
+      now,
+    });
+    return {
+      ...snapshot,
+      summary: summarizeAgentStatusSnapshot(snapshot),
+    };
+  } catch (error) {
+    diagnostics.push(diagnostic({
+      severity: "warning",
+      code: "agent-state.invalid",
+      message: `Agent state could not be read: ${error.message}`,
+    }));
+    return null;
+  }
 }
 
 function indexComment(comment) {

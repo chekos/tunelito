@@ -335,11 +335,12 @@ test("review watch can read session metadata and returns nonzero on timeout", as
 });
 
 test("parseCommentsArgs supports target and direct comments inspection", () => {
-  const target = parseCommentsArgs(["inspect", "page.html", "--out", "review.md", "--json"]);
+  const target = parseCommentsArgs(["inspect", "page.html", "--out", "review.md", "--agent-state", "state.json", "--json"]);
   assert.equal(target.command, "inspect");
   assert.equal(target.format, "json");
   assert.equal(target.targetPath, resolve("page.html"));
   assert.equal(target.commentsPath, resolve("review.md"));
+  assert.equal(target.agentStatePath, resolve("state.json"));
 
   const direct = parseCommentsArgs(["inspect", "review.md", "--json"]);
   assert.equal(direct.targetPath, undefined);
@@ -378,7 +379,11 @@ test("runCommentsCommand prints parseable JSON for a comments inbox", () => {
   assert.equal(code, 0);
   assert.equal(stderr.text(), "");
   assert.equal(index.format, "tunelito-comments");
+  assert.equal(index.version, 2);
   assert.equal(index.commentsPath, commentsPath);
+  assert.equal(index.summary.pending, 1);
+  assert.equal(index.summary.unhandled, 1);
+  assert.equal(index.comments[0].agentStatus.status, "pending");
   assert.deepEqual(index.comments.map((comment) => comment.id), ["c_cli_index"]);
 });
 
@@ -486,6 +491,9 @@ test("parseInboxArgs supports watch and record options", () => {
   const status = parseInboxArgs(["status", "site", "--format", "json"]);
   assert.equal(status.command, "status");
   assert.equal(status.format, "json");
+
+  const next = parseInboxArgs(["next", "site"]);
+  assert.equal(next.claimOwner, "inbox-command");
 });
 
 test("runInboxCommand claims, records, and reports comment status", async () => {
@@ -529,6 +537,7 @@ test("runInboxCommand claims, records, and reports comment status", async () => 
 
   assert.equal(claimedStatusCode, 0);
   assert.match(claimedStatusOut.text(), /## c_cli - claimed/);
+  assert.match(claimedStatusOut.text(), new RegExp(`Claim: ${claimId} by inbox-command \\(active`));
   assert.match(claimedStatusOut.text(), /- \[ \] Being worked on: Make this concise\./);
 
   const recordOut = streamCollector();

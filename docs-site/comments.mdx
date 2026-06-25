@@ -93,12 +93,13 @@ Agents and tools can inspect the Markdown inbox as a versioned JSON index:
 ```bash
 tunelito comments inspect ./site --json
 tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```
 
-The index has `format: "tunelito-comments"` and `version: 1`. It includes absolute target and comments paths, summary counts, normalized comments, and diagnostics. The durable source of truth remains `*.comments.md`; JSON is a derived integration view and does not include `.tunelito/agent/state.json`.
+The index has `format: "tunelito-comments"` and `version: 2`. It includes absolute target, comments, and optional agent-state paths, summary counts, normalized comments, diagnostics, and per-comment processing status when a ledger is available. The durable source of truth remains `*.comments.md`; JSON is a derived integration view and never writes to the comments file or `.tunelito/agent/state.json`.
 
-For page or folder targets, a missing default comments file returns an empty successful index. When inspecting a Markdown file directly, the file must exist and look like a Tunelito comments inbox.
+For page or folder targets, a missing default comments file returns an empty successful index. When inspecting a Markdown file directly, the file must exist and look like a Tunelito comments inbox; pass `--agent-state` if direct inspection should include pending, unhandled, and completed status counts.
 
 ## Agent inbox workflow
 
@@ -115,6 +116,8 @@ The same Tunelito process blocks until an actionable comment appears, claims it 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated heading rhythm." --file index.html
 ```
+
+If a foreground `inbox next` or `inbox watch` call contends with an existing `--agent-session` watcher, `inbox status` shows the active claim id. Use `--claim auto` to record against the currently owning claim instead of editing the ledger by hand.
 
 Tunelito can also run that watching loop for you. By default, every persistent comment is sent to the worker and the local agent decides whether to edit, return `no-op`, or mark it `ignored`:
 

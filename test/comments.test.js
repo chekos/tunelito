@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCommentStore, loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
 import { buildCommentsIndex } from "../src/comment-index.js";
+import { saveAgentState } from "../src/agent-worker.js";
 
 test("comment store writes readable markdown and restores hidden metadata", () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-"));
@@ -67,7 +68,7 @@ test("comments index summarizes a single-file default comments inbox", () => {
 
   assert.equal(index.ok, true);
   assert.equal(index.format, "tunelito-comments");
-  assert.equal(index.version, 1);
+  assert.equal(index.version, 2);
   assert.equal(index.targetPath, sourcePath);
   assert.equal(index.commentsPath, commentsPath);
   assert.deepEqual(index.summary, {
@@ -77,8 +78,15 @@ test("comments index summarizes a single-file default comments inbox", () => {
     owner: 0,
     visitor: 1,
     ownerApproved: 0,
+    pending: 1,
+    unhandled: 1,
+    completed: 0,
   });
-  assert.deepEqual(index.comments[0], {
+  assert.equal(index.agentStatePath, join(dir, ".tunelito", "agent", "state.json"));
+  assert.equal(index.agentStatus.summary.pending, 1);
+  assert.equal(index.agentStatus.summary.unhandled, 1);
+  assert.equal(index.comments[0].agentStatus.status, "pending");
+  assert.deepEqual({ ...index.comments[0], agentStatus: null }, {
     id: comment.id,
     author: "Jane",
     authorRole: "visitor",
@@ -94,6 +102,7 @@ test("comments index summarizes a single-file default comments inbox", () => {
     textStart: 0,
     textEnd: 4,
     created: "2026-06-17T00:00:00.000Z",
+    agentStatus: null,
   });
 });
 
@@ -139,8 +148,81 @@ test("comments index supports folder default comments path and owner approvals",
     owner: 1,
     visitor: 1,
     ownerApproved: 1,
+    pending: 2,
+    unhandled: 2,
+    completed: 0,
   });
   assert.equal(index.comments.find((comment) => comment.id === "c_approved").ownerApproval.approvedBy, "Chekos");
+});
+
+test("comments index carries agent processing status from the ledger", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comments-index-agent-status-"));
+  const sitePath = join(dir, "site");
+  const commentsPath = join(dir, "site.comments.md");
+  const statePath = join(sitePath, ".tunelito", "agent", "state.json");
+  mkdirSync(sitePath);
+  writeFileSync(join(sitePath, "index.html"), "<!doctype html><h1>Site</h1>");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: sitePath,
+    comments: [
+      {
+        id: "c_done",
+        author: "Dana",
+        authorRole: "visitor",
+        scope: "page",
+        quote: "",
+        body: "Fix the heading.",
+        created: "2026-06-25T00:00:00.000Z",
+      },
+      {
+        id: "c_pending",
+        author: "Dana",
+        authorRole: "visitor",
+        scope: "site",
+        quote: "",
+        body: "Apply this to the whole site.",
+        created: "2026-06-25T00:01:00.000Z",
+      },
+    ],
+  }));
+  saveAgentState(statePath, {
+    comments: {
+      c_done: {
+        id: "c_done",
+        status: "resolved",
+        summary: "Fixed the heading.",
+        completedTasks: ["Fixed the heading"],
+        updatedAt: "2026-06-25T00:02:00.000Z",
+        completedAt: "2026-06-25T00:02:00.000Z",
+      },
+      c_pending: {
+        id: "c_pending",
+        status: "claimed",
+        claim: {
+          id: "claim_current",
+          owner: "agent-session",
+          claimedAt: "2026-06-25T00:02:00.000Z",
+          expiresAt: "2026-06-25T00:30:00.000Z",
+        },
+        updatedAt: "2026-06-25T00:02:00.000Z",
+      },
+    },
+  }, () => new Date("2026-06-25T00:02:00.000Z"));
+
+  const index = buildCommentsIndex({
+    targetPath: sitePath,
+    now: () => new Date("2026-06-25T00:03:00.000Z"),
+  });
+
+  assert.equal(index.summary.pending, 0);
+  assert.equal(index.summary.unhandled, 1);
+  assert.equal(index.summary.completed, 1);
+  assert.deepEqual(index.agentStatus.summary.byStatus, {
+    resolved: 1,
+    claimed: 1,
+  });
+  assert.equal(index.comments.find((comment) => comment.id === "c_done").agentStatus.status, "resolved");
+  assert.equal(index.comments.find((comment) => comment.id === "c_pending").agentStatus.claim.id, "claim_current");
 });
 
 test("comments index supports custom comments paths and direct markdown inspection", () => {

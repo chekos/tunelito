@@ -102,6 +102,7 @@ Inspect the comments inbox as JSON for an agent or diagnostic tool:
 ```bash
 tunelito comments inspect ./site --json
 tunelito comments inspect ./site --out ./notes/review.md --json
+tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```
 
@@ -134,6 +135,8 @@ The same process serves the room, watches comments, claims actionable feedback, 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
+
+If a claim was taken by another foreground/background claimer in the same workspace, inspect it with `tunelito inbox status ./site` and record with `--claim auto` when you intentionally want to resolve the currently owning claim.
 
 Print the same comment work tracker in the terminal:
 

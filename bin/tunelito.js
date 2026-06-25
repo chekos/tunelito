@@ -615,8 +615,9 @@ Commands:
   help        Show this message
 
 Options:
-  --out <path>    Markdown comments file for a page or folder target
-  --json          Print the machine-readable tunelito-comments index
+  --out <path>          Markdown comments file for a page or folder target
+  --agent-state <path>  Agent resolution ledger for processing status
+  --json                Print the machine-readable tunelito-comments index
 `;
 }
 
@@ -637,6 +638,8 @@ export function parseCommentsArgs(argv) {
       opts.help = true;
     } else if (arg === "--out") {
       opts.commentsPath = resolve(requiredValue(argv[++i], "--out"));
+    } else if (arg === "--agent-state") {
+      opts.agentStatePath = resolve(requiredValue(argv[++i], "--agent-state"));
     } else if (arg === "--json") {
       opts.format = "json";
     } else if (arg.startsWith("--")) {
@@ -685,6 +688,7 @@ export function runCommentsCommand(args, { stdout = process.stdout, stderr = pro
     targetPath: opts.targetPath,
     commentsPath: opts.commentsPath,
     requireCommentsFile: opts.requireCommentsFile,
+    agentStatePath: opts.agentStatePath,
   });
   stdout.write(formatCommentsIndex(index, opts.format));
   return index.ok ? 0 : 1;
@@ -706,6 +710,8 @@ function formatCommentsIndex(index, format) {
     `Owner:    ${index.summary.owner}`,
     `Visitor:  ${index.summary.visitor}`,
     `Approved: ${index.summary.ownerApproved}`,
+    `Pending:  ${index.summary.pending ?? "unknown"}`,
+    `Unhandled: ${index.summary.unhandled ?? "unknown"}`,
     diagnostics,
   ].join("\n");
 }
@@ -870,7 +876,7 @@ Options for next/watch/status:
   --agent-max-attempts <n>  Stop retrying a comment after n attempts (default: ${DEFAULT_AGENT_MAX_ATTEMPTS})
   --agent-max-passes <n>    Stop continuing a multi-pass comment after n passes (default: ${DEFAULT_AGENT_MAX_PASSES})
   --limit <n>               Number of comments to claim at once (default: 1)
-  --claim-owner <name>      Label for the active agent claim (default: agent-session)
+  --claim-owner <name>      Label for the active agent claim (default: inbox-command)
   --claim-ttl <s>           Claim lease in seconds (default: ${DEFAULT_INBOX_CLAIM_SECONDS})
   --wait                    Wait until an actionable comment exists
   --wait-interval <s>       Fallback polling interval while waiting (default: ${DEFAULT_INBOX_WAIT_INTERVAL_SECONDS})
@@ -883,7 +889,7 @@ Options for record:
   --out <path>              Markdown comments file (default: <page-or-folder>.comments.md)
   --agent-state <path>      Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
   --id <id>                 Comment id to record
-  --claim <id>              Active claim id from inbox next/watch
+  --claim <id|auto>         Active claim id from inbox next/watch, or auto to use the current claim
   --status <status>         resolved|no-op|blocked|stale|ignored|partial|needs_followup
   --summary <txt>           Short result summary
   --file <path>             Changed file; repeat for multiple files
@@ -911,7 +917,7 @@ export function parseInboxArgs(argv) {
     agentMaxAttempts: DEFAULT_AGENT_MAX_ATTEMPTS,
     agentMaxPasses: DEFAULT_AGENT_MAX_PASSES,
     limit: 1,
-    claimOwner: "agent-session",
+    claimOwner: "inbox-command",
     claimTtlSeconds: DEFAULT_INBOX_CLAIM_SECONDS,
     waitIntervalSeconds: DEFAULT_INBOX_WAIT_INTERVAL_SECONDS,
     timeoutSeconds: 0,

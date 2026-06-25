@@ -43,6 +43,8 @@
     agentStatusFingerprint: "",
     agentStatusTimer: null,
     pendingSelection: null,
+    reloadQueued: false,
+    reloadTimer: null,
     highlights: [],
     selectionTimer: null,
     cursorTimer: null,
@@ -117,8 +119,7 @@
       } else if (message.type === "viewer-count") {
         renderStatus(null, message.count);
       } else if (message.type === "document-changed") {
-        renderStatus("Page changed; reloading...");
-        setTimeout(() => location.reload(), 500);
+        handleDocumentChanged();
       } else if (message.type === "peer-joined") {
         handlePeerJoined(message.peer);
       } else if (message.type === "peer-left") {
@@ -1262,6 +1263,7 @@
   function closeComposer() {
     ui.composer.classList.remove("open");
     state.pendingSelection = null;
+    flushQueuedReload();
   }
 
   function setComposerScope(scope) {
@@ -1318,6 +1320,43 @@
     }));
     closeComposer();
     window.getSelection()?.removeAllRanges();
+  }
+
+  function handleDocumentChanged() {
+    if (isComposerOpen()) {
+      queueReloadUntilComposerCloses();
+      return;
+    }
+    scheduleDocumentReload();
+  }
+
+  function queueReloadUntilComposerCloses() {
+    state.reloadQueued = true;
+    renderStatus("Page changed; reload queued until this comment is submitted or closed.");
+  }
+
+  function flushQueuedReload() {
+    if (!state.reloadQueued) return;
+    if (isComposerOpen()) return;
+    scheduleDocumentReload();
+  }
+
+  function scheduleDocumentReload() {
+    state.reloadQueued = false;
+    renderStatus("Page changed; reloading...");
+    if (state.reloadTimer) return;
+    state.reloadTimer = setTimeout(() => {
+      state.reloadTimer = null;
+      if (isComposerOpen()) {
+        queueReloadUntilComposerCloses();
+        return;
+      }
+      location.reload();
+    }, 500);
+  }
+
+  function isComposerOpen() {
+    return ui.composer.classList.contains("open");
   }
 
   function addComment(comment) {
