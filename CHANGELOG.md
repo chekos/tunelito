@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.1 - 2026-06-25
 
 - Clarifies that the bundled Tunelito agent skill defaults to the rolling `--agent-session` review loop, with batch `Done Reviewing` and spawned `--agent` worker modes as explicit opt-ins.
 
