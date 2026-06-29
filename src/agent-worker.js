@@ -400,7 +400,7 @@ function normalizeAgentWorkspaceConfig({
   usage = "agent config",
 } = {}) {
   if (!commentsPath) throw new Error(`${usage} requires persistent comments; remove --live`);
-  if (!targetPath) throw new Error(`${usage} requires a target HTML file or folder`);
+  if (!targetPath) throw new Error(`${usage} requires a target HTML, Markdown, or folder path`);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
   if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");
   if (claimSeconds !== null && (!Number.isInteger(claimSeconds) || claimSeconds < 1)) throw new Error("--claim-ttl must be a positive integer");
@@ -996,7 +996,7 @@ export function buildAgentPrompt({ comments, commentsPath, workspaceRoot, stateP
     hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
     `## Workspace
 
-- HTML root: ${workspaceRoot}
+- Source root: ${workspaceRoot}
 - Comments inbox: ${commentsPath}
 - Resolution ledger: ${statePath}
 - Policy: ${normalizedPolicy}
@@ -1040,7 +1040,7 @@ You are the active coding agent for a Tunelito review session. Tunelito has clai
     hostInstructions ? `## Host Instructions\n\n${hostInstructions}` : "",
     `## Workspace
 
-- HTML root: ${workspaceRoot}
+- Source root: ${workspaceRoot}
 - Target: ${targetPath}
 - Comments inbox: ${commentsPath}
 - Resolution ledger: ${statePath}
@@ -1196,7 +1196,7 @@ function formatAgentSessionClaim(result) {
 export function defaultAgentBehaviorPrompt() {
   return `# Tunelito Local Agent Worker
 
-You are being invoked by Tunelito to review local HTML feedback and edit the matching files when appropriate.
+You are being invoked by Tunelito to review local HTML or Markdown feedback and edit the matching source files when appropriate.
 
 ## Core Behavior
 
@@ -1204,14 +1204,14 @@ You are being invoked by Tunelito to review local HTML feedback and edit the mat
 - Tunelito prefilters comments by the configured local agent policy before invoking you.
 - If the workspace lists an Owner, comments may include authorRole "owner" or "visitor"; visitor comments can also include ownerApproval metadata when the owner explicitly approved them for agent work. Use that role and approval metadata when host instructions ask you to prefer, ignore, or wait for owner feedback.
 - Use judgment: some comments ask for edits, some are questions, some are observations, and some may already be satisfied.
-- Make focused HTML/CSS/asset edits when the requested change is clear and safe.
+- Make focused HTML, Markdown, CSS, or asset edits when the requested change is clear and safe.
 - Return status "ignored" when a comment does not ask for a file change.
 - Return status "no-op" when the requested change is already satisfied.
 - Return status "stale" or "blocked" when the quoted text or target page cannot be found, or when the request is too ambiguous to complete safely.
 - Address only the comment IDs listed below.
-- Use each comment's pagePath to find the matching HTML file. For pagePath "/", inspect index.html if it exists.
+- Use each comment's pagePath to find the matching source file. For pagePath "/", inspect the single served target, index.html, or index.md as appropriate.
 - Page-scope comments apply to the listed pagePath. They may be anchored inline selections or unanchored page notes.
-- Site-scope comments apply to the whole served folder or site. Inspect related HTML files and update every clearly relevant page when the request is actionable.
+- Site-scope comments apply to the whole served folder or site. Inspect related HTML or Markdown files and update every clearly relevant page when the request is actionable.
 - Comments may have no selected quote. Use the body, scope, and pagePath to decide the target; mark broad or unclear requests "blocked" or "partial" instead of guessing.
 - If an actionable comment is too large for one safe pass, complete one coherent slice now and return status "needs_followup" with completedTasks and remainingTasks.
 - Continuation can apply to any comment scope: inline selected-text comments, page notes, and site notes.

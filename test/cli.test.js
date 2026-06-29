@@ -229,6 +229,27 @@ test("runDoctorCommand prints parseable JSON and returns nonzero for errors", as
   assert.equal(report.checks.some((check) => check.id === "target.file" && check.status === "fail"), true);
 });
 
+test("runDoctorCommand accepts Markdown targets", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-doctor-md-"));
+  const targetPath = join(dir, "notes.md");
+  writeFileSync(targetPath, "# Notes");
+
+  const stdout = streamCollector();
+  const code = await runDoctorCommand([targetPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+    deps: {
+      checkPort: async () => ({ available: true }),
+      commandExists: () => false,
+    },
+  });
+  const report = JSON.parse(stdout.text());
+
+  assert.equal(code, 0);
+  assert.equal(report.ok, true);
+  assert.equal(report.checks.find((check) => check.id === "target.file").details.sourceType, "markdown");
+});
+
 test("mcp help is side-effect free and unknown arguments fail", () => {
   const helpOut = streamCollector();
   const helpCode = runMcpCommand(["--help"], {
@@ -342,13 +363,17 @@ test("parseCommentsArgs supports target and direct comments inspection", () => {
   assert.equal(target.commentsPath, resolve("review.md"));
   assert.equal(target.agentStatePath, resolve("state.json"));
 
-  const direct = parseCommentsArgs(["inspect", "review.md", "--json"]);
+  const markdownTarget = parseCommentsArgs(["inspect", "notes.md", "--json"]);
+  assert.equal(markdownTarget.targetPath, resolve("notes.md"));
+  assert.equal(markdownTarget.commentsPath, undefined);
+
+  const direct = parseCommentsArgs(["inspect", "review.comments.md", "--json"]);
   assert.equal(direct.targetPath, undefined);
-  assert.equal(direct.commentsPath, resolve("review.md"));
+  assert.equal(direct.commentsPath, resolve("review.comments.md"));
   assert.equal(direct.requireCommentsFile, true);
 
   assert.throws(
-    () => parseCommentsArgs(["inspect", "review.md", "--out", "other.md"]),
+    () => parseCommentsArgs(["inspect", "review.comments.md", "--out", "other.md"]),
     /--out is only supported/,
   );
 });
@@ -604,6 +629,13 @@ test("parseArgs accepts an explicit comments path", () => {
   assert.equal(opts.filePath, resolve("page.html"));
   assert.equal(opts.commentsPath, resolve("notes.md"));
   assert.equal(opts.tunnel, false);
+});
+
+test("parseArgs accepts a Markdown stylesheet href", () => {
+  const opts = parseArgs(["notes.md", "--markdown-css", "/review.css"]);
+  assert.equal(opts.filePath, resolve("notes.md"));
+  assert.equal(opts.markdownCssHref, "/review.css");
+  assert.throws(() => parseArgs(["notes.md", "--markdown-css", "javascript:alert(1)"]), /--markdown-css/);
 });
 
 test("parseArgs accepts an owner name", () => {

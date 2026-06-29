@@ -111,32 +111,33 @@ function addTargetChecks(checks, targetPath) {
 
   const stat = statSync(targetPath);
   if (stat.isFile()) {
-    const html = /\.html?$/i.test(targetPath);
+    const supported = /\.html?$/i.test(targetPath) || /\.md$/i.test(targetPath);
+    const sourceType = /\.md$/i.test(targetPath) ? "Markdown" : "HTML";
     addCheck(checks, {
       id: "target.file",
-      severity: html ? "info" : "error",
-      status: html ? "pass" : "fail",
-      message: html ? `Target file is HTML: ${targetPath}` : `Target file is not .html or .htm: ${targetPath}`,
-      details: { type: "file" },
+      severity: supported ? "info" : "error",
+      status: supported ? "pass" : "fail",
+      message: supported ? `Target file is ${sourceType}: ${targetPath}` : `Target file is not .html, .htm, or .md: ${targetPath}`,
+      details: { type: "file", sourceType: sourceType.toLowerCase() },
     });
     return;
   }
 
   if (stat.isDirectory()) {
-    const htmlFiles = readdirSync(targetPath).filter((entry) => /\.html?$/i.test(entry));
+    const reviewableFiles = readdirSync(targetPath).filter((entry) => /\.html?$/i.test(entry) || /\.md$/i.test(entry));
     addCheck(checks, {
       id: "target.folder",
       severity: "info",
       status: "pass",
       message: `Target folder exists: ${targetPath}`,
-      details: { type: "folder", htmlFiles: htmlFiles.map((entry) => basename(entry)) },
+      details: { type: "folder", reviewableFiles: reviewableFiles.map((entry) => basename(entry)) },
     });
-    if (!htmlFiles.length) {
+    if (!reviewableFiles.length) {
       addCheck(checks, {
-        id: "target.folder-html",
+        id: "target.folder-reviewable",
         severity: "warning",
         status: "warn",
-        message: "Target folder contains no top-level HTML files; Tunelito can serve a generated directory index, but reviewers may have nothing to annotate.",
+        message: "Target folder contains no top-level HTML or Markdown files; Tunelito can serve a generated directory index, but reviewers may have nothing to annotate.",
       });
     }
     return;

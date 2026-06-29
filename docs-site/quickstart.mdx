@@ -1,18 +1,24 @@
 ---
 title: "Quickstart"
-description: "Install Tunelito and start your first live HTML review session."
+description: "Install Tunelito and start your first live HTML or Markdown review session."
 ---
 
 ## Requirements
 
 - Node.js 22 or newer
-- An HTML file or folder of HTML files on your machine
+- An HTML or Markdown file, or a folder of HTML and Markdown files, on your machine
 - Internet access if you want a public tunnel URL
 
 ## Start a review
 
 ```bash
 npx --yes tunelito ./page.html
+```
+
+For a Markdown memo or draft:
+
+```bash
+npx --yes tunelito ./notes.md
 ```
 
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.
@@ -44,7 +50,7 @@ site/
 site.comments.md
 ```
 
-Each folder comment includes a scope and page path, so a person or coding agent can map page feedback back to the right HTML file or treat site feedback as applying across the folder.
+Each folder comment includes a scope and page path, so a person or coding agent can map page feedback back to the right HTML or Markdown file or treat site feedback as applying across the folder.
 
 ## Start a review with local agent follow-up
 
@@ -114,6 +120,6 @@ Press `Ctrl+C` in the terminal. Tunelito stops the local server and tunnel proce
 
 ## Next step
 
-Follow the [folder review tutorial](/tutorial) to collect comments across multiple HTML pages and have a local coding agent edit the matching source files.
+Follow the [folder review tutorial](/tutorial) to collect comments across multiple pages and have a local coding agent edit the matching source files.
 
 If reviewers will save the served site to an iPhone Home Screen, follow the [iPhone Home Screen guide](/iphone-home-screen) so internal links stay inside the saved web app.

@@ -6,18 +6,19 @@ description: "Tunelito command-line options and examples."
 ```text
 Tunelito 0.16.1
 
-Usage: tunelito <page.html|folder> [options]
-       tunelito doctor [page.html|folder] [options]
+Usage: tunelito <page.html|notes.md|folder> [options]
+       tunelito doctor [page.html|notes.md|folder] [options]
        tunelito mcp
-       tunelito comments inspect <page.html|folder|comments.md> [options]
-       tunelito review watch [page.html|folder] [options]
-       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
+       tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
+       tunelito review watch [page.html|notes.md|folder] [options]
+       tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
        tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
@@ -67,7 +68,19 @@ Start a public review session:
 tunelito ./page.html
 ```
 
-Serve a folder of HTML files:
+Serve a Markdown memo with the built-in readable page style:
+
+```bash
+tunelito ./notes.md
+```
+
+Add a team stylesheet to rendered Markdown pages:
+
+```bash
+tunelito ./notes.md --markdown-css ./review.css
+```
+
+Serve a folder of HTML and Markdown files:
 
 ```bash
 tunelito ./site

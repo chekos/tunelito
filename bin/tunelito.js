@@ -29,6 +29,7 @@ import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { buildDoctorReport } from "../src/doctor.js";
 import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
+import { normalizeMarkdownCssHref } from "../src/markdown.js";
 import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
@@ -39,18 +40,19 @@ export const VERSION = pkg.version;
 function usage() {
   return `Tunelito ${VERSION}
 
-Usage: tunelito <page.html|folder> [options]
-       tunelito doctor [page.html|folder] [options]
+Usage: tunelito <page.html|notes.md|folder> [options]
+       tunelito doctor [page.html|notes.md|folder] [options]
        tunelito mcp
-       tunelito comments inspect <page.html|folder|comments.md> [options]
-       tunelito review watch [page.html|folder] [options]
-       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
+       tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
+       tunelito review watch [page.html|notes.md|folder] [options]
+       tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
        tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
@@ -166,6 +168,8 @@ export function parseArgs(argv) {
     } else if (arg === "--out") {
       const value = requiredValue(argv[++i], "--out");
       opts.commentsPath = resolve(value);
+    } else if (arg === "--markdown-css") {
+      opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
     } else if (arg.startsWith("--")) {
@@ -176,7 +180,7 @@ export function parseArgs(argv) {
   }
 
   if (positional.length > 1) {
-    throw new Error(`Expected one HTML file or folder, got ${positional.length}`);
+    throw new Error(`Expected one HTML file, Markdown file, or folder, got ${positional.length}`);
   }
   if (opts.agent === "custom" && !opts.agentCommand) {
     throw new Error("--agent custom requires --agent-command");
@@ -300,7 +304,7 @@ async function main() {
   }
 
   if (!opts.filePath) {
-    console.error("Missing HTML file or folder.");
+    console.error("Missing HTML file, Markdown file, or folder.");
     console.error("");
     console.error(usage());
     process.exit(1);
@@ -329,6 +333,7 @@ async function main() {
     ownerName: opts.ownerName,
     liveMode: opts.live,
     blockedPaths: agentStatePath ? agentBlockedPaths(agentStatePath) : [],
+    markdownCssHref: opts.markdownCssHref,
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -384,7 +389,7 @@ async function main() {
     console.log(`Review completed #${event.sequence}: ${event.summary.comments} comment${event.summary.comments === 1 ? "" : "s"}`);
   });
   instance.events.on("document-changed", () => {
-    console.log("HTML changed on disk; connected browsers were asked to reload.");
+    console.log("Source changed on disk; connected browsers were asked to reload.");
   });
 
   console.log("Tunelito is running");
@@ -465,7 +470,7 @@ function doctorUsage() {
   return `Tunelito doctor -- read-only local setup and safety diagnostics.
 
 Usage:
-  tunelito doctor [page.html|folder] [options]
+  tunelito doctor [page.html|notes.md|folder] [options]
 
 Options:
   --out <path>              Markdown comments file to inspect
@@ -533,7 +538,7 @@ export function parseDoctorArgs(argv) {
   }
 
   if (positional.length > 1) {
-    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+    throw new Error(`Expected zero or one HTML file, Markdown file, or folder, got ${positional.length}`);
   }
   if (opts.agent && !["codex", "claude", "custom"].includes(opts.agent)) {
     throw new Error(`Unsupported --agent provider: ${opts.agent}`);
@@ -608,14 +613,14 @@ function commentsUsage() {
   return `Tunelito comments -- structured comments inbox tools.
 
 Usage:
-  tunelito comments inspect <page.html|folder|comments.md> [options]
+  tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
 
 Commands:
   inspect     Print an index for a Tunelito comments inbox
   help        Show this message
 
 Options:
-  --out <path>          Markdown comments file for a page or folder target
+  --out <path>          Markdown comments file for a page, Markdown, or folder target
   --agent-state <path>  Agent resolution ledger for processing status
   --json                Print the machine-readable tunelito-comments index
 `;
@@ -655,11 +660,11 @@ export function parseCommentsArgs(argv) {
 
   if (positional[0]) {
     const inputPath = resolve(positional[0]);
-    const inputLooksLikeMarkdown = /\.md$/i.test(positional[0]);
-    if (opts.commentsPath && inputLooksLikeMarkdown) {
-      throw new Error("--out is only supported when inspecting a page or folder target");
+    const inputLooksLikeComments = looksLikeCommentsInboxPath(inputPath);
+    if (opts.commentsPath && inputLooksLikeComments) {
+      throw new Error("--out is only supported when inspecting a page, Markdown, or folder target");
     }
-    if (!opts.commentsPath && inputLooksLikeMarkdown) {
+    if (!opts.commentsPath && inputLooksLikeComments) {
       opts.commentsPath = inputPath;
       opts.requireCommentsFile = true;
     } else {
@@ -668,6 +673,18 @@ export function parseCommentsArgs(argv) {
   }
 
   return opts;
+}
+
+function looksLikeCommentsInboxPath(inputPath) {
+  if (!/\.md$/i.test(inputPath)) return false;
+  if (/\.comments\.md$/i.test(inputPath)) return true;
+  if (!existsSync(inputPath)) return false;
+  try {
+    const sample = readFileSync(inputPath, "utf8").slice(0, 4096);
+    return /^# Tunelito comments for `/m.test(sample) || sample.includes("<!-- tunelito-comment:");
+  } catch {
+    return false;
+  }
 }
 
 export function runCommentsCommand(args, { stdout = process.stdout, stderr = process.stderr } = {}) {
@@ -720,7 +737,7 @@ function reviewUsage() {
   return `Tunelito review -- reviewer handoff event commands.
 
 Usage:
-  tunelito review watch [page.html|folder] [options]
+  tunelito review watch [page.html|notes.md|folder] [options]
 
 Commands:
   watch       Wait for the next Done Reviewing handoff event
@@ -769,7 +786,7 @@ export function parseReviewArgs(argv) {
   }
 
   if (positional.length > 1 && !opts.help) {
-    throw new Error(`Expected zero or one HTML file or folder, got ${positional.length}`);
+    throw new Error(`Expected zero or one HTML file, Markdown file, or folder, got ${positional.length}`);
   }
   if (!["text", "json"].includes(opts.format)) {
     throw new Error("Unsupported --format for review watch: use text or json");
@@ -852,10 +869,10 @@ function inboxUsage() {
   return `Tunelito inbox -- active-agent comment inbox commands.
 
 Usage:
-  tunelito inbox next <page.html|folder> [options]
-  tunelito inbox watch <page.html|folder> [options]
-  tunelito inbox status <page.html|folder> [options]
-  tunelito inbox record <page.html|folder> --id <id> --status <status> [options]
+  tunelito inbox next <page.html|notes.md|folder> [options]
+  tunelito inbox watch <page.html|notes.md|folder> [options]
+  tunelito inbox status <page.html|notes.md|folder> [options]
+  tunelito inbox record <page.html|notes.md|folder> --id <id> --status <status> [options]
 
 Commands:
   next        Claim pending comments and print a prompt for the current agent
@@ -985,7 +1002,7 @@ export function parseInboxArgs(argv) {
   }
 
   if (positional.length !== 1 && !opts.help) {
-    throw new Error(`Expected one HTML file or folder, got ${positional.length}`);
+    throw new Error(`Expected one HTML file, Markdown file, or folder, got ${positional.length}`);
   }
   if (opts.agentInstructions && opts.agentInstructionsPath) {
     throw new Error("Use either --agent-instructions or --agent-instructions-file, not both");

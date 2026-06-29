@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createCommentStore, loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
+import { createCommentStore, defaultCommentsPath, loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { saveAgentState } from "../src/agent-worker.js";
 
@@ -104,6 +104,10 @@ test("comments index summarizes a single-file default comments inbox", () => {
     created: "2026-06-17T00:00:00.000Z",
     agentStatus: null,
   });
+});
+
+test("default comments path removes a Markdown extension", () => {
+  assert.equal(defaultCommentsPath("/tmp/notes.md"), "/tmp/notes.comments.md");
 });
 
 test("comments index supports folder default comments path and owner approvals", () => {

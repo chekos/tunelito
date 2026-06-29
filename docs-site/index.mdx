@@ -1,11 +1,11 @@
 ---
 title: "Tunelito"
-description: "Turn local HTML into a temporary live review room with comments."
+description: "Turn local HTML or Markdown into a temporary live review room with comments."
 ---
 
-Tunelito turns any local HTML file or folder of HTML files into a temporary live review room.
+Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown files, into a temporary live review room.
 
-Run one command, share the printed link on a call, and reviewers can select text, leave page notes, or leave site-wide notes live. You keep editing the HTML in your editor. Connected browsers reload when files change, and reload waits if a reviewer has an open comment composer. Comments are saved as readable Markdown by default, or kept ephemeral with `--live`.
+Run one command, share the printed link on a call, and reviewers can select text, leave page notes, or leave site-wide notes live. You keep editing the source in your editor. Connected browsers reload when files change, and reload waits if a reviewer has an open comment composer. Comments are saved as readable Markdown by default, or kept ephemeral with `--live`.
 
 ## Why it exists
 
@@ -13,7 +13,7 @@ Sometimes the fastest way to review a draft, prototype, spec, or one-off HTML pa
 
 Tunelito gives you that loop:
 
-- local HTML stays the source of truth
+- local HTML or Markdown stays the source of truth
 - reviewers can comment but cannot edit the files
 - comments sync live, with WebRTC peer-to-peer support in `--live`
 - folder reviews share one Markdown inbox with page and site comment scopes
@@ -25,6 +25,12 @@ Tunelito gives you that loop:
 
 ```bash
 npx --yes tunelito ./page.html
+```
+
+For a Markdown memo:
+
+```bash
+npx --yes tunelito ./notes.md
 ```
 
 For a folder:
