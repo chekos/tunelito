@@ -29,7 +29,7 @@ For review calls where feedback should be handled as a batch, reviewers can clic
 npx --yes tunelito review watch --url "http://127.0.0.1:4317/?tunelito_key=..." --json --timeout 600
 ```
 
-The event does not edit source HTML, rewrite comments markdown, or write agent state. It is retained only while the server is running. By default `review watch` replays retained events after sequence `0`; pass `--after latest` to wait only for a future click.
+The event does not edit source files, rewrite comments markdown, or write agent state. It is retained only while the server is running. By default `review watch` replays retained events after sequence `0`; pass `--after latest` to wait only for a future click.
 
 ## Use MCP tools
 
@@ -65,7 +65,7 @@ Use `--agent-command` for another command that accepts a prompt on stdin and ret
 npx --yes tunelito ./site --agent-command "openclaw run --stdin"
 ```
 
-The custom command runs from the served HTML root. Tunelito also sets:
+The custom command runs from the served source root. Tunelito also sets:
 
 - `TUNELITO_AGENT_ROOT`
 - `TUNELITO_AGENT_COMMENTS`
@@ -132,7 +132,7 @@ Prompt replacement changes the behavior instructions, but Tunelito still appends
 
 The worker prompt includes `scope` for every comment:
 
-- `page`: edit the HTML file identified by the comment's page path.
+- `page`: edit the HTML or Markdown file identified by the comment's page path.
 - `site`: inspect the served folder and update every clearly relevant page.
 
 Page comments can be selected-text comments or unanchored page notes. Comments may have no selected quote when reviewers use `Page note` or `Site note`. In that case the agent should rely on the body, scope, and page path.

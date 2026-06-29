@@ -1,7 +1,7 @@
 {
   "name": "tunelito",
   "version": "0.16.1",
-  "description": "Serve local HTML files or folders as temporary live review rooms with injected comments.",
+  "description": "Serve local HTML or Markdown files and folders as temporary live review rooms with injected comments.",
   "type": "module",
   "packageManager": "npm@11.12.1",
   "bin": {
@@ -37,6 +37,7 @@
   },
   "keywords": [
     "html",
+    "markdown",
     "review",
     "comments",
     "annotation",
@@ -53,5 +54,8 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "marked": "^18.0.5"
   }
 }

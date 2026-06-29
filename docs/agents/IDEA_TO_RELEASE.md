@@ -44,7 +44,7 @@ Keep the plan small enough to change as the code teaches you more.
 Make the smallest coherent change that satisfies the acceptance criteria:
 
 - follow the existing plain Node.js ESM style
-- keep source HTML untouched by the annotation layer
+- keep source HTML and Markdown untouched by the annotation layer
 - add or update tests close to changed behavior
 - update README, CHANGELOG, Mintlify docs, examples, or playbooks when behavior or process changes
 - treat tunnel sharing, file serving, auth, hooks, local agents, and publishing as security-sensitive

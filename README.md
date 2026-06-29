@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/chekos/tunelito/actions/workflows/ci.yml/badge.svg)](https://github.com/chekos/tunelito/actions/workflows/ci.yml)
 
-Tunelito turns any local HTML file or folder of HTML files into a temporary live review room.
+Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown files, into a temporary live review room.
 
-Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the HTML in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
+Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the source in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
 
 Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
@@ -14,6 +14,12 @@ Tunelito requires Node.js 22 or newer.
 
 ```bash
 npx --yes tunelito ./page.html
+```
+
+For a Markdown memo or draft:
+
+```bash
+npx --yes tunelito ./notes.md
 ```
 
 For a folder-backed mini-site:
@@ -29,7 +35,7 @@ site/
 site.comments.md
 ```
 
-Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can watch that file, apply edits to the matching HTML file or the whole folder when a comment is site-wide, and continue larger comments across bounded follow-up passes.
+Each comment includes a scope, page path, and visible comment id, so Claude Code, Codex, or another local agent can watch that file, apply edits to the matching HTML or Markdown file or the whole folder when a comment is site-wide, and continue larger comments across bounded follow-up passes.
 
 To let a local agent handle comments while Tunelito runs:
 
@@ -113,7 +119,7 @@ tunelito ./page.html --live
 
 ## What You Control
 
-- The source HTML files remain untouched.
+- The source HTML and Markdown files remain untouched by Tunelito's annotation layer.
 - Edits happen in your editor only.
 - Saved HTML changes trigger a live reload in connected browsers.
 - Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--out`.
@@ -124,18 +130,19 @@ tunelito ./page.html --live
 ```text
 Tunelito 0.16.1
 
-Usage: tunelito <page.html|folder> [options]
-       tunelito doctor [page.html|folder] [options]
+Usage: tunelito <page.html|notes.md|folder> [options]
+       tunelito doctor [page.html|notes.md|folder] [options]
        tunelito mcp
-       tunelito comments inspect <page.html|folder|comments.md> [options]
-       tunelito review watch [page.html|folder] [options]
-       tunelito inbox <next|watch|status|record> <page.html|folder> [options]
+       tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
+       tunelito review watch [page.html|notes.md|folder] [options]
+       tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
        tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
   --agent <codex|claude|custom>
@@ -203,11 +210,12 @@ Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing 
 
 ## How It Works
 
-Tunelito serves the HTML from disk and injects a small same-origin annotation client into the response. For folder targets, every served `.html` or `.htm` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original HTML files are not modified.
+Tunelito serves HTML from disk or renders Markdown into a readable page, then injects a small same-origin annotation client into the response. For folder targets, every served `.html`, `.htm`, or `.md` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
 
 The server also:
 
-- serves sibling assets relative to the HTML file, or non-hidden files within the selected folder
+- serves sibling assets relative to the selected file, or non-hidden files within the selected folder
+- renders Markdown with a built-in readable stylesheet, optionally adding `--markdown-css <href>` for team styling
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
@@ -296,7 +304,7 @@ tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agen
 tunelito comments inspect ./site.comments.md --json
 ```
 
-The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file or write to source HTML. For page or folder targets, the index also includes per-comment agent status from `.tunelito/agent/state.json` when a ledger is available, plus top-level pending, unhandled, and completed counts. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
+The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file or write to source files. For page or folder targets, the index also includes per-comment agent status from `.tunelito/agent/state.json` when a ledger is available, plus top-level pending, unhandled, and completed counts. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
 
 In `--live`, comments are not written to markdown and are not restored after restart.
 
@@ -320,7 +328,7 @@ The browser panel shows matching status badges and task details on each comment 
 
 Use repeated `tunelito inbox next ./site` calls for non-blocking manual checks from an agent shell, or `tunelito inbox watch ./site` when you need the one-shot waiting primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox claimer per served workspace; a foreground `inbox next/watch` call against a workspace already served with `--agent-session` is another claimer. Claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock. If a foreground record needs to resolve the currently owning claim, pass `--claim auto` instead of opening `.tunelito/agent/state.json`. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
 
-For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source HTML, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
+For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source files, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
 
 The running server prints a handoff command that waits for the next retained event:
 
@@ -395,7 +403,7 @@ Treat `--agent` as trusted-session behavior: reviewer comments become instructio
 Manual agent prompt for older builds:
 
 ```text
-Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file, then summarize the comment id and change made.
+Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML or Markdown file, then summarize the comment id and change made.
 ```
 
 Quick walkthrough:
@@ -403,7 +411,7 @@ Quick walkthrough:
 1. Run `npx --yes tunelito ./site --agent codex --no-tunnel --open`.
 2. Select text in the browser and leave a comment.
 3. The local worker invokes Codex for new unresolved comments.
-4. Codex edits the source HTML file named by a page-scoped comment's `page: ...` context, or the relevant files for a site-scoped comment.
+4. Codex edits the source HTML or Markdown file named by a page-scoped comment's `page: ...` context, or the relevant files for a site-scoped comment.
 5. If Codex returns `needs_followup`, Tunelito sends the same comment again with completed and remaining tasks on the next pass.
 6. Tunelito reloads connected browsers after saved HTML changes, deferring the reload when a reviewer has an open comment composer so unsubmitted text is not lost.
 
@@ -424,7 +432,7 @@ Before sharing a live session:
 5. Add a short page note or site note from the comments panel.
 6. Confirm the terminal logs `Comment from ...`.
 7. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
-8. Edit and save the HTML file; the phone should reload.
+8. Edit and save the source file; the phone should reload.
 
 For an ephemeral call, run with `--live` and skip the markdown-file check.
 

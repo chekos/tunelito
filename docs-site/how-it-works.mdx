@@ -3,11 +3,11 @@ title: "How it works"
 description: "Understand the Tunelito local server, injected client, live sync, and persistence modes."
 ---
 
-Tunelito is local-first. It does not upload your source HTML to a hosted backend.
+Tunelito is local-first. It does not upload your source HTML or Markdown to a hosted backend.
 
 ## Runtime pieces
 
-The CLI starts a local server for one HTML file or a folder of HTML files. The server reads HTML from disk, injects the Tunelito browser client into served HTML responses, and serves non-hidden assets from the selected file directory or folder root.
+The CLI starts a local server for one HTML or Markdown file, or a folder of HTML and Markdown files. The server reads HTML from disk or renders Markdown into a readable page, injects the Tunelito browser client into served page responses, and serves non-hidden assets from the selected file directory or folder root.
 
 The browser client handles:
 
@@ -42,9 +42,9 @@ When `--agent` is enabled, a separate worker handles:
 
 When `--agent-session` is enabled, Tunelito does not invoke another CLI. The server process writes `.tunelito/session.json`, watches the comments inbox, claims actionable comments for the current coding-agent session, prints bounded prompts, shows reviewer-facing status on comment cards, exposes the same tracker through `tunelito inbox status`, and records results through `tunelito inbox record`.
 
-## Source HTML is not modified
+## Source files are not modified
 
-The injection happens only in the HTTP response. Your source HTML files remain untouched.
+The injection happens only in the HTTP response. Your source HTML and Markdown files remain untouched by Tunelito's annotation layer.
 
 ## Persistence
 
@@ -55,6 +55,13 @@ page.html
 page.comments.md
 ```
 
+Markdown targets use the same sidecar shape:
+
+```text
+notes.md
+notes.comments.md
+```
+
 For folder targets, the default inbox is beside the folder:
 
 ```text
@@ -62,9 +69,9 @@ site/
 site.comments.md
 ```
 
-The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart and tie new comments to a stable reviewer identity for renames. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML file and treat site feedback as applying across the folder.
+The Markdown remains readable if Tunelito is never opened again. Hidden metadata inside the file lets Tunelito restore live comments after a restart and tie new comments to a stable reviewer identity for renames. Folder comments include visible scopes and page paths so a person or coding agent can map page feedback back to the right HTML or Markdown file and treat site feedback as applying across the folder.
 
-`tunelito comments inspect` reads that same hidden metadata and prints a derived `tunelito-comments` JSON index for agents and diagnostics. The command does not write to the comments file or source HTML. When an agent ledger path is known, the index also includes the same pending, claimed, resolved, and follow-up status used by `inbox status` and browser comment-card badges.
+`tunelito comments inspect` reads that same hidden metadata and prints a derived `tunelito-comments` JSON index for agents and diagnostics. The command does not write to the comments file or source files. When an agent ledger path is known, the index also includes the same pending, claimed, resolved, and follow-up status used by `inbox status` and browser comment-card badges.
 
 The local agent worker and active-agent inbox commands do not edit this Markdown file. They treat comments as an append-only inbox and write resolution state beside the served root under `.tunelito/agent/`. That hidden ledger is not served as static content and does not trigger document reload notices. It also stores continuation state for comments that need multiple bounded passes, so the next agent prompt can continue from saved remaining tasks instead of redoing completed work.
 

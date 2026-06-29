@@ -92,7 +92,7 @@ Required:
 - `test/server.test.js`
 - `test/cli.test.js`
 - timeout coverage for `tunelito review watch`
-- persistent coverage proving handoff does not corrupt comments markdown or source HTML
+- persistent coverage proving handoff does not corrupt comments markdown or source files
 - live-mode coverage proving handoff does not create a comments file
 - browser or screenshot verification for the `Done Reviewing` panel control
 - `npm run ci`

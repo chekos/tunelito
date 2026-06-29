@@ -5,7 +5,7 @@ const METADATA_PREFIX = "<!-- tunelito-comment:";
 const METADATA_SUFFIX = "-->";
 
 export function defaultCommentsPath(filePath) {
-  return filePath.replace(/\.html?$/i, "") + ".comments.md";
+  return filePath.replace(/\.(?:html?|md)$/i, "") + ".comments.md";
 }
 
 export function normalizeComment(input, now = new Date()) {

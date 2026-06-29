@@ -703,7 +703,7 @@ test("agent config normalizers keep validation order and trigger defaults", () =
   );
   assert.throws(
     () => normalizeAgentInboxConfig({ commentsPath, claimSeconds: 0 }),
-    /inbox commands requires a target HTML file or folder/,
+    /inbox commands requires a target HTML, Markdown, or folder path/,
   );
   assert.throws(
     () => normalizeAgentInboxConfig({ commentsPath, targetPath: dir, claimSeconds: 0 }),

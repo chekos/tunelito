@@ -25,8 +25,8 @@ Tests should cover both allowed and denied paths.
 
 Expected behavior:
 
-- Serve the selected HTML file at `/`, or serve a selected folder root.
-- Serve assets only within the selected HTML file directory or selected folder root.
+- Serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a selected folder root.
+- Serve assets only within the selected source file directory or selected folder root.
 - Reject malformed URL escapes with `400`.
 - Reject traversal and non-file paths with `404`, except generated directory indexes in folder mode.
 - Do not follow a request into dotfiles, `.git/`, parent directories, or unrelated workspace files.
@@ -59,10 +59,10 @@ Product-level local agent worker behavior:
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
 - Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
 - Active-agent inbox commands (`tunelito inbox next/watch/record`) use the same trust boundary: selected reviewer comments become instructions to the current local agent session.
-- `Done Reviewing` handoff emits an in-memory `review.completed` event only. It may expose reviewer-authored summary context to authenticated CLI waiters, but it must not write source HTML, comments markdown, or agent state.
+- `Done Reviewing` handoff emits an in-memory `review.completed` event only. It may expose reviewer-authored summary context to authenticated CLI waiters, but it must not write source files, comments markdown, or agent state.
 - `tunelito review watch` must use the same review-key gate as the browser session and must time out cleanly without starting a server, tunnel, browser, worker, or editor.
 - `tunelito mcp` exposes the same comments and inbox primitives to MCP-capable agents. Read-only tools must stay read-only; claim tools may mutate `.tunelito/agent/state.json`, and record tools may mutate `.tunelito/agent/state.json` plus append `.tunelito/agent/log.md`.
-- MCP must not spawn local agent CLIs, start a Tunelito review server, start Cloudflare Tunnel, open a browser, or edit served HTML files.
+- MCP must not spawn local agent CLIs, start a Tunelito review server, start Cloudflare Tunnel, open a browser, or edit served source files.
 - `--agent-trigger "<marker>"` is the stricter opt-in marker mode for less trusted sessions.
 - Resolution state belongs in `.tunelito/agent/state.json`, not the comments markdown that the server rewrites.
 - Inbox claims must expire so a crashed or abandoned active-agent session does not permanently hide a pending comment.

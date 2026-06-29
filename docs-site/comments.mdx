@@ -103,7 +103,7 @@ For page or folder targets, a missing default comments file returns an empty suc
 
 ## Agent inbox workflow
 
-The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to inspect the comments file, edit the matching source HTML for page comments, apply clearly relevant changes across the folder for site comments, and report which visible comment IDs were addressed.
+The Markdown file can act as a local inbox for a coding agent. Keep Tunelito running in persistent mode, then ask Claude Code, Codex, or another local agent to inspect the comments file, edit the matching source file for page comments, apply clearly relevant changes across the folder for site comments, and report which visible comment IDs were addressed.
 
 If you are already inside an agent session, use active-agent mode:
 
@@ -144,7 +144,7 @@ tunelito ./site --owner "Chekos" --agent codex --agent-policy owner-or-mention -
 Manual prompt:
 
 ```text
-Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML file and summarize the comment id plus the change made. For larger comments, keep track of completed and remaining tasks so the next pass continues instead of repeating work.
+Monitor site.comments.md every 2 minutes. For each new actionable comment, edit the matching HTML or Markdown file and summarize the comment id plus the change made. For larger comments, keep track of completed and remaining tasks so the next pass continues instead of repeating work.
 ```
 
 For a complete end-to-end example, see the [folder review tutorial](/tutorial) and the [local agent worker guide](/agent-worker).

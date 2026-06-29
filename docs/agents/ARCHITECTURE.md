@@ -8,7 +8,7 @@ The CLI owns process orchestration:
 
 - parse arguments
 - choose host/port/comments path
-- accept either a single HTML file or a folder target
+- accept either a single HTML/Markdown file or a folder target
 - choose persistent or ephemeral live mode
 - choose optional local agent worker settings
 - choose optional owner display identity
@@ -22,13 +22,13 @@ The CLI owns process orchestration:
 
 The server owns local IO and transport:
 
-- serve the selected HTML file at `/`, or serve a folder root with injected HTML pages
+- serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a folder root with injected HTML/Markdown pages
 - serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
 - mark direct loopback local sessions as owners so local comments carry `authorRole: owner`
 - mark public tunnel or forwarded sessions as visitors even when they carry the review key
-- let direct local owner sessions approve a specific visitor comment for local-agent handling without changing the source HTML
+- let direct local owner sessions approve a specific visitor comment for local-agent handling without changing the source file
 - accept WebSocket comment events
 - tie new comments to a stable reviewer identity so reviewer renames update only that reviewer's prior comments
 - write/read markdown comments or keep live-mode comments in memory
@@ -38,7 +38,7 @@ The server owns local IO and transport:
 - expose a read-only agent status projection for comments when an agent ledger is configured
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
-- broadcast reload events when source HTML changes; browser clients defer the actual reload while a comment composer is open
+- broadcast reload events when source files change; browser clients defer the actual reload while a comment composer is open
 
 The local agent worker owns comment follow-up when `--agent` is enabled:
 
@@ -65,7 +65,7 @@ The review handoff event queue owns batch-finished signals when `Done Reviewing`
 - keep `review.completed` events in memory only, retained for the current server process
 - include sequence id, created timestamp, target path, comments path when persistent, live mode, directory mode, summary counts, and optional event-only overall comment
 - replay retained events after sequence `0` by default; allow callers to wait for future events with `--after latest`
-- never write handoff events to source HTML, comments Markdown, or `.tunelito/agent/state.json`
+- never write handoff events to source files, comments Markdown, or `.tunelito/agent/state.json`
 - keep `--live` handoff events ephemeral and avoid creating a comments file
 
 The MCP adapter owns structured agent access when `tunelito mcp` is used:
@@ -95,15 +95,15 @@ The browser client owns reviewer interaction:
 
 ## Invariants
 
-- Never modify source HTML files to install Tunelito.
-- Never serve files outside the selected HTML file directory or selected folder root.
+- Never modify source HTML or Markdown files to install Tunelito.
+- Never serve files outside the selected source file directory or selected folder root.
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep the `tunelito-comments` JSON index derived from markdown metadata plus optional agent-ledger status; do not make it durable state.
 - Keep `--live` comments ephemeral; do not write them to markdown.
-- Keep review handoff events ephemeral; do not write them to source HTML, comments markdown, or agent state.
-- Keep pointer halos ephemeral; do not write pointer events to markdown or source HTML.
+- Keep review handoff events ephemeral; do not write them to source files, comments markdown, or agent state.
+- Keep pointer halos ephemeral; do not write pointer events to markdown or source files.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as server-assigned request metadata, not authentication; direct loopback local sessions are owners, public tunnel or forwarded sessions are visitors, and the review key remains the access gate.
 - Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.

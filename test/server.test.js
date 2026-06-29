@@ -66,6 +66,66 @@ test("server serves injected HTML, sibling assets, and live WebSocket comments",
   }
 });
 
+test("server renders a Markdown file as an injected commentable page", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-markdown-file-"));
+  const markdownPath = join(dir, "notes.md");
+  const commentsPath = join(dir, "notes.comments.md");
+  writeFileSync(markdownPath, [
+    "# Morning notes",
+    "",
+    "Review **this memo** before standup.",
+    "",
+    "<script>alert('raw html should be escaped')</script>",
+    "",
+    "[unsafe](javascript:alert(1))",
+  ].join("\n"));
+
+  const instance = await createTunelitoServer({
+    filePath: markdownPath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    markdownCssHref: "/brand.css",
+  });
+
+  let socket = null;
+  try {
+    const html = await fetch(instance.localUrl).then((res) => res.text());
+    assert.match(html, /<h1>Morning notes<\/h1>/);
+    assert.match(html, /<strong>this memo<\/strong>/);
+    assert.match(html, /data-tunelito-source-type="markdown"/);
+    assert.match(html, /<link rel="stylesheet" href="\/brand\.css">/);
+    assert.match(html, new RegExp(CLIENT_ROUTE));
+    assert.match(html, /&lt;script&gt;alert/);
+    assert.doesNotMatch(html, /<script>alert/);
+    assert.doesNotMatch(html, /href="javascript:/);
+
+    const named = await fetch(new URL("/notes.md", instance.localUrl));
+    assert.equal(named.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.match(await named.text(), /Morning notes/);
+
+    socket = openJsonSocket(new URL("/__tunelito/ws", instance.localUrl));
+    await waitFor(socket.socket, "open");
+    await waitUntil(() => socket.messages.some((message) => message.type === "hello"));
+    socket.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Sam",
+        quote: "this memo",
+        body: "Tighten this before sharing.",
+        textStart: 7,
+        textEnd: 16,
+      },
+    }));
+    await waitUntil(() => socket.messages.some((message) => message.type === "comment"));
+    assert.match(readFileSync(commentsPath, "utf8"), /Tighten this before sharing\./);
+    assert.equal(readFileSync(markdownPath, "utf8").includes("Tighten this before sharing."), false);
+  } finally {
+    socket?.socket.close();
+    await instance.close();
+  }
+});
+
 test("directory mode injects HTML pages and keeps comments page-specific", async () => {
   const parentDir = mkdtempSync(join(tmpdir(), "tunelito-directory-"));
   const siteDir = join(parentDir, "site");
@@ -184,6 +244,62 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
       const linkedEnvFile = await fetch(new URL("/linked-env", instance.localUrl));
       assert.equal(linkedEnvFile.status, 404);
     }
+  } finally {
+    for (const socket of sockets) socket.close();
+    await instance.close();
+  }
+});
+
+test("directory mode renders Markdown pages and lists them in generated indexes", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-directory-"));
+  const commentsPath = join(siteDir, "site.comments.md");
+  writeFileSync(join(siteDir, "index.md"), "# Home memo\n\nStart here.");
+  writeFileSync(join(siteDir, "brief.md"), "# Project brief\n\nPlain prose.");
+  writeFileSync(join(siteDir, "style.css"), "main { max-width: 50rem; }");
+
+  const nestedDir = join(siteDir, "notes");
+  mkdirSync(nestedDir);
+  writeFileSync(join(nestedDir, "daily.md"), "# Daily note\n\nNested memo.");
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const sockets = [];
+  try {
+    const root = await fetch(instance.localUrl).then((res) => res.text());
+    assert.match(root, /Home memo/);
+    assert.match(root, new RegExp(CLIENT_ROUTE));
+
+    const brief = await fetch(new URL("/brief.md", instance.localUrl));
+    assert.equal(brief.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.match(await brief.text(), /Project brief/);
+
+    const notesIndex = await fetch(new URL("/notes/", instance.localUrl)).then((res) => res.text());
+    assert.match(notesIndex, /daily\.md/);
+
+    const briefSocketUrl = new URL("/__tunelito/ws", instance.localUrl);
+    briefSocketUrl.searchParams.set("tunelito_page", "/brief.md");
+    const briefSocket = openJsonSocket(briefSocketUrl);
+    sockets.push(briefSocket.socket);
+    await waitFor(briefSocket.socket, "open");
+    await waitUntil(() => briefSocket.messages.some((message) => message.type === "hello"));
+
+    briefSocket.socket.send(JSON.stringify({
+      type: "create-comment",
+      comment: {
+        author: "Rae",
+        quote: "Plain prose.",
+        body: "Make this memo more concrete.",
+      },
+    }));
+    await waitUntil(() => briefSocket.messages.some((message) => message.type === "comment"));
+    const comment = briefSocket.messages.find((message) => message.type === "comment").comment;
+    assert.equal(comment.pagePath, "/brief.md");
+    assert.match(readFileSync(commentsPath, "utf8"), /page: `\/brief\.md`/);
   } finally {
     for (const socket of sockets) socket.close();
     await instance.close();
@@ -547,6 +663,7 @@ test("directory mode renders a basic HTML index when no index file exists", asyn
   const siteDir = mkdtempSync(join(tmpdir(), "tunelito-directory-index-"));
   const commentsPath = join(siteDir, "comments.html");
   writeFileSync(join(siteDir, "page.html"), "<!doctype html><html><body>Listed page</body></html>");
+  writeFileSync(join(siteDir, "notes.md"), "# Listed notes");
   writeFileSync(commentsPath, "private comments");
   writeFileSync(`${commentsPath}.tmp`, "private comments temp");
   writeFileSync(join(siteDir, "notes.txt"), "not listed");
@@ -561,6 +678,7 @@ test("directory mode renders a basic HTML index when no index file exists", asyn
   try {
     const html = await fetch(instance.localUrl).then((res) => res.text());
     assert.match(html, /page\.html/);
+    assert.match(html, /notes\.md/);
     assert.doesNotMatch(html, /notes\.txt/);
     assert.doesNotMatch(html, /comments\.html/);
     assert.match(html, new RegExp(CLIENT_ROUTE));

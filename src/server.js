@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
@@ -40,6 +41,7 @@ export async function createTunelitoServer(options) {
   const accessKey = options.accessKey ? String(options.accessKey) : "";
   const ownerName = cleanOwnerName(options.ownerName);
   const ownerSessionId = String(options.ownerSessionId || randomBytes(9).toString("base64url"));
+  const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -60,6 +62,7 @@ export async function createTunelitoServer(options) {
       accessKey,
       ownerName,
       ownerSessionId,
+      markdownCssHref,
     });
   });
 
@@ -336,7 +339,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -424,12 +427,25 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       return;
     }
 
+    if (isMarkdownPath(asset.path)) {
+      const sourceName = relativeSourceName(rootDir, asset.path);
+      const html = renderMarkdownFile({
+        path: asset.realPath,
+        sourceName,
+        markdownCssHref,
+      });
+      sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
+      return;
+    }
+
     sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, responseHeaders);
     return;
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
-    const html = readFileSync(filePath, "utf8");
+    const html = isMarkdownPath(filePath)
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref })
+      : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
   }
@@ -458,6 +474,8 @@ function resolveDirectoryRequest(rootDir, rootRealDir, pathname, options = {}) {
   const directoryPathname = pathname.endsWith("/") ? pathname : `${pathname}/`;
   const index = resolveServedAsset(rootDir, rootRealDir, `${directoryPathname}index.html`, options);
   if (index) return index;
+  const markdownIndex = resolveServedAsset(rootDir, rootRealDir, `${directoryPathname}index.md`, options);
+  if (markdownIndex) return markdownIndex;
 
   return {
     generatedHtml: renderDirectoryIndex({ directoryPath: directory.realPath, pagePath: directoryPathname, blockedPaths: options.blockedPaths || [] }),
@@ -505,7 +523,7 @@ function resolveServedDirectory(rootDir, rootRealDir, pathname) {
 function renderDirectoryIndex({ directoryPath, pagePath, blockedPaths = [] }) {
   const entries = readdirSync(directoryPath, { withFileTypes: true })
     .filter((entry) => !entry.name.startsWith("."))
-    .filter((entry) => entry.isDirectory() || isHtmlPath(entry.name))
+    .filter((entry) => entry.isDirectory() || isHtmlPath(entry.name) || isMarkdownPath(entry.name))
     .filter((entry) => !isBlockedDirectoryEntry(directoryPath, entry.name, blockedPaths))
     .sort((left, right) => left.name.localeCompare(right.name));
   const basePath = pagePath.endsWith("/") ? pagePath : `${pagePath}/`;
@@ -524,10 +542,18 @@ function renderDirectoryIndex({ directoryPath, pagePath, blockedPaths = [] }) {
     "</head>",
     "<body>",
     `  <h1>${escapeHtml(pagePath)}</h1>`,
-    links.length ? `  <ul>\n    ${links.join("\n    ")}\n  </ul>` : "  <p>No HTML files found in this folder.</p>",
+    links.length ? `  <ul>\n    ${links.join("\n    ")}\n  </ul>` : "  <p>No HTML or Markdown files found in this folder.</p>",
     "</body>",
     "</html>",
   ].join("\n");
+}
+
+function renderMarkdownFile({ path, sourceName, markdownCssHref }) {
+  return renderMarkdownDocument({
+    markdownSource: readFileSync(path, "utf8"),
+    sourceName,
+    cssHref: markdownCssHref,
+  });
 }
 
 function sendText(res, status, body, contentType = "text/plain; charset=utf-8", method = "GET", extraHeaders = {}) {
