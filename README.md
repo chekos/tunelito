@@ -128,7 +128,7 @@ tunelito ./page.html --live
 ## CLI
 
 ```text
-Tunelito 0.16.1
+Tunelito 0.17.0
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
