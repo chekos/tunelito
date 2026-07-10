@@ -21,6 +21,8 @@ For a Markdown memo or draft:
 npx --yes tunelito ./notes.md
 ```
 
+Markdown fences labeled `mermaid` render automatically as diagrams. Ordinary code fences stay as code, and invalid diagrams show their readable source instead of a blank region.
+
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.
 
 Tunelito also prints the comments file path:

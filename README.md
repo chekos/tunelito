@@ -210,12 +210,13 @@ Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing 
 
 ## How It Works
 
-Tunelito serves HTML from disk or renders Markdown into a readable page, then injects a small same-origin annotation client into the response. For folder targets, every served `.html`, `.htm`, or `.md` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
+Tunelito serves HTML from disk or renders Markdown into a readable page, then injects a small same-origin annotation client into the response. Fenced `mermaid` blocks in Markdown render automatically as diagrams; other fenced languages remain ordinary code blocks. For folder targets, every served `.html`, `.htm`, or `.md` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
 
 The server also:
 
 - serves sibling assets relative to the selected file, or non-hidden files within the selected folder
 - renders Markdown with a built-in readable stylesheet, optionally adding `--markdown-css <href>` for team styling
+- renders fenced `mermaid` blocks from a packaged same-origin runtime, with Mermaid strict security, bounded diagram complexity, and an accessible source fallback if JavaScript or diagram syntax fails
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
@@ -460,4 +461,5 @@ The package includes the CLI, runtime source, examples, docs, changelog, license
 - Canvas, video, images, and cross-origin iframes are not yet annotatable.
 - If the exact commented text changes, the comment remains in markdown and the sidebar, but the highlight may not reattach.
 - Strict in-page CSP meta tags are removed from the served response so the injected same-origin client can run.
+- Mermaid is served from the installed Tunelito package rather than a CDN, stays behind the same review-key gate, uses `securityLevel: "strict"`, disables HTML labels and diagram click behavior, and preserves escaped source in a collapsible fallback. Diagram authors can add Mermaid `accTitle` and `accDescr` lines for accessible SVG labels.
 - WebRTC peer-to-peer connections depend on browser and network support; the WebSocket relay keeps `--live` usable when direct peer connections fail.

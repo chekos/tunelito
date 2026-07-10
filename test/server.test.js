@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer, isIgnoredWatchFilename, isLocalOwnerRequest } from "../src/server.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE } from "../src/inject.js";
+import { MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE } from "../src/markdown.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
@@ -78,7 +79,17 @@ test("server renders a Markdown file as an injected commentable page", async () 
     "<script>alert('raw html should be escaped')</script>",
     "",
     "[unsafe](javascript:alert(1))",
+    "",
+    "```mermaid",
+    "flowchart LR",
+    "  Draft --> Review",
+    "```",
+    "",
+    "```js",
+    "const ordinary = true;",
+    "```",
   ].join("\n"));
+  const originalMarkdown = readFileSync(markdownPath, "utf8");
 
   const instance = await createTunelitoServer({
     filePath: markdownPath,
@@ -99,6 +110,22 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(html, /&lt;script&gt;alert/);
     assert.doesNotMatch(html, /<script>alert/);
     assert.doesNotMatch(html, /href="javascript:/);
+    assert.match(html, /data-tunelito-mermaid/);
+    assert.match(html, /flowchart LR/);
+    assert.match(html, /<pre><code class="language-js">/);
+    assert.match(html, new RegExp(MERMAID_LIBRARY_ROUTE));
+    assert.match(html, new RegExp(MERMAID_CLIENT_ROUTE));
+
+    const mermaidLibrary = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.localUrl));
+    assert.equal(mermaidLibrary.headers.get("content-type"), "text/javascript; charset=utf-8");
+    assert.match(await mermaidLibrary.text(), /mermaid/);
+
+    const mermaidClient = await fetch(new URL(MERMAID_CLIENT_ROUTE, instance.localUrl));
+    assert.equal(mermaidClient.headers.get("content-type"), "text/javascript; charset=utf-8");
+    const mermaidClientSource = await mermaidClient.text();
+    assert.match(mermaidClientSource, /securityLevel: "strict"/);
+    assert.match(mermaidClientSource, /startOnLoad: false/);
+    assert.match(mermaidClientSource, /Could not render Mermaid diagram/);
 
     const named = await fetch(new URL("/notes.md", instance.localUrl));
     assert.equal(named.headers.get("content-type"), "text/html; charset=utf-8");
@@ -119,7 +146,7 @@ test("server renders a Markdown file as an injected commentable page", async () 
     }));
     await waitUntil(() => socket.messages.some((message) => message.type === "comment"));
     assert.match(readFileSync(commentsPath, "utf8"), /Tighten this before sharing\./);
-    assert.equal(readFileSync(markdownPath, "utf8").includes("Tighten this before sharing."), false);
+    assert.equal(readFileSync(markdownPath, "utf8"), originalMarkdown);
   } finally {
     socket?.socket.close();
     await instance.close();
@@ -254,7 +281,7 @@ test("directory mode renders Markdown pages and lists them in generated indexes"
   const siteDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-directory-"));
   const commentsPath = join(siteDir, "site.comments.md");
   writeFileSync(join(siteDir, "index.md"), "# Home memo\n\nStart here.");
-  writeFileSync(join(siteDir, "brief.md"), "# Project brief\n\nPlain prose.");
+  writeFileSync(join(siteDir, "brief.md"), "# Project brief\n\nPlain prose.\n\n```mermaid\nsequenceDiagram\n  Author->>Reviewer: Share\n```");
   writeFileSync(join(siteDir, "style.css"), "main { max-width: 50rem; }");
 
   const nestedDir = join(siteDir, "notes");
@@ -276,7 +303,10 @@ test("directory mode renders Markdown pages and lists them in generated indexes"
 
     const brief = await fetch(new URL("/brief.md", instance.localUrl));
     assert.equal(brief.headers.get("content-type"), "text/html; charset=utf-8");
-    assert.match(await brief.text(), /Project brief/);
+    const briefHtml = await brief.text();
+    assert.match(briefHtml, /Project brief/);
+    assert.match(briefHtml, /data-tunelito-mermaid/);
+    assert.match(briefHtml, new RegExp(MERMAID_LIBRARY_ROUTE));
 
     const notesIndex = await fetch(new URL("/notes/", instance.localUrl)).then((res) => res.text());
     assert.match(notesIndex, /daily\.md/);
@@ -946,9 +976,22 @@ test("server can require a review access key", async () => {
     assert.equal(clientDenied.status, 401);
     await clientDenied.text();
 
+    const mermaidDenied = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.originUrl));
+    assert.equal(mermaidDenied.status, 401);
+    await mermaidDenied.text();
+
+    const mermaidClientDenied = await fetch(new URL(MERMAID_CLIENT_ROUTE, instance.originUrl));
+    assert.equal(mermaidClientDenied.status, 401);
+    await mermaidClientDenied.text();
+
     const clientAllowed = await fetch(new URL("/__tunelito/client.js?tunelito_key=secret", instance.originUrl));
     assert.equal(clientAllowed.status, 200);
     assert.match(await clientAllowed.text(), /WebSocket/);
+
+    const mermaidAllowed = await fetch(new URL(`${MERMAID_LIBRARY_ROUTE}?tunelito_key=secret`, instance.originUrl));
+    assert.equal(mermaidAllowed.status, 200);
+    assert.equal(mermaidAllowed.headers.get("x-content-type-options"), "nosniff");
+    await mermaidAllowed.body.cancel();
   } finally {
     await instance.close();
   }

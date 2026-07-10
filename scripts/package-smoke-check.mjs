@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,7 @@ try {
   assertVersion(run(installedBin, ["--version"], { cwd: execDir }), "global tarball install");
   assertSkill(run(installedBin, ["skill", "show"], { cwd: execDir }), "global tarball install");
   assertSkillSetup(run(installedBin, ["skill", "setup"], { cwd: execDir }), "global tarball install");
+  assertMermaidDependency(prefixDir);
 
   assertVersion(
     run(npxCommand, ["--yes", "--package", tarball, "--", "tunelito", "--version"], { cwd: execDir }),
@@ -92,5 +93,14 @@ function assertSkill(output, label) {
 function assertSkillSetup(output, label) {
   if (!output.includes("Tunelito agent setup") || !output.includes("npx --yes tunelito skill show")) {
     throw new Error(`${label}: "tunelito skill setup" did not print setup guidance`);
+  }
+}
+
+function assertMermaidDependency(prefixDir) {
+  const dependencyPath = process.platform === "win32"
+    ? join(prefixDir, "node_modules", "tunelito", "node_modules", "mermaid", "dist", "mermaid.min.js")
+    : join(prefixDir, "lib", "node_modules", "tunelito", "node_modules", "mermaid", "dist", "mermaid.min.js");
+  if (!existsSync(dependencyPath)) {
+    throw new Error(`global tarball install did not include the Mermaid browser runtime at ${dependencyPath}`);
   }
 }

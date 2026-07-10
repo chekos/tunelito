@@ -39,6 +39,9 @@ Expected behavior:
 - Do not write the injection back to disk.
 - Remove strict CSP meta tags only from the served response so the same-origin client can run.
 - Avoid leaking the review key in unnecessary places.
+- Serve Mermaid and its bootstrap from fixed internal routes behind the existing review-key/cookie gate; do not expose arbitrary dependency paths.
+- Initialize Mermaid with `securityLevel: "strict"`, `startOnLoad: false`, HTML labels and click behavior disabled, bounded text/edge limits, and controlled error rendering.
+- Keep escaped Mermaid source available as the no-JavaScript/invalid-syntax fallback, and never fetch Mermaid from a CDN.
 
 ## Tunnel Behavior
 
