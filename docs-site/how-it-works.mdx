@@ -7,7 +7,7 @@ Tunelito is local-first. It does not upload your source HTML or Markdown to a ho
 
 ## Runtime pieces
 
-The CLI starts a local server for one HTML or Markdown file, or a folder of HTML and Markdown files. The server reads HTML from disk or renders Markdown into a readable page, injects the Tunelito browser client into served page responses, and serves non-hidden assets from the selected file directory or folder root.
+The CLI starts a local server for one HTML or Markdown file, or a folder of HTML and Markdown files. The server reads HTML from disk or renders Markdown into a readable page, injects the Tunelito browser client into served page responses, and serves non-hidden assets from the selected file directory or folder root. In Markdown, fenced `mermaid` blocks render as diagrams while other fenced languages remain code.
 
 The browser client handles:
 
@@ -29,6 +29,7 @@ The server handles:
 - comment validation
 - Markdown persistence, unless `--live` is enabled
 - file watching
+- packaged same-origin Mermaid assets for Markdown pages that contain diagrams
 - page-specific and site-wide comment streams when serving a folder
 - optional Cloudflare Tunnel startup
 
@@ -45,6 +46,19 @@ When `--agent-session` is enabled, Tunelito does not invoke another CLI. The ser
 ## Source files are not modified
 
 The injection happens only in the HTTP response. Your source HTML and Markdown files remain untouched by Tunelito's annotation layer.
+
+## Mermaid diagrams
+
+Use a normal Mermaid fence in a Markdown document:
+
+````markdown
+```mermaid
+flowchart LR
+  Draft --> Review --> Publish
+```
+````
+
+Tunelito loads Mermaid from its installed package, not a CDN, so rendering remains local/offline and the asset uses the same review-key protection as the page. It initializes Mermaid once per page with strict security, HTML labels and click actions disabled, and bounded text/edge limits. Valid diagrams become responsive SVG. The escaped source remains available under **View Mermaid source**; invalid syntax, an oversized diagram, or a runtime failure opens that source and shows a readable error instead of leaving a blank page. Add Mermaid `accTitle` and `accDescr` statements when the diagram needs an explicit accessible name and description.
 
 ## Persistence
 

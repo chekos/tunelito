@@ -23,6 +23,7 @@ The CLI owns process orchestration:
 The server owns local IO and transport:
 
 - serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a folder root with injected HTML/Markdown pages
+- turn exact `mermaid` code fences into source-preserving diagram figures and serve the fixed packaged Mermaid runtime/bootstrap routes behind normal review-key authorization
 - serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
 - protect shared sessions with `tunelito_key`
@@ -92,6 +93,7 @@ The browser client owns reviewer interaction:
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
+- initialize Mermaid once per rendered Markdown page with strict security and render each pending figure once, preserving readable source on success or failure
 
 ## Invariants
 
@@ -113,6 +115,7 @@ The browser client owns reviewer interaction:
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.
+- Keep Mermaid local/offline and same-origin; do not add a CDN dependency or allow request paths to select arbitrary files from installed dependencies.
 
 ## Extension Points
 

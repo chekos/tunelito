@@ -1,4 +1,7 @@
-import { Marked } from "marked";
+import { Marked, Renderer } from "marked";
+
+export const MERMAID_LIBRARY_ROUTE = "/__tunelito/mermaid.js";
+export const MERMAID_CLIENT_ROUTE = "/__tunelito/mermaid-client.js";
 
 const DEFAULT_MARKDOWN_CSS = `
 :root {
@@ -81,6 +84,53 @@ body {
   background: transparent;
   color: inherit;
 }
+.tunelito-mermaid {
+  margin: 0 0 1rem;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #f8fafc;
+}
+.tunelito-mermaid-canvas {
+  overflow-x: auto;
+  text-align: center;
+}
+.tunelito-mermaid-canvas svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.tunelito-mermaid-status {
+  margin: 0.75rem 0 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+.tunelito-mermaid[data-mermaid-state="rendered"] .tunelito-mermaid-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.tunelito-mermaid[data-mermaid-state="error"] {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+.tunelito-mermaid[data-mermaid-state="error"] .tunelito-mermaid-status {
+  color: #991b1b;
+  font-weight: 600;
+}
+.tunelito-mermaid details {
+  margin-top: 0.75rem;
+}
+.tunelito-mermaid details pre {
+  margin: 0.75rem 0 0;
+}
 .tunelito-markdown table {
   width: 100%;
   border-collapse: collapse;
@@ -129,31 +179,57 @@ body {
   .tunelito-markdown th {
     background: #243044;
   }
+  .tunelito-mermaid {
+    border-color: #334155;
+    background: #111827;
+  }
+  .tunelito-mermaid-status {
+    color: #cbd5e1;
+  }
+  .tunelito-mermaid[data-mermaid-state="error"] {
+    border-color: #f87171;
+    background: #351b22;
+  }
+  .tunelito-mermaid[data-mermaid-state="error"] .tunelito-mermaid-status {
+    color: #fecaca;
+  }
 }
 `;
 
-const markdown = new Marked({
-  gfm: true,
-  renderer: {
-    html(token) {
-      return escapeHtml(token?.raw || token?.text || "");
+function createMarkdownParser() {
+  let hasMermaid = false;
+  const defaultRenderer = new Renderer();
+  const parser = new Marked({
+    gfm: true,
+    renderer: {
+      html(token) {
+        return escapeHtml(token?.raw || token?.text || "");
+      },
+      link(token) {
+        const href = safeHref(token?.href, { media: false });
+        const text = this.parser.parseInline(token?.tokens || []);
+        if (!href) return text;
+        const title = token?.title ? ` title="${escapeAttribute(token.title)}"` : "";
+        return `<a href="${escapeAttribute(href)}"${title}>${text}</a>`;
+      },
+      image(token) {
+        const src = safeHref(token?.href, { media: true });
+        const alt = escapeAttribute(token?.text || "");
+        if (!src) return alt;
+        const title = token?.title ? ` title="${escapeAttribute(token.title)}"` : "";
+        return `<img src="${escapeAttribute(src)}" alt="${alt}"${title}>`;
+      },
+      code(token) {
+        if (String(token?.lang || "").trim().toLowerCase() !== "mermaid") {
+          return defaultRenderer.code.call(this, token);
+        }
+        hasMermaid = true;
+        return renderMermaidFigure(token?.text || "");
+      },
     },
-    link(token) {
-      const href = safeHref(token?.href, { media: false });
-      const text = this.parser.parseInline(token?.tokens || []);
-      if (!href) return text;
-      const title = token?.title ? ` title="${escapeAttribute(token.title)}"` : "";
-      return `<a href="${escapeAttribute(href)}"${title}>${text}</a>`;
-    },
-    image(token) {
-      const src = safeHref(token?.href, { media: true });
-      const alt = escapeAttribute(token?.text || "");
-      if (!src) return alt;
-      const title = token?.title ? ` title="${escapeAttribute(token.title)}"` : "";
-      return `<img src="${escapeAttribute(src)}" alt="${alt}"${title}>`;
-    },
-  },
-});
+  });
+  return { parser, hasMermaid: () => hasMermaid };
+}
 
 export function isMarkdownPath(pathname) {
   return /\.md$/i.test(String(pathname || ""));
@@ -161,9 +237,16 @@ export function isMarkdownPath(pathname) {
 
 export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown page", cssHref = "" } = {}) {
   const title = String(sourceName || "Markdown page");
-  const body = markdown.parse(String(markdownSource || "").replace(/^\uFEFF/, ""));
+  const markdown = createMarkdownParser();
+  const body = markdown.parser.parse(String(markdownSource || "").replace(/^\uFEFF/, ""));
   const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
   const customCss = customCssHref ? `  <link rel="stylesheet" href="${escapeAttribute(customCssHref)}">\n` : "";
+  const mermaidScripts = markdown.hasMermaid()
+    ? [
+        `  <script src="${MERMAID_LIBRARY_ROUTE}" defer></script>`,
+        `  <script src="${MERMAID_CLIENT_ROUTE}" defer></script>`,
+      ]
+    : [];
 
   return [
     "<!doctype html>",
@@ -176,12 +259,27 @@ export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown 
     DEFAULT_MARKDOWN_CSS.trim(),
     "  </style>",
     customCss.trimEnd(),
+    ...mermaidScripts,
     "</head>",
     "<body>",
     `  <main class="tunelito-markdown" data-tunelito-source-type="markdown">\n${body.trimEnd()}\n  </main>`,
     "</body>",
     "</html>",
   ].filter((line) => line !== "").join("\n");
+}
+
+function renderMermaidFigure(source) {
+  const escapedSource = escapeHtml(source);
+  return [
+    '<figure class="tunelito-mermaid" data-tunelito-mermaid data-mermaid-state="source">',
+    '  <div class="tunelito-mermaid-canvas" aria-hidden="true"></div>',
+    '  <figcaption class="tunelito-mermaid-status">Mermaid diagram source. Diagram rendering requires JavaScript.</figcaption>',
+    "  <details open>",
+    "    <summary>View Mermaid source</summary>",
+    `    <pre><code class="language-mermaid">${escapedSource}\n</code></pre>`,
+    "  </details>",
+    "</figure>",
+  ].join("\n");
 }
 
 export function normalizeMarkdownCssHref(value, { throwOnUnsafe = true } = {}) {

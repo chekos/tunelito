@@ -2,16 +2,19 @@ import { createServer } from "node:http";
 import { EventEmitter } from "node:events";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, readdirSync, realpathSync, statSync, watch } from "node:fs";
-import { basename, dirname, extname, relative, resolve, sep } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
-import { isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
+import { MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
+const MERMAID_CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "mermaid-client.js");
+const MERMAID_LIBRARY_PATH = join(dirname(createRequire(import.meta.url).resolve("mermaid")), "mermaid.min.js");
 export const ACCESS_KEY_PARAM = "tunelito_key";
 export const PAGE_PARAM = "tunelito_page";
 const REVIEWER_ID_PARAM = "tunelito_reviewer_id";
@@ -370,6 +373,16 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
 
   if (pathname === CLIENT_ROUTE) {
     sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === MERMAID_LIBRARY_ROUTE) {
+    sendFile(res, MERMAID_LIBRARY_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === MERMAID_CLIENT_ROUTE) {
+    sendFile(res, MERMAID_CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
     return;
   }
 

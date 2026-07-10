@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Renders fenced `mermaid` blocks as diagrams in single-file and folder Markdown reviews, using a packaged same-origin runtime with strict security settings and a readable source fallback when rendering fails.
+
 ## 0.17.0 - 2026-06-29
 
 - Adds first-class Markdown review targets: `.md` files and Markdown pages inside folder reviews render as readable, commentable pages with live reload and optional `--markdown-css` styling.
