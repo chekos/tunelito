@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0 - 2026-07-10
 
 - Renders fenced `mermaid` blocks as diagrams in single-file and folder Markdown reviews, using a packaged same-origin runtime with strict security settings and a readable source fallback when rendering fails.
 
