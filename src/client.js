@@ -1976,12 +1976,16 @@
   }
 
   function getTextNodes(root) {
+    const commentSurface = root === document.body
+      ? document.querySelector("[data-tunelito-comment-surface]") || root
+      : root;
     const nodes = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    const walker = document.createTreeWalker(commentSurface, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
         if (parent.closest("#tunelito-root")) return NodeFilter.FILTER_REJECT;
+        if (parent.closest("[data-tunelito-comment-ignore]")) return NodeFilter.FILTER_REJECT;
         if (parent.closest("script, style, noscript, textarea, input")) return NodeFilter.FILTER_REJECT;
         if (!node.textContent) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
@@ -2023,8 +2027,10 @@
   }
 
   function isSelectionInsideTunelito(selection) {
-    const node = selection.anchorNode;
-    return Boolean(node && closestElement(node)?.closest?.("#tunelito-root"));
+    const boundaries = [selection.anchorNode, selection.focusNode].filter(Boolean);
+    if (boundaries.some((node) => closestElement(node)?.closest?.("#tunelito-root, [data-tunelito-comment-ignore]"))) return true;
+    const commentSurface = document.querySelector("[data-tunelito-comment-surface]");
+    return Boolean(commentSurface && boundaries.some((node) => !commentSurface.contains(node)));
   }
 
   function closestElement(node) {

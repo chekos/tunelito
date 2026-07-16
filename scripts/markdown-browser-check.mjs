@@ -25,7 +25,7 @@ const accessibilityFixtures = [
   "examples/markdown/kitchen-sink.md",
 ];
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ headless: true });
 try {
   for (const fixture of markerFixtures) await verifyMarkerFixture(fixture);
   for (const fixture of accessibilityFixtures) await verifyAccessibility(fixture);
@@ -196,6 +196,19 @@ async function verifyResponsiveAndComments() {
     const collapse = page.locator(".tunelito-properties-collapse");
     const tab = page.locator(".tunelito-properties-tab");
     assert.equal(await collapse.getAttribute("aria-expanded"), "true", "desktop metadata should start open");
+    assert.equal(await drawer.getAttribute("data-tunelito-comment-ignore"), "", "metadata chrome must stay outside persisted comment anchors");
+    assert.equal(await page.locator(".tunelito-markdown").getAttribute("data-tunelito-comment-surface"), "", "Markdown article must own the anchorable comment text");
+    await drawer.locator(".tunelito-properties-title").evaluate((title) => {
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".selection").classList.contains("visible")), false, "generated metadata text must not open the comment composer");
+    await page.evaluate(() => window.getSelection().removeAllRanges());
     await collapse.click();
     assert.equal(await drawer.getAttribute("aria-hidden"), "true");
     await tab.click();

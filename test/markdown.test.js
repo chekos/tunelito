@@ -24,6 +24,8 @@ test("renderMarkdownDocument moves valid YAML front matter into the left propert
 
   assert.match(html, /class="tunelito-has-properties tunelito-properties-open"/);
   assert.match(html, /id="tunelito-properties"/);
+  assert.match(html, /id="tunelito-properties"[^>]*data-tunelito-comment-ignore/);
+  assert.match(html, /data-tunelito-source-type="markdown" data-tunelito-comment-surface/);
   assert.match(html, /Properties · 3/);
   assert.match(html, /class="tunelito-property-pill">markdown/);
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
@@ -109,6 +111,7 @@ test("renderMarkdownDocument adds a desktop document-map shell with theme and re
 
   assert.match(html, /aria-label="Document map"/);
   assert.match(html, /data-tunelito-document-map/);
+  assert.match(html, /data-tunelito-document-map data-tunelito-comment-ignore/);
   assert.match(html, /prefers-color-scheme: dark/);
   assert.match(html, /prefers-reduced-motion: reduce/);
   assert.match(html, /max-width: 760px/);

@@ -702,8 +702,8 @@ export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown 
     `<body${bodyClasses}>`,
     '  <div class="tunelito-page-frame">',
     properties,
-    `    <main class="tunelito-markdown" data-tunelito-source-type="markdown">\n${body.trimEnd()}\n    </main>`,
-    '    <nav class="tunelito-document-map" aria-label="Document map" data-tunelito-document-map></nav>',
+    `    <main class="tunelito-markdown" data-tunelito-source-type="markdown" data-tunelito-comment-surface>\n${body.trimEnd()}\n    </main>`,
+    '    <nav class="tunelito-document-map" aria-label="Document map" data-tunelito-document-map data-tunelito-comment-ignore></nav>',
     "  </div>",
     "</body>",
     "</html>",
@@ -740,10 +740,10 @@ function renderProperties(frontMatter) {
     : `<dl class="tunelito-properties-list">\n${frontMatter.properties.map(renderProperty).join("\n")}\n      </dl>`;
 
   return [
-    '    <button class="tunelito-properties-tab" type="button" aria-controls="tunelito-properties" aria-expanded="true" hidden>',
+    '    <button class="tunelito-properties-tab" type="button" aria-controls="tunelito-properties" aria-expanded="true" data-tunelito-comment-ignore hidden>',
     `      Properties · ${escapeHtml(countLabel)}`,
     "    </button>",
-    '    <aside class="tunelito-properties" id="tunelito-properties" aria-label="Document properties">',
+    '    <aside class="tunelito-properties" id="tunelito-properties" aria-label="Document properties" data-tunelito-comment-ignore>',
     '      <header class="tunelito-properties-header">',
     "        <div>",
     '          <p class="tunelito-properties-kicker">Document metadata</p>',
