@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.0 - 2026-07-16
 
 - Adds a polished, collapsible left-side Properties drawer for bounded leading YAML front matter, with ordered values, nested metadata, reload persistence, dark mode, responsive behavior, and a readable invalid-YAML fallback.
 - Renders common Obsidian wiki references as escaped, semantically honest unresolved references while preserving embeds, code, escaped literals, and raw-HTML boundaries for future vault-resolution work.

@@ -138,7 +138,7 @@ Properties open on a first desktop visit and remember their collapsed/open prefe
 ## CLI
 
 ```text
-Tunelito 0.18.0
+Tunelito 0.19.0
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
