@@ -82,6 +82,16 @@ async function verifyMarkerFixture(relativePath) {
         H1: "36px", H2: "29px", H3: "23px", H4: "17px", H5: "14px", H6: "12px",
       });
       assert.equal(new Set(mapping.headingLevels.map(({ id }) => id)).size, mapping.headingLevels.length, "heading ids must be unique");
+      const dialGeometry = await page.locator("[data-tunelito-document-map]").evaluate((ruler) => {
+        const track = ruler.querySelector(".tunelito-document-map-track");
+        const bounds = track.getBoundingClientRect();
+        return {
+          height: bounds.height,
+          centerDelta: Math.abs((bounds.top + bounds.bottom) / 2 - innerHeight / 2),
+        };
+      });
+      assert.equal(Math.round(dialGeometry.height), 500, "desktop document map should use the compact 500px dial height");
+      assert.ok(dialGeometry.centerDelta <= 1, "document map dial should be vertically centered");
       const h6 = page.locator('.tunelito-ruler-marker[data-block-type="Heading 6"]');
       await h6.click();
       assert.match(await page.evaluate(() => location.hash), /%E6%97%A5%E6%9C%AC%E8%AA%9E|日本語/);
@@ -193,6 +203,18 @@ async function verifyResponsiveAndComments() {
     assert.equal(await page.locator("#tunelito-properties").getAttribute("aria-hidden"), "true", "narrow metadata should start collapsed");
     assert.equal(await page.locator("[data-tunelito-document-map]").evaluate((node) => getComputedStyle(node).display), "none", "mobile should hide the desktop ruler");
   }, { viewport: { width: 720, height: 900 } });
+
+  await withFixture("examples/markdown/heading-ladder.md", async (page) => {
+    const geometry = await page.locator(".tunelito-document-map-track").evaluate((track) => {
+      const bounds = track.getBoundingClientRect();
+      return {
+        height: bounds.height,
+        centerDelta: Math.abs((bounds.top + bounds.bottom) / 2 - innerHeight / 2),
+      };
+    });
+    assert.equal(Math.round(geometry.height), 440, "short desktop viewports should preserve 60px breathing room above and below the dial");
+    assert.ok(geometry.centerDelta <= 1, "short-viewport dial should remain vertically centered");
+  }, { viewport: { width: 900, height: 560 } });
 }
 
 async function windowDispatches(page) {

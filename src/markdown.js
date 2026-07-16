@@ -246,13 +246,16 @@ body {
   --ruler-unread: #64748b;
   --ruler-consumed: #dbe2e8;
   --ruler-accent: #0f766e;
+  --ruler-track-height: min(500px, calc(100vh - 120px));
   position: fixed;
-  top: 22px;
+  top: 50%;
   right: 0;
-  bottom: 22px;
+  bottom: auto;
   z-index: 2147483598;
   width: 58px;
+  height: var(--ruler-track-height);
   color: #334155;
+  transform: translateY(-50%);
   transition: width 160ms ease, right 160ms ease, opacity 160ms ease;
 }
 .tunelito-document-map:hover,
@@ -262,11 +265,11 @@ body {
 }
 .tunelito-document-map-track {
   position: absolute;
-  inset: 36px 0 18px;
+  inset: 0;
 }
 .tunelito-ruler-toggle {
   position: absolute;
-  top: 0;
+  top: -40px;
   right: 13px;
   width: 30px;
   height: 28px;
@@ -356,9 +359,9 @@ body {
 }
 .tunelito-ruler-scrubber {
   position: absolute;
-  top: 36px;
+  top: 0;
   right: 10px;
-  bottom: 18px;
+  bottom: 0;
   width: 40px;
   height: auto;
   border: 0;

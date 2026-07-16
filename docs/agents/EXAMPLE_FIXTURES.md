@@ -56,6 +56,8 @@ For Markdown-specific changes, use this smaller risk-based set:
 
 The ruler treats h5 and h6 as headings rather than dropping them: h5 uses a 14px tick and h6 uses a 12px tick, both slightly longer than the 10px ordinary-content tick. Both levels receive labels, stable ids, hash navigation, and the same keyboard/current-section behavior as h1–h4.
 
+The desktop ruler is a vertically centered dial rather than a full-height rail. Its track is 500px tall when space permits and contracts to `calc(100vh - 120px)` on shorter desktop viewports, leaving 60px above and below. Browser coverage should verify both the capped and contracted geometry before the ruler disappears at the mobile breakpoint.
+
 If a new injected-UI feature can affect all page shapes, run the full set. If you skip a relevant fixture, say why in the handoff.
 
 ## How To Run
