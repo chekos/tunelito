@@ -27,6 +27,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: npm run ci
       - id: release
         run: node scripts/npm-release-tag.mjs "${{ inputs.version }}" >> "$GITHUB_OUTPUT"

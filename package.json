@@ -21,13 +21,14 @@
     "SECURITY.md"
   ],
   "scripts": {
-    "ci": "npm run check && npm run agent:check && npm run docs:check && npm test && npm run smoke:check && npm run pack:check",
+    "ci": "npm run check && npm run agent:check && npm run docs:check && npm test && npm run browser:check && npm run smoke:check && npm run pack:check",
     "test": "node --test",
     "check": "node --check bin/tunelito.js && node --check src/*.js scripts/*.mjs test/*.test.js",
     "agent:check": "node --check .claude/hooks/*.mjs .claude/scripts/*.mjs && node .claude/scripts/validate-agent-config.mjs",
     "docs:check": "node .claude/scripts/validate-mintlify-docs.mjs",
     "docs:dev": "cd docs-site && npx mint dev --no-open",
     "docs:validate": "cd docs-site && npx mint validate --disable-openapi",
+    "browser:check": "node scripts/markdown-browser-check.mjs",
     "release:check": "node scripts/release-check.mjs",
     "smoke:check": "node scripts/smoke-check.mjs",
     "pack:check": "node scripts/package-smoke-check.mjs"
@@ -59,6 +60,11 @@
   },
   "dependencies": {
     "marked": "^18.0.5",
-    "mermaid": "11.16.0"
+    "mermaid": "11.16.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "playwright": "^1.61.1"
   }
 }

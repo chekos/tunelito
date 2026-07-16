@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 240" role="img" aria-labelledby="title description">
+  <title id="title">Document map concept</title>
+  <desc id="description">A central page with metadata marks on the left and ruler ticks on the right.</desc>
+  <rect width="720" height="240" rx="20" fill="#e8f2ef"/>
+  <rect x="190" y="24" width="340" height="192" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+  <g stroke="#0f766e" stroke-linecap="round">
+    <path d="M40 54h92M40 84h62M40 114h78M40 144h50M40 174h88" stroke-width="8"/>
+    <path d="M588 52h84M620 78h52M636 104h36M606 130h66M642 156h30M626 182h46" stroke-width="3"/>
+  </g>
+  <g fill="#334155">
+    <rect x="226" y="58" width="210" height="12" rx="6"/>
+    <rect x="226" y="90" width="266" height="7" rx="3.5" opacity=".52"/>
+    <rect x="226" y="110" width="238" height="7" rx="3.5" opacity=".52"/>
+    <rect x="226" y="145" width="150" height="10" rx="5"/>
+    <rect x="226" y="174" width="254" height="7" rx="3.5" opacity=".52"/>
+  </g>
+</svg>

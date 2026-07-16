@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer, isIgnoredWatchFilename, isLocalOwnerRequest } from "../src/server.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE } from "../src/inject.js";
-import { MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE } from "../src/markdown.js";
+import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE } from "../src/markdown.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
@@ -72,9 +72,15 @@ test("server renders a Markdown file as an injected commentable page", async () 
   const markdownPath = join(dir, "notes.md");
   const commentsPath = join(dir, "notes.comments.md");
   writeFileSync(markdownPath, [
+    "---",
+    "status: active",
+    "tags: [review, markdown]",
+    "---",
+    "",
     "# Morning notes",
     "",
     "Review **this memo** before standup.",
+    "See [[Project brief|the project brief]] for context.",
     "",
     "<script>alert('raw html should be escaped')</script>",
     "",
@@ -105,6 +111,11 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(html, /<h1>Morning notes<\/h1>/);
     assert.match(html, /<strong>this memo<\/strong>/);
     assert.match(html, /data-tunelito-source-type="markdown"/);
+    assert.match(html, /id="tunelito-properties"/);
+    assert.match(html, /Properties · 2/);
+    assert.match(html, /data-tunelito-wikilink="Project brief">the project brief/);
+    assert.doesNotMatch(html, /<p>status: active/);
+    assert.match(html, /aria-label="Document map"/);
     assert.match(html, /<link rel="stylesheet" href="\/brand\.css">/);
     assert.match(html, new RegExp(CLIENT_ROUTE));
     assert.match(html, /&lt;script&gt;alert/);
@@ -115,6 +126,17 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(html, /<pre><code class="language-js">/);
     assert.match(html, new RegExp(MERMAID_LIBRARY_ROUTE));
     assert.match(html, new RegExp(MERMAID_CLIENT_ROUTE));
+    assert.match(html, new RegExp(MARKDOWN_CLIENT_ROUTE));
+
+    const markdownClient = await fetch(new URL(MARKDOWN_CLIENT_ROUTE, instance.localUrl));
+    assert.equal(markdownClient.headers.get("content-type"), "text/javascript; charset=utf-8");
+    const markdownClientSource = await markdownClient.text();
+    assert.match(markdownClientSource, /aria-current/);
+    assert.match(markdownClientSource, /ArrowDown/);
+    assert.match(markdownClientSource, /prefers-reduced-motion/);
+    assert.match(markdownClientSource, /tunelito:comments-panel/);
+    assert.match(markdownClientSource, /H5: "14px"/);
+    assert.match(markdownClientSource, /H6: "12px"/);
 
     const mermaidLibrary = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.localUrl));
     assert.equal(mermaidLibrary.headers.get("content-type"), "text/javascript; charset=utf-8");
@@ -125,6 +147,8 @@ test("server renders a Markdown file as an injected commentable page", async () 
     const mermaidClientSource = await mermaidClient.text();
     assert.match(mermaidClientSource, /securityLevel: "strict"/);
     assert.match(mermaidClientSource, /startOnLoad: false/);
+    assert.match(mermaidClientSource, /themeVariables/);
+    assert.match(mermaidClientSource, /primaryTextColor/);
     assert.match(mermaidClientSource, /Could not render Mermaid diagram/);
 
     const named = await fetch(new URL("/notes.md", instance.localUrl));
@@ -976,6 +1000,10 @@ test("server can require a review access key", async () => {
     assert.equal(clientDenied.status, 401);
     await clientDenied.text();
 
+    const markdownClientDenied = await fetch(new URL(MARKDOWN_CLIENT_ROUTE, instance.originUrl));
+    assert.equal(markdownClientDenied.status, 401);
+    await markdownClientDenied.text();
+
     const mermaidDenied = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.originUrl));
     assert.equal(mermaidDenied.status, 401);
     await mermaidDenied.text();
@@ -987,6 +1015,10 @@ test("server can require a review access key", async () => {
     const clientAllowed = await fetch(new URL("/__tunelito/client.js?tunelito_key=secret", instance.originUrl));
     assert.equal(clientAllowed.status, 200);
     assert.match(await clientAllowed.text(), /WebSocket/);
+
+    const markdownClientAllowed = await fetch(new URL(`${MARKDOWN_CLIENT_ROUTE}?tunelito_key=secret`, instance.originUrl));
+    assert.equal(markdownClientAllowed.status, 200);
+    assert.match(await markdownClientAllowed.text(), /Document map/);
 
     const mermaidAllowed = await fetch(new URL(`${MERMAID_LIBRARY_ROUTE}?tunelito_key=secret`, instance.originUrl));
     assert.equal(mermaidAllowed.status, 200);

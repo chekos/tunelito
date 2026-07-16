@@ -1,6 +1,6 @@
 # Tunelito Examples
 
-Tunelito's examples are small HTML fixtures. Use them for demos, screenshots, and regression checks when the injected review UI changes. Each fixture has a distinct visual system so screenshots do not all collapse into the same generic interface style.
+Tunelito's examples are durable HTML and Markdown fixtures. Use them for demos, screenshots, accessibility checks, and browser regression work. Each fixture answers a diagnostic question; do not replace the edge cases with interchangeable demo copy.
 
 ## Fixture Taxonomy
 
@@ -65,3 +65,32 @@ tunelito examples/project-brief.html --no-tunnel --open
 - For overlay placement or viewport behavior: `slide-deck.html`, `dashboard-spa.html`
 - For comments that become local-agent work: `project-brief.html`, `dashboard-spa.html`, `research-paper.html`
 - For docs screenshots: start with `project-brief.html`, then use `slide-deck.html` and `dashboard-spa.html` for contrast
+
+## Markdown Fixture Taxonomy
+
+Run a single Markdown fixture with the normal local server shape:
+
+```bash
+tunelito examples/markdown/frontmatter-flat.md --no-tunnel --open
+```
+
+Run the tiny vault in folder/index mode:
+
+```bash
+tunelito examples/markdown-vault --no-tunnel --open
+```
+
+| Fixture | Diagnostic question | Run command |
+| --- | --- | --- |
+| `markdown/minimal-text.md` | Does the smallest heading-free document produce one real paragraph tick? | `tunelito examples/markdown/minimal-text.md --no-tunnel --open` |
+| `markdown/paragraphs-only.md` | Do equal paragraph ticks, consumption states, and a later thematic break behave without false front matter? | `tunelito examples/markdown/paragraphs-only.md --no-tunnel --open` |
+| `markdown/single-long-paragraph.md` | Does one paragraph spanning many viewports remain exactly one ruler item? | `tunelito examples/markdown/single-long-paragraph.md --no-tunnel --open` |
+| `markdown/heading-ladder.md` | Are h1–h6 lengths, labels, stable ids, collisions, Unicode, punctuation, and truncation explicit? | `tunelito examples/markdown/heading-ladder.md --no-tunnel --open` |
+| `markdown/frontmatter-flat.md` | Do typical Obsidian scalars, dates, arrays, tags, and aliases render once in the drawer? | `tunelito examples/markdown/frontmatter-flat.md --no-tunnel --open` |
+| `markdown/frontmatter-nested.md` | Do nested maps, mixed arrays, nulls, multiline strings, long values, and hostile-looking text remain readable and escaped? | `tunelito examples/markdown/frontmatter-nested.md --no-tunnel --open` |
+| `markdown/frontmatter-invalid.md` | Does invalid YAML expose an accessible, escaped source fallback while preserving the article? | `tunelito examples/markdown/frontmatter-invalid.md --no-tunnel --open` |
+| `markdown/kitchen-sink.md` | Do all ruler block types, transform boundaries, a local image, Mermaid, wiki links, and metadata coexist? | `tunelito examples/markdown/kitchen-sink.md --no-tunnel --open` |
+| `markdown/ruler-density.md` | Do at least 150 real blocks remain accurate and usable without per-scroll layout work? | `tunelito examples/markdown/ruler-density.md --no-tunnel --open` |
+| `markdown-vault/index.md` | Do folder mode, plain/aliased/fragment/unresolved wiki references, code boundaries, and literal embeds behave together? | `tunelito examples/markdown-vault --no-tunnel --open` |
+
+`minimal-text.md`, `paragraphs-only.md`, and `single-long-paragraph.md` intentionally have no h1. They are structural diagnostics, so the normal useful-h1 expectation does not apply. Serving these fixtures must not create committed comments, session files, screenshots, tunnel artifacts, or source edits.

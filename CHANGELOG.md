@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Adds a polished, collapsible left-side Properties drawer for bounded leading YAML front matter, with ordered values, nested metadata, reload persistence, dark mode, responsive behavior, and a readable invalid-YAML fallback.
+- Renders common Obsidian wiki references as escaped, semantically honest unresolved references while preserving embeds, code, escaped literals, and raw-HTML boundaries for future vault-resolution work.
+- Adds a keyboard-accessible, vertically centered right-edge Markdown document-map dial with transient hover expansion, paragraph progress, h1-h6 hierarchy, click navigation, responsive comments-panel coexistence, dark mode, and reduced-motion support.
+- Adds the durable Markdown fixture taxonomy, automated browser and accessibility coverage, and real UI screenshot sources for metadata, wiki references, document-map density, long-form content, Mermaid, and HTML-shell regression checks.
+
 ## 0.18.0 - 2026-07-10
 
 - Renders fenced `mermaid` blocks as diagrams in single-file and folder Markdown reviews, using a packaged same-origin runtime with strict security settings and a readable source fallback when rendering fails.
