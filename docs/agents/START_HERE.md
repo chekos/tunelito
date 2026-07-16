@@ -33,7 +33,7 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 - `src/ws.js`: minimal WebSocket hub.
 - `src/tunnel.js`: Cloudflare Tunnel process management.
 - `test/`: Node test runner coverage.
-- `examples/`: review fixtures for UI, screenshot, accessibility, and regression checks.
+- `examples/`: HTML and Markdown review fixtures for UI, screenshot, accessibility, and regression checks; use `docs/agents/EXAMPLE_FIXTURES.md` as the canonical inventory.
 - `.claude/`: Claude Code hooks, project skills, and subagents.
 - `docs/agents/SKILLS.md`: catalog of project skills and validation policy.
 - `docs/agents/EXAMPLE_FIXTURES.md`: repo-local fixture taxonomy and when to use each example.

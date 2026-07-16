@@ -23,6 +23,9 @@ The CLI owns process orchestration:
 The server owns local IO and transport:
 
 - serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a folder root with injected HTML/Markdown pages
+- parse only bounded, complete, leading YAML front matter for the served Markdown response; keep malformed metadata visible as escaped review UI and leave the source file untouched
+- turn supported Obsidian wiki syntax into escaped, semantically unresolved inline references without performing vault-wide lookup or inventing link destinations
+- serve the fixed packaged Markdown interaction client behind normal review-key authorization
 - turn exact `mermaid` code fences into source-preserving diagram figures and serve the fixed packaged Mermaid runtime/bootstrap routes behind normal review-key authorization
 - serve non-hidden assets only from the selected file directory or folder root
 - inject the review client at response time
@@ -93,6 +96,9 @@ The browser client owns reviewer interaction:
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
+- manage the Markdown Properties drawer without writing state into the source document
+- build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, and provide h1-h6 and paragraph navigation with scroll-progress state
+- coordinate the Markdown drawer, document map, Mermaid completion, and comments panel across responsive, dark-mode, keyboard, and reduced-motion states
 - initialize Mermaid once per rendered Markdown page with strict security and render each pending figure once, preserving readable source on success or failure
 
 ## Invariants
@@ -115,6 +121,9 @@ The browser client owns reviewer interaction:
 - Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.
+- Keep Markdown front-matter parsing bounded and presentation-only; never evaluate metadata or let it choose file or request paths.
+- Keep unresolved wiki references semantically honest: escaped visible text and target metadata are allowed, but fake `href` values and vault-wide filesystem discovery are not.
+- Build document-map markers only from rendered blocks in the selected Markdown response; do not mutate source Markdown to add anchors or progress state.
 - Keep Mermaid local/offline and same-origin; do not add a CDN dependency or allow request paths to select arbitrary files from installed dependencies.
 
 ## Extension Points

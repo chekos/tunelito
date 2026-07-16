@@ -40,8 +40,12 @@ Expected behavior:
 - Remove strict CSP meta tags only from the served response so the same-origin client can run.
 - Avoid leaking the review key in unnecessary places.
 - Serve Mermaid and its bootstrap from fixed internal routes behind the existing review-key/cookie gate; do not expose arbitrary dependency paths.
+- Serve the packaged Markdown interaction client from a fixed internal route behind the same review-key/cookie gate; do not derive runtime paths from front matter or wiki targets.
 - Initialize Mermaid with `securityLevel: "strict"`, `startOnLoad: false`, HTML labels and click behavior disabled, bounded text/edge limits, and controlled error rendering.
 - Keep escaped Mermaid source available as the no-JavaScript/invalid-syntax fallback, and never fetch Mermaid from a CDN.
+- Parse only complete leading YAML front matter with explicit size, nesting, and alias bounds. Escape keys and values, keep invalid YAML readable, and never evaluate tags or use metadata to select files, URLs, or code paths.
+- Escape wiki targets and labels, preserve wiki syntax inside code, escaped literals, raw HTML, and unsupported embeds, and do not invent navigable `href` values before a real vault-resolution policy exists.
+- Derive the document map from the rendered page only. Generated heading ids and reading state belong to the served response and browser memory, never the source Markdown.
 
 ## Tunnel Behavior
 

@@ -125,6 +125,16 @@ tunelito ./page.html --live
 - Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--out`.
 - `--live` keeps comments in memory only; the session disappears when the local server exits.
 
+## Markdown Review Surfaces
+
+Markdown reviews keep the source file untouched while adding three presentation-only surfaces to the served response:
+
+- A leading YAML front-matter mapping appears in a collapsible left `Properties` drawer. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure.
+- Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
+- A desktop document map at the right edge derives one tick from every real top-level heading, paragraph, list, blockquote, code block, table, figure, Mermaid figure, or thematic break. Heading ticks step from h1 (longest) through h6; h5 and h6 remain navigable 14px and 12px heading marks rather than disappearing. The current block is teal, consumed marks recede toward the theme background, and heading labels expand on hover or focus. Every tick navigates; Arrow keys, Page keys, Home, End, and Escape support keyboard use without adding paragraph hashes or a visual progress number.
+
+Properties open on a first desktop visit and remember their collapsed/open preference across full-page reloads. Narrow layouts start with a collapsed sheet, and the document map is hidden at 760px and below. On wide desktops the map shifts beside an open comments panel; at narrower desktop widths it temporarily hides while comments are open. Both surfaces respect dark mode and `prefers-reduced-motion`, and `--markdown-css` still loads after the built-in Markdown styles.
+
 ## CLI
 
 ```text
@@ -210,12 +220,15 @@ Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing 
 
 ## How It Works
 
-Tunelito serves HTML from disk or renders Markdown into a readable page, then injects a small same-origin annotation client into the response. Fenced `mermaid` blocks in Markdown render automatically as diagrams; other fenced languages remain ordinary code blocks. For folder targets, every served `.html`, `.htm`, or `.md` page gets the client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
+Tunelito serves HTML from disk or renders Markdown into a readable page, then injects small same-origin clients into the response. Markdown front matter, wiki references, Mermaid, and the document map are rendered or discovered only in the served page. For folder targets, every served `.html`, `.htm`, or `.md` page gets the annotation client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
 
 The server also:
 
 - serves sibling assets relative to the selected file, or non-hidden files within the selected folder
 - renders Markdown with a built-in readable stylesheet, optionally adding `--markdown-css <href>` for team styling
+- parses bounded leading YAML front matter into an escaped, reload-persistent left properties drawer with a readable invalid-YAML fallback
+- renders common Obsidian wiki references as semantically honest inline references without vault-wide resolution or embed support
+- builds a keyboard-accessible, opacity-based desktop document map from the real rendered Markdown blocks, including explicit h1–h6 navigation
 - renders fenced `mermaid` blocks from a packaged same-origin runtime, with Mermaid strict security, bounded diagram complexity, and an accessible source fallback if JavaScript or diagram syntax fails
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown

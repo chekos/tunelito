@@ -115,6 +115,22 @@ Required:
 
 For mobile, visual, accessibility, screenshot, overlay, or text-selection changes, run the relevant fixture regression set from `docs/agents/EXAMPLE_FIXTURES.md`. Include desktop and mobile viewport checks when layout or overlay placement can change.
 
+For rendered Markdown UI changes, also run:
+
+```bash
+npm run browser:check
+```
+
+Required Markdown subsets:
+
+- renderer shell or no-heading behavior: `minimal-text.md`, `paragraphs-only.md`, `single-long-paragraph.md`
+- front matter or drawer behavior: `frontmatter-flat.md`, `frontmatter-nested.md`, `frontmatter-invalid.md`, `kitchen-sink.md`
+- wiki-link behavior or transform boundaries: `kitchen-sink.md`, `markdown-vault/index.md`
+- document ruler hierarchy/navigation: `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md`, `kitchen-sink.md`, `ruler-density.md`
+- folder/index behavior: serve `examples/markdown-vault/`
+
+The committed-fixture validator and production-renderer smoke run in `npm test`; do not replace them with temporary Markdown strings. Capture real-browser screenshot evidence from the committed fixtures for visual changes.
+
 ## Packaging Changes
 
 Required:

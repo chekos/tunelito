@@ -8,11 +8,12 @@ import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
-import { MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
+import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
+const MARKDOWN_CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "markdown-client.js");
 const MERMAID_CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "mermaid-client.js");
 const MERMAID_LIBRARY_PATH = join(dirname(createRequire(import.meta.url).resolve("mermaid")), "mermaid.min.js");
 export const ACCESS_KEY_PARAM = "tunelito_key";
@@ -373,6 +374,11 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
 
   if (pathname === CLIENT_ROUTE) {
     sendFile(res, CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === MARKDOWN_CLIENT_ROUTE) {
+    sendFile(res, MARKDOWN_CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
     return;
   }
 
