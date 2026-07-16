@@ -95,7 +95,7 @@ For UI changes, verify the relevant fixtures in a real browser when available:
 - SPA routes and slide controls still change state
 - text selection and page notes work on the changed surfaces
 
-The useful-h1 check intentionally does not apply to `minimal-text.md`, `paragraphs-only.md`, or `single-long-paragraph.md`; their missing heading is the regression condition. For ruler work, also run `npm run browser:check` to verify real marker counts/targets, h1–h6 ids and lengths, reduced motion, horizontal overflow, and axe WCAG 2 A/AA rules.
+The useful-h1 check intentionally does not apply to `minimal-text.md`, `paragraphs-only.md`, or `single-long-paragraph.md`; their missing heading is the regression condition. For ruler work, also run `npm run browser:check` to verify real marker counts/targets, h1–h6 ids and lengths, hover retreat after pointer navigation, keyboard-only focus expansion, reduced motion, horizontal overflow, and axe WCAG 2 A/AA rules.
 
 Automated tests do not replace this pass. They are the package gate; these fixtures are the human-readable UI gate.
 

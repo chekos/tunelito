@@ -259,32 +259,12 @@ body {
   transition: width 160ms ease, right 160ms ease, opacity 160ms ease;
 }
 .tunelito-document-map:hover,
-.tunelito-document-map:focus-within,
-.tunelito-document-map[data-pinned="true"] {
+.tunelito-document-map:focus-within {
   width: min(300px, 40vw);
 }
 .tunelito-document-map-track {
   position: absolute;
   inset: 0;
-}
-.tunelito-ruler-toggle {
-  position: absolute;
-  top: -40px;
-  right: 13px;
-  width: 30px;
-  height: 28px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  font: 700 18px/1 ui-sans-serif, system-ui, sans-serif;
-}
-.tunelito-ruler-toggle:hover,
-.tunelito-ruler-toggle:focus-visible {
-  color: var(--ruler-accent);
-  outline: 2px solid rgba(20, 184, 166, 0.35);
-  outline-offset: 1px;
 }
 .tunelito-ruler-marker {
   position: absolute;
@@ -302,8 +282,7 @@ body {
   text-decoration: none;
 }
 .tunelito-document-map:hover .tunelito-ruler-marker,
-.tunelito-document-map:focus-within .tunelito-ruler-marker,
-.tunelito-document-map[data-pinned="true"] .tunelito-ruler-marker {
+.tunelito-document-map:focus-within .tunelito-ruler-marker {
   width: calc(var(--ruler-length) + 190px);
 }
 .tunelito-ruler-tick {
@@ -342,8 +321,7 @@ body {
   white-space: nowrap;
 }
 .tunelito-document-map:hover .tunelito-ruler-label,
-.tunelito-document-map:focus-within .tunelito-ruler-label,
-.tunelito-document-map[data-pinned="true"] .tunelito-ruler-label {
+.tunelito-document-map:focus-within .tunelito-ruler-label {
   opacity: 1;
   pointer-events: auto;
   transform: translate(0, -50%);

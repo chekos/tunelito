@@ -92,18 +92,16 @@ async function verifyMarkerFixture(relativePath) {
       });
       assert.equal(Math.round(dialGeometry.height), 500, "desktop document map should use the compact 500px dial height");
       assert.ok(dialGeometry.centerDelta <= 1, "document map dial should be vertically centered");
-      const h6 = page.locator('.tunelito-ruler-marker[data-block-type="Heading 6"]');
-      await h6.click();
-      assert.match(await page.evaluate(() => location.hash), /%E6%97%A5%E6%9C%AC%E8%AA%9E|日本語/);
+      const ruler = page.locator("[data-tunelito-document-map]");
+      const rulerWidth = () => ruler.evaluate((node) => getComputedStyle(node).width);
+      assert.equal(await page.locator(".tunelito-ruler-toggle").count(), 0, "the hover dial should not expose a redundant pin control");
+      assert.equal(await rulerWidth(), "58px", "the resting document map should stay compact");
 
-      const toggle = page.locator(".tunelito-ruler-toggle");
-      await toggle.click();
-      assert.equal(await page.locator("[data-tunelito-document-map]").getAttribute("data-pinned"), "true");
-      await page.keyboard.press("Escape");
-      assert.equal(await page.locator("[data-tunelito-document-map]").getAttribute("data-pinned"), "false");
+      await page.keyboard.press("Tab");
+      assert.equal(await page.locator(".tunelito-ruler-scrubber").evaluate((node) => node === document.activeElement), true, "Tab should enter the document map through its keyboard slider");
+      assert.equal(await rulerWidth(), "300px", "visible keyboard focus should expand the document map");
 
       const scrubber = page.locator(".tunelito-ruler-scrubber");
-      await scrubber.focus();
       await page.keyboard.press("End");
       assert.equal(await scrubber.getAttribute("aria-valuenow"), String(mapping.blockCount));
       await page.keyboard.press("Home");
@@ -111,6 +109,22 @@ async function verifyMarkerFixture(relativePath) {
       await page.keyboard.press("ArrowDown");
       assert.equal(await scrubber.getAttribute("aria-valuenow"), "2");
       assert.match(await scrubber.getAttribute("aria-valuetext"), /^Paragraph 2 of /);
+      await page.keyboard.press("Escape");
+      assert.equal(await rulerWidth(), "58px", "Escape should dismiss the keyboard-expanded document map");
+
+      await ruler.hover();
+      assert.equal(await rulerWidth(), "300px", "hover should expand the document map");
+      const h6 = page.locator('.tunelito-ruler-marker[data-block-type="Heading 6"]');
+      await h6.click();
+      assert.match(await page.evaluate(() => location.hash), /%E6%97%A5%E6%9C%AC%E8%AA%9E|日本語/);
+      await page.mouse.move(100, 100);
+      assert.equal(await h6.evaluate((node) => node === document.activeElement), false, "pointer navigation should release mouse focus from the ruler");
+      assert.equal(await rulerWidth(), "58px", "pointer navigation must retreat when hover leaves");
+
+      await h6.focus();
+      assert.equal(await rulerWidth(), "300px", "keyboard focus should keep heading labels available");
+      await page.keyboard.press("Escape");
+      assert.equal(await rulerWidth(), "58px", "Escape should dismiss heading focus expansion");
     }
     if (relativePath.endsWith("single-long-paragraph.md")) assert.equal(mapping.markerCount, 1);
     if (relativePath.endsWith("minimal-text.md")) assert.equal(mapping.markerCount, 1);

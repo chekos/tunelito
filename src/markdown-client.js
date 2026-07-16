@@ -67,11 +67,6 @@
     }
 
     ensureHeadingIds(blocks);
-    const toggle = element("button", "tunelito-ruler-toggle", "‹");
-    toggle.type = "button";
-    toggle.setAttribute("aria-label", "Expand document map");
-    toggle.setAttribute("aria-expanded", "false");
-
     const scrubber = element("div", "tunelito-ruler-scrubber");
     scrubber.tabIndex = 0;
     scrubber.setAttribute("role", "slider");
@@ -83,9 +78,8 @@
     const track = element("div", "tunelito-document-map-track");
     const markers = blocks.map((block, index) => createMarker(block, index, blocks.length));
     track.append(...markers);
-    ruler.replaceChildren(toggle, scrubber, track);
+    ruler.replaceChildren(scrubber, track);
 
-    let pinned = false;
     let selectedIndex = 0;
     let measurements = [];
     let scrollFrame = 0;
@@ -93,11 +87,10 @@
     let navigationLockUntil = 0;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
-    toggle.addEventListener("click", () => setPinned(!pinned));
     ruler.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        setPinned(false);
-        toggle.focus({ preventScroll: true });
+        const active = document.activeElement;
+        if (active && ruler.contains(active) && typeof active.blur === "function") active.blur();
         event.preventDefault();
         return;
       }
@@ -118,8 +111,16 @@
       const ratio = Math.max(0, Math.min(1, (event.clientY - bounds.top) / Math.max(bounds.height, 1)));
       navigateTo(Math.round(ratio * (blocks.length - 1)));
     });
+    ruler.addEventListener("pointerup", () => {
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && ruler.contains(active) && typeof active.blur === "function") active.blur();
+      });
+    });
     document.addEventListener("pointerdown", (event) => {
-      if (pinned && !ruler.contains(event.target)) setPinned(false);
+      if (event.target instanceof Node && ruler.contains(event.target)) return;
+      const active = document.activeElement;
+      if (active && ruler.contains(active) && typeof active.blur === "function") active.blur();
     });
     window.addEventListener("scroll", scheduleScrollUpdate, { passive: true });
     window.addEventListener("resize", scheduleMeasure, { passive: true });
@@ -208,14 +209,6 @@
         history.pushState(null, "", next);
       }
       updateReadingState(index);
-    }
-
-    function setPinned(nextPinned) {
-      pinned = Boolean(nextPinned);
-      ruler.dataset.pinned = String(pinned);
-      toggle.setAttribute("aria-expanded", String(pinned));
-      toggle.setAttribute("aria-label", pinned ? "Collapse document map" : "Expand document map");
-      toggle.textContent = pinned ? "›" : "‹";
     }
   }
 
