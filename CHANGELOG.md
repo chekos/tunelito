@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 - 2026-07-17
 
 - Adds four packaged Markdown themes—`default`, `editorial`, `technical`, and dark-only `bns-pitaya`—with offline font fallbacks, light/dark compatibility coverage, accessibility checks, and committed visual evidence.
 - Adds layered Markdown presentation configuration through `--theme`, target-local and global `tunelito.config.json` files, and read-only `tunelito config show`, while preserving `--markdown-css` as the final override.
