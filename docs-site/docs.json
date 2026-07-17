@@ -31,6 +31,7 @@
         "pages": [
           "how-it-works",
           "comments",
+          "configuration",
           "agent-worker",
           "agent-setup",
           "sharing-safely"

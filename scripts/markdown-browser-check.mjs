@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { createTunelitoServer } from "../src/server.js";
+import { THEME_DETAILS, THEME_NAMES } from "../src/themes.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const blockSelector = ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6, :scope > p, :scope > blockquote, :scope > pre, :scope > ul, :scope > ol, :scope > table, :scope > figure, :scope > hr";
@@ -21,6 +22,7 @@ const accessibilityFixtures = [
   "examples/markdown/frontmatter-flat.md",
   "examples/markdown/frontmatter-nested.md",
   "examples/markdown/frontmatter-invalid.md",
+  "examples/markdown/html-comments.md",
   "examples/markdown/heading-ladder.md",
   "examples/markdown/kitchen-sink.md",
 ];
@@ -30,8 +32,9 @@ try {
   for (const fixture of markerFixtures) await verifyMarkerFixture(fixture);
   for (const fixture of accessibilityFixtures) await verifyAccessibility(fixture);
   await verifyVault();
+  await verifyThemesAndComments();
   await verifyResponsiveAndComments();
-  process.stdout.write(`Markdown browser checks passed in light and dark mode for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files plus the folder vault.\n`);
+  process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, and the folder vault.\n`);
 } finally {
   await browser.close();
 }
@@ -190,6 +193,55 @@ async function verifyVault() {
   }
 }
 
+async function verifyThemesAndComments() {
+  for (const themeName of THEME_NAMES) {
+    await withFixture("examples/markdown/kitchen-sink.md", async (page) => {
+      assert.equal(await page.locator("html").getAttribute("data-tunelito-theme"), themeName);
+      const schemes = THEME_DETAILS[themeName].colorModes;
+      for (const colorScheme of schemes) {
+        await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const presentation = await page.locator(".tunelito-markdown").evaluate((article) => {
+          const style = getComputedStyle(article);
+          return {
+            background: style.backgroundColor,
+            color: style.color,
+            fontFamily: style.fontFamily,
+            lineHeight: style.lineHeight,
+            maxWidth: style.maxWidth,
+          };
+        });
+        assert.notEqual(presentation.background, presentation.color, `${themeName} must preserve readable foreground/background separation`);
+        assert.ok(presentation.fontFamily.length > 0, `${themeName} must resolve a body font stack`);
+        assert.ok(Number.parseFloat(presentation.lineHeight) > 20, `${themeName} must keep a readable line height`);
+        assert.notEqual(presentation.maxWidth, "none", `${themeName} must keep a bounded reading measure`);
+        await assertAccessible(page, `${themeName} theme ${colorScheme} mode`);
+        await assertNoOverflow(page, `${themeName} theme ${colorScheme} mode`);
+      }
+
+      await page.locator(".tunelito-markdown p").first().evaluate((paragraph) => {
+        const range = document.createRange();
+        range.selectNodeContents(paragraph);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+      await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".selection")?.classList.contains("visible"));
+      assert.equal(await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".selection").classList.contains("visible")), true, `${themeName} must preserve comment selection`);
+      await page.evaluate(() => window.getSelection().removeAllRanges());
+    }, { serverOptions: { markdownTheme: themeName } });
+  }
+
+  await withFixture("examples/markdown/html-comments.md", async (page) => {
+    const readerText = await page.locator(".tunelito-markdown").innerText();
+    assert.doesNotMatch(readerText, /inline author note|This block note is for the author only|adjacent note/);
+    assert.match(readerText, /Literal comment inside inline code/);
+    assert.match(readerText, /Literal comment inside fenced code/);
+    assert.match(readerText, /Beforeafter\./);
+  });
+}
+
 async function verifyResponsiveAndComments() {
   await withFixture("examples/markdown/frontmatter-flat.md", async (page) => {
     const drawer = page.locator("#tunelito-properties");
@@ -252,7 +304,10 @@ async function windowDispatches(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
-async function withFixture(relativePath, callback, { viewport = { width: 1440, height: 1000 } } = {}) {
+async function withFixture(relativePath, callback, {
+  viewport = { width: 1440, height: 1000 },
+  serverOptions = {},
+} = {}) {
   const filePath = resolve(repoRoot, relativePath);
   const original = readFileSync(filePath, "utf8");
   const tempDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-browser-"));
@@ -262,6 +317,7 @@ async function withFixture(relativePath, callback, { viewport = { width: 1440, h
     host: "127.0.0.1",
     port: 0,
     accessKey: "browser-check",
+    ...serverOptions,
   });
   const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
   const page = await context.newPage();

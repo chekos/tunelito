@@ -89,6 +89,7 @@ tunelito examples/markdown-vault --no-tunnel --open
 | `markdown/frontmatter-flat.md` | Do typical Obsidian scalars, dates, arrays, tags, and aliases render once in the drawer? | `tunelito examples/markdown/frontmatter-flat.md --no-tunnel --open` |
 | `markdown/frontmatter-nested.md` | Do nested maps, mixed arrays, nulls, multiline strings, long values, and hostile-looking text remain readable and escaped? | `tunelito examples/markdown/frontmatter-nested.md --no-tunnel --open` |
 | `markdown/frontmatter-invalid.md` | Does invalid YAML expose an accessible, escaped source fallback while preserving the article? | `tunelito examples/markdown/frontmatter-invalid.md --no-tunnel --open` |
+| `markdown/html-comments.md` | Do inline, block, multiline, and adjacent author comments stay hidden while fenced literals remain visible? | `tunelito examples/markdown/html-comments.md --no-tunnel --open` |
 | `markdown/kitchen-sink.md` | Do all ruler block types, transform boundaries, a local image, Mermaid, wiki links, and metadata coexist? | `tunelito examples/markdown/kitchen-sink.md --no-tunnel --open` |
 | `markdown/ruler-density.md` | Do at least 150 real blocks remain accurate and usable without per-scroll layout work? | `tunelito examples/markdown/ruler-density.md --no-tunnel --open` |
 | `markdown-vault/index.md` | Do folder mode, plain/aliased/fragment/unresolved wiki references, code boundaries, and literal embeds behave together? | `tunelito examples/markdown-vault --no-tunnel --open` |

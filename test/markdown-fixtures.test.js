@@ -14,6 +14,7 @@ const fixtureFiles = [
   "examples/markdown/frontmatter-flat.md",
   "examples/markdown/frontmatter-nested.md",
   "examples/markdown/frontmatter-invalid.md",
+  "examples/markdown/html-comments.md",
   "examples/markdown/kitchen-sink.md",
   "examples/markdown/ruler-density.md",
   "examples/markdown-vault/index.md",
@@ -61,6 +62,11 @@ test("committed Markdown fixtures serve through the production renderer without 
       assert.match(html, /data-tunelito-source-type="markdown"/);
       assert.match(html, /data-tunelito-document-map/);
       if (fixture.endsWith("frontmatter-invalid.md")) assert.match(html, /Metadata needs attention/);
+      if (fixture.endsWith("html-comments.md")) {
+        assert.doesNotMatch(html, /inline author note|This block note is for the author only|adjacent note/);
+        assert.match(html, /&lt;!-- Literal comment inside inline code --&gt;/);
+        assert.match(html, /&lt;!-- Literal comment inside fenced code --&gt;/);
+      }
       assert.equal(readFileSync(filePath, "utf8"), source, `${fixture} source changed while serving`);
     } finally {
       await instance.close();

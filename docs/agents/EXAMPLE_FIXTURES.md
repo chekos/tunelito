@@ -25,6 +25,7 @@ Use the example fixtures as the shared regression surface for Tunelito UI work. 
 | `examples/markdown/frontmatter-flat.md` | Typical Obsidian note | Ordered scalars, quoted strings, booleans, numbers, dates, tags, aliases, drawer open/collapsed |
 | `examples/markdown/frontmatter-nested.md` | Complex property stress | Nested maps, arrays of objects, mixed arrays, nulls, multiline and long values, escaping |
 | `examples/markdown/frontmatter-invalid.md` | Broken YAML recovery | Accessible metadata error, escaped source disclosure, readable article |
+| `examples/markdown/html-comments.md` | Author-only comment boundaries | Inline, block, multiline, and adjacent HTML comments hidden from readers; fenced literal preserved |
 | `examples/markdown/kitchen-sink.md` | Full Markdown integration | Every top-level ruler block, code boundaries, local image, Mermaid, ordinary links, wiki links, metadata |
 | `examples/markdown/ruler-density.md` | Dense document performance | At least 150 meaningful blocks, crowding, measurement, target accuracy, label usability |
 | `examples/markdown-vault/index.md` | Folder/index and Obsidian context | Companion notes, aliases, target-plus-heading and unresolved references, code boundaries, literal embeds |
@@ -48,11 +49,12 @@ For Markdown-specific changes, use this smaller risk-based set:
 | Basic Markdown shell or no-heading behavior | `minimal-text.md`, `paragraphs-only.md`, `single-long-paragraph.md` |
 | YAML parsing, drawer layout, escaping, or error recovery | `frontmatter-flat.md`, `frontmatter-nested.md`, `frontmatter-invalid.md`, `kitchen-sink.md` |
 | Wiki-link parsing and transform boundaries | `kitchen-sink.md`, `markdown-vault/index.md` |
+| HTML-comment hiding and code boundaries | `html-comments.md`, `kitchen-sink.md` |
 | Ruler hierarchy, ids, labels, and keyboard navigation | `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md` |
 | Ruler integration with mixed content and Mermaid | `kitchen-sink.md` |
 | Ruler density or scroll performance | `ruler-density.md` |
 | Folder-mode Markdown behavior | `markdown-vault/` |
-| Markdown screenshots | `frontmatter-flat.md`, `frontmatter-nested.md`, `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md`, `kitchen-sink.md`, `markdown-vault/index.md` |
+| Markdown screenshots | `frontmatter-flat.md`, `frontmatter-nested.md`, `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md`, `html-comments.md`, `kitchen-sink.md`, `markdown-vault/index.md` |
 
 The ruler treats h5 and h6 as headings rather than dropping them: h5 uses a 14px tick and h6 uses a 12px tick, both slightly longer than the 10px ordinary-content tick. Both levels receive labels, stable ids, hash navigation, and the same keyboard/current-section behavior as h1–h4.
 

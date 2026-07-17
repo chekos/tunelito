@@ -27,6 +27,7 @@ import {
 } from "../src/agent-worker.js";
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
+import { resolveTunelitoConfig } from "../src/config.js";
 import { buildDoctorReport } from "../src/doctor.js";
 import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { normalizeMarkdownCssHref } from "../src/markdown.js";
@@ -46,12 +47,14 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
        tunelito review watch [page.html|notes.md|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
+       tunelito config show [page.html|notes.md|folder] [options]
        tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
@@ -89,6 +92,7 @@ Commands:
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
+  config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
@@ -168,8 +172,12 @@ export function parseArgs(argv) {
     } else if (arg === "--out") {
       const value = requiredValue(argv[++i], "--out");
       opts.commentsPath = resolve(value);
+    } else if (arg === "--theme") {
+      opts.theme = requiredValue(argv[++i], "--theme", "theme name");
+      opts.themeProvided = true;
     } else if (arg === "--markdown-css") {
       opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
+      opts.markdownCssProvided = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
     } else if (arg.startsWith("--")) {
@@ -279,6 +287,10 @@ async function main() {
     process.exitCode = await runInboxCommand(argv.slice(1));
     return;
   }
+  if (argv[0] === "config") {
+    process.exitCode = runConfigCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "skill") {
     process.exitCode = runSkillCommand(argv.slice(1));
     return;
@@ -319,6 +331,19 @@ async function main() {
     console.error(`Not a file or folder: ${opts.filePath}`);
     process.exit(1);
   }
+  let resolvedConfig;
+  try {
+    resolvedConfig = resolveTunelitoConfig({
+      targetPath: opts.filePath,
+      cliTheme: opts.theme,
+      cliThemeProvided: opts.themeProvided,
+      cliMarkdownCss: opts.markdownCssHref,
+      cliMarkdownCssProvided: opts.markdownCssProvided,
+    });
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 
   const accessKey = opts.auth ? generateAccessKey() : null;
   const agentStatePath = (opts.agent || opts.agentSession) ? (opts.agentStatePath || defaultAgentStatePath(opts.filePath)) : null;
@@ -332,8 +357,13 @@ async function main() {
     accessKey,
     ownerName: opts.ownerName,
     liveMode: opts.live,
-    blockedPaths: agentStatePath ? agentBlockedPaths(agentStatePath) : [],
-    markdownCssHref: opts.markdownCssHref,
+    blockedPaths: [
+      ...(agentStatePath ? agentBlockedPaths(agentStatePath) : []),
+      ...resolvedConfig.blockedPaths,
+    ],
+    markdownCssHref: resolvedConfig.markdownCssHref,
+    markdownCssText: resolvedConfig.markdownCssText,
+    markdownTheme: resolvedConfig.theme.value,
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -394,6 +424,7 @@ async function main() {
 
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
+  console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
   console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
@@ -1327,6 +1358,128 @@ export function loadAgentPromptOptions(opts) {
 
 export function readBundledSkill() {
   return readFileSync(new URL("../docs-site/skill.md", import.meta.url), "utf8");
+}
+
+function configUsage() {
+  return `Tunelito config -- resolved Markdown presentation settings.
+
+Usage:
+  tunelito config show [page.html|notes.md|folder] [options]
+
+Options:
+  --theme <name>        Override the resolved theme for this invocation
+  --markdown-css <href> Override configured Markdown CSS for this invocation
+  --json                Print the versioned machine-readable config report
+`;
+}
+
+export function parseConfigArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") {
+    return { help: true };
+  }
+  if (command !== "show") throw new Error(`Unknown config command: ${command}`);
+
+  const opts = { command, format: "text" };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+    } else if (arg === "--theme") {
+      opts.theme = requiredValue(argv[++i], "--theme", "theme name");
+      opts.themeProvided = true;
+    } else if (arg === "--markdown-css") {
+      opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
+      opts.markdownCssProvided = true;
+    } else if (arg === "--json") {
+      opts.format = "json";
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown config option: ${arg}`);
+    } else {
+      positional.push(arg);
+    }
+  }
+  if (positional.length > 1) {
+    throw new Error(`Expected zero or one HTML file, Markdown file, or folder, got ${positional.length}`);
+  }
+  opts.targetPath = resolve(positional[0] || process.cwd());
+  return opts;
+}
+
+export function runConfigCommand(args, {
+  stdout = process.stdout,
+  stderr = process.stderr,
+  env = process.env,
+  homePath,
+} = {}) {
+  let opts;
+  try {
+    opts = parseConfigArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${configUsage()}`);
+    return 1;
+  }
+  if (opts.help) {
+    stdout.write(configUsage());
+    return 0;
+  }
+
+  let config;
+  try {
+    config = resolveTunelitoConfig({
+      targetPath: opts.targetPath,
+      cliTheme: opts.theme,
+      cliThemeProvided: opts.themeProvided,
+      cliMarkdownCss: opts.markdownCssHref,
+      cliMarkdownCssProvided: opts.markdownCssProvided,
+      env,
+      ...(homePath ? { homePath } : {}),
+    });
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+
+  const report = publicConfigReport(config);
+  if (opts.format === "json") {
+    stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    stdout.write([
+      "Tunelito config",
+      `Target:       ${report.targetPath}`,
+      `Project root: ${report.projectRoot}`,
+      `Theme:        ${report.theme.value} (${report.theme.source})`,
+      `Markdown CSS: ${report.markdownCss.resolved || "(none)"} (${report.markdownCss.source})`,
+      `Global file:  ${report.configFiles.global.path} (${report.configFiles.global.exists ? "found" : "missing"})`,
+      `Project file: ${report.configFiles.project.path} (${report.configFiles.project.exists ? "found" : "missing"})`,
+      `Themes:       ${report.availableThemes.map((theme) => theme.name).join(", ")}`,
+      "",
+    ].join("\n"));
+  }
+  return 0;
+}
+
+function publicConfigReport(config) {
+  return {
+    format: config.format,
+    version: config.version,
+    targetPath: config.targetPath,
+    projectRoot: config.projectRoot,
+    theme: config.theme,
+    markdownCss: config.markdownCss,
+    configFiles: {
+      global: {
+        path: config.configPaths.global,
+        exists: existsSync(config.configPaths.global),
+      },
+      project: {
+        path: config.configPaths.project,
+        exists: existsSync(config.configPaths.project),
+      },
+    },
+    availableThemes: config.availableThemes,
+  };
 }
 
 function skillUsage() {

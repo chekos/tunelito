@@ -12,6 +12,8 @@ The CLI owns process orchestration:
 - choose persistent or ephemeral live mode
 - choose optional local agent worker settings
 - choose optional owner display identity
+- resolve Markdown presentation settings from CLI, target-local project configuration, global configuration, and defaults
+- report the resolved Markdown settings and source layers through read-only `tunelito config show`
 - report read-only setup and safety diagnostics through `tunelito doctor`
 - start a stdio MCP adapter for comments and inbox tools without starting a review server
 - generate the review key
@@ -23,6 +25,8 @@ The CLI owns process orchestration:
 The server owns local IO and transport:
 
 - serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a folder root with injected HTML/Markdown pages
+- apply the selected packaged Markdown theme and configured CSS only to served Markdown responses
+- omit complete Markdown HTML comments from rendered prose while leaving source files and literal code examples untouched
 - parse only bounded, complete, leading YAML front matter for the served Markdown response; keep malformed metadata visible as escaped review UI and leave the source file untouched
 - turn supported Obsidian wiki syntax into escaped, semantically unresolved inline references without performing vault-wide lookup or inventing link destinations
 - serve the fixed packaged Markdown interaction client behind normal review-key authorization
@@ -104,7 +108,9 @@ The browser client owns reviewer interaction:
 ## Invariants
 
 - Never modify source HTML or Markdown files to install Tunelito.
+- Never let Markdown themes or configuration rewrite the selected Markdown source.
 - Never serve files outside the selected source file directory or selected folder root.
+- Never serve a target-local `tunelito.config.json` through folder mode.
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
@@ -122,6 +128,9 @@ The browser client owns reviewer interaction:
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.
 - Keep Markdown front-matter parsing bounded and presentation-only; never evaluate metadata or let it choose file or request paths.
+- Keep Markdown configuration JSON-only and presentation-only; accept only known string settings, resolve local CSS relative to its owning config file, and escape inline CSS closing tags.
+- Keep built-in themes packaged, dependency-free, and offline; theme selection must not fetch fonts or other theme assets.
+- Hide only complete HTML comment tokens in rendered Markdown; preserve inline and fenced code literals and never remove text from the source file.
 - Keep unresolved wiki references semantically honest: escaped visible text and target metadata are allowed, but fake `href` values and vault-wide filesystem discovery are not.
 - Build document-map markers only from rendered blocks in the selected Markdown response; do not mutate source Markdown to add anchors or progress state.
 - Keep Mermaid local/offline and same-origin; do not add a CDN dependency or allow request paths to select arbitrary files from installed dependencies.

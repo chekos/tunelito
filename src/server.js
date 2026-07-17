@@ -46,6 +46,8 @@ export async function createTunelitoServer(options) {
   const ownerName = cleanOwnerName(options.ownerName);
   const ownerSessionId = String(options.ownerSessionId || randomBytes(9).toString("base64url"));
   const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
+  const markdownCssText = String(options.markdownCssText || "");
+  const markdownTheme = String(options.markdownTheme || "default");
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -67,6 +69,8 @@ export async function createTunelitoServer(options) {
       ownerName,
       ownerSessionId,
       markdownCssHref,
+      markdownCssText,
+      markdownTheme,
     });
   });
 
@@ -343,7 +347,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -452,6 +456,8 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         path: asset.realPath,
         sourceName,
         markdownCssHref,
+        markdownCssText,
+        markdownTheme,
       });
       sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
       return;
@@ -463,7 +469,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -567,11 +573,13 @@ function renderDirectoryIndex({ directoryPath, pagePath, blockedPaths = [] }) {
   ].join("\n");
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref }) {
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
     cssHref: markdownCssHref,
+    cssText: markdownCssText,
+    themeName: markdownTheme,
   });
 }
 

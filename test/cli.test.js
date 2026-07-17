@@ -5,13 +5,17 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlin
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
 function streamCollector() {
   const chunks = [];
   return { write: (chunk) => { chunks.push(chunk); return true; }, text: () => chunks.join("") };
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 test("CLI version matches package metadata", () => {
@@ -38,6 +42,13 @@ test("parseArgs supports ephemeral live mode", () => {
   const opts = parseArgs(["page.html", "--live"]);
   assert.equal(opts.live, true);
   assert.equal(opts.filePath, resolve("page.html"));
+});
+
+test("parseArgs supports named Markdown themes", () => {
+  const opts = parseArgs(["notes.md", "--theme", "editorial"]);
+  assert.equal(opts.theme, "editorial");
+  assert.equal(opts.themeProvided, true);
+  assert.throws(() => parseArgs(["notes.md", "--theme"]), /--theme requires a theme name/);
 });
 
 test("parseArgs supports local agent worker options", () => {
@@ -635,7 +646,63 @@ test("parseArgs accepts a Markdown stylesheet href", () => {
   const opts = parseArgs(["notes.md", "--markdown-css", "/review.css"]);
   assert.equal(opts.filePath, resolve("notes.md"));
   assert.equal(opts.markdownCssHref, "/review.css");
+  assert.equal(opts.markdownCssProvided, true);
   assert.throws(() => parseArgs(["notes.md", "--markdown-css", "javascript:alert(1)"]), /--markdown-css/);
+});
+
+test("config show resolves project settings and reports CLI overrides", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-"));
+  const homePath = join(dir, "home");
+  const projectPath = join(dir, "project");
+  mkdirSync(join(homePath, ".config", "tunelito"), { recursive: true });
+  mkdirSync(projectPath);
+  writeFileSync(join(homePath, ".config", "tunelito", "config.json"), JSON.stringify({ theme: "editorial" }));
+  writeFileSync(join(projectPath, "tunelito.config.json"), JSON.stringify({ theme: "technical" }));
+  writeFileSync(join(projectPath, "notes.md"), "# Notes");
+
+  const parsed = parseConfigArgs(["show", join(projectPath, "notes.md"), "--theme", "bns-pitaya", "--json"]);
+  assert.equal(parsed.command, "show");
+  assert.equal(parsed.theme, "bns-pitaya");
+  assert.equal(parsed.format, "json");
+
+  const stdout = streamCollector();
+  const code = runConfigCommand([
+    "show",
+    join(projectPath, "notes.md"),
+    "--theme",
+    "bns-pitaya",
+    "--json",
+  ], {
+    stdout,
+    stderr: streamCollector(),
+    env: {},
+    homePath,
+  });
+  assert.equal(code, 0);
+  const report = JSON.parse(stdout.text());
+  assert.equal(report.format, "tunelito-config");
+  assert.equal(report.version, 1);
+  assert.equal(report.theme.value, "bns-pitaya");
+  assert.equal(report.theme.source, "cli");
+  assert.equal(report.configFiles.global.exists, true);
+  assert.equal(report.configFiles.project.exists, true);
+  assert.deepEqual(report.availableThemes.map(({ name }) => name), ["default", "editorial", "technical", "bns-pitaya"]);
+});
+
+test("config show fails clearly for malformed project JSON", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-invalid-"));
+  const homePath = join(dir, "home");
+  mkdirSync(join(homePath, ".config", "tunelito"), { recursive: true });
+  writeFileSync(join(dir, "tunelito.config.json"), "{ broken");
+  const stderr = streamCollector();
+  const code = runConfigCommand(["show", dir], {
+    stdout: streamCollector(),
+    stderr,
+    env: {},
+    homePath,
+  });
+  assert.equal(code, 1);
+  assert.match(stderr.text(), new RegExp(`Invalid project Tunelito config at ${escapeRegex(join(dir, "tunelito.config.json"))}`));
 });
 
 test("parseArgs accepts an owner name", () => {
