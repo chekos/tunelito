@@ -103,6 +103,8 @@ test("server renders a Markdown file as an injected commentable page", async () 
     host: "127.0.0.1",
     port: 0,
     markdownCssHref: "/brand.css",
+    markdownCssText: ".tunelito-markdown { outline: 1px solid rebeccapurple; }",
+    markdownTheme: "editorial",
   });
 
   let socket = null;
@@ -116,7 +118,12 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(html, /data-tunelito-wikilink="Project brief">the project brief/);
     assert.doesNotMatch(html, /<p>status: active/);
     assert.match(html, /aria-label="Document map"/);
+    assert.match(html, /data-tunelito-theme="editorial"/);
+    assert.match(html, /data-tunelito-config-css/);
+    assert.match(html, /outline: 1px solid rebeccapurple/);
     assert.match(html, /<link rel="stylesheet" href="\/brand\.css">/);
+    assert.ok(html.indexOf("data-tunelito-theme-css") < html.indexOf("data-tunelito-config-css"));
+    assert.ok(html.indexOf("data-tunelito-config-css") < html.indexOf('href="/brand.css"'));
     assert.match(html, new RegExp(CLIENT_ROUTE));
     assert.match(html, /&lt;script&gt;alert/);
     assert.doesNotMatch(html, /<script>alert/);
@@ -192,8 +199,10 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
   writeFileSync(join(siteDir, ".tunelito", "agent", "state.json"), "{}");
   const visibleAgentStatePath = join(siteDir, "agent-state.json");
   const visibleAgentLogPath = join(siteDir, "log.md");
+  const projectConfigPath = join(siteDir, "tunelito.config.json");
   writeFileSync(visibleAgentStatePath, "{}");
   writeFileSync(visibleAgentLogPath, "agent log");
+  writeFileSync(projectConfigPath, JSON.stringify({ theme: "technical" }));
   let linkedEnvPath = null;
   try {
     linkedEnvPath = join(siteDir, "linked-env");
@@ -207,7 +216,7 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     commentsPath,
     host: "127.0.0.1",
     port: 0,
-    blockedPaths: [visibleAgentStatePath, visibleAgentLogPath],
+    blockedPaths: [visibleAgentStatePath, visibleAgentLogPath, projectConfigPath],
   });
 
   const sockets = [];
@@ -291,6 +300,9 @@ test("directory mode injects HTML pages and keeps comments page-specific", async
     const visibleAgentLog = await fetch(new URL("/log.md", instance.localUrl));
     assert.equal(visibleAgentLog.status, 404);
 
+    const projectConfig = await fetch(new URL("/tunelito.config.json", instance.localUrl));
+    assert.equal(projectConfig.status, 404);
+
     if (linkedEnvPath) {
       const linkedEnvFile = await fetch(new URL("/linked-env", instance.localUrl));
       assert.equal(linkedEnvFile.status, 404);
@@ -317,6 +329,7 @@ test("directory mode renders Markdown pages and lists them in generated indexes"
     commentsPath,
     host: "127.0.0.1",
     port: 0,
+    markdownTheme: "technical",
   });
 
   const sockets = [];
@@ -324,11 +337,13 @@ test("directory mode renders Markdown pages and lists them in generated indexes"
     const root = await fetch(instance.localUrl).then((res) => res.text());
     assert.match(root, /Home memo/);
     assert.match(root, new RegExp(CLIENT_ROUTE));
+    assert.match(root, /data-tunelito-theme="technical"/);
 
     const brief = await fetch(new URL("/brief.md", instance.localUrl));
     assert.equal(brief.headers.get("content-type"), "text/html; charset=utf-8");
     const briefHtml = await brief.text();
     assert.match(briefHtml, /Project brief/);
+    assert.match(briefHtml, /data-tunelito-theme="technical"/);
     assert.match(briefHtml, /data-tunelito-mermaid/);
     assert.match(briefHtml, new RegExp(MERMAID_LIBRARY_ROUTE));
 

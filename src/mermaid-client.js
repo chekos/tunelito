@@ -12,37 +12,13 @@
     return;
   }
 
-  const darkMode = matchMedia("(prefers-color-scheme: dark)").matches;
+  const themeVariables = mermaidThemeVariables();
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "strict",
     htmlLabels: false,
     theme: "base",
-    themeVariables: darkMode ? {
-      background: "#18202f",
-      primaryColor: "#243044",
-      primaryTextColor: "#f8fafc",
-      primaryBorderColor: "#94a3b8",
-      secondaryColor: "#134e4a",
-      secondaryTextColor: "#f8fafc",
-      tertiaryColor: "#1e293b",
-      tertiaryTextColor: "#f8fafc",
-      lineColor: "#cbd5e1",
-      textColor: "#f8fafc",
-      edgeLabelBackground: "#18202f",
-    } : {
-      background: "#ffffff",
-      primaryColor: "#e2e8f0",
-      primaryTextColor: "#111827",
-      primaryBorderColor: "#64748b",
-      secondaryColor: "#ccfbf1",
-      secondaryTextColor: "#111827",
-      tertiaryColor: "#f1f5f9",
-      tertiaryTextColor: "#111827",
-      lineColor: "#475569",
-      textColor: "#111827",
-      edgeLabelBackground: "#ffffff",
-    },
+    themeVariables,
     suppressErrorRendering: true,
     maxTextSize: MAX_TEXT_SIZE,
     maxEdges: 500,
@@ -52,6 +28,25 @@
   renderFigures(mermaid, figures, MAX_TEXT_SIZE)
     .finally(() => window.dispatchEvent(new CustomEvent("tunelito:mermaid-rendered")));
 })();
+
+function mermaidThemeVariables() {
+  const styles = getComputedStyle(document.documentElement);
+  const value = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  const text = value("--tl-mermaid-primary-text", "#111827");
+  return {
+    background: value("--tl-mermaid-background", "#ffffff"),
+    primaryColor: value("--tl-mermaid-primary", "#e2e8f0"),
+    primaryTextColor: text,
+    primaryBorderColor: value("--tl-mermaid-border", "#64748b"),
+    secondaryColor: value("--tl-mermaid-secondary", "#ccfbf1"),
+    secondaryTextColor: text,
+    tertiaryColor: value("--tl-mermaid-tertiary", "#f1f5f9"),
+    tertiaryTextColor: text,
+    lineColor: value("--tl-mermaid-line", "#475569"),
+    textColor: text,
+    edgeLabelBackground: value("--tl-mermaid-edge-label", "#ffffff"),
+  };
+}
 
 async function renderFigures(mermaid, figures, maxTextSize) {
   let sequence = 0;

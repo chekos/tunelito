@@ -29,6 +29,7 @@
     "docs:dev": "cd docs-site && npx mint dev --no-open",
     "docs:validate": "cd docs-site && npx mint validate --disable-openapi",
     "browser:check": "node scripts/markdown-browser-check.mjs",
+    "theme:screenshots": "node scripts/capture-markdown-theme-screenshots.mjs",
     "release:check": "node scripts/release-check.mjs",
     "smoke:check": "node scripts/smoke-check.mjs",
     "pack:check": "node scripts/package-smoke-check.mjs"

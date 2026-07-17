@@ -114,8 +114,66 @@ test("renderMarkdownDocument adds a desktop document-map shell with theme and re
   assert.match(html, /data-tunelito-document-map data-tunelito-comment-ignore/);
   assert.match(html, /prefers-color-scheme: dark/);
   assert.match(html, /prefers-reduced-motion: reduce/);
-  assert.match(html, /max-width: 760px/);
+  assert.match(html, /--tl-reading-measure: 760px/);
   assert.match(html, /body\.tunelito-comments-open \.tunelito-document-map/);
+});
+
+test("renderMarkdownDocument selects each bundled theme and keeps custom CSS last", () => {
+  for (const themeName of ["default", "editorial", "technical", "bns-pitaya"]) {
+    const html = renderMarkdownDocument({
+      markdownSource: "# Themed",
+      themeName,
+      cssText: ".tunelito-markdown { max-width: 50rem; }",
+      cssHref: "/final.css",
+    });
+    assert.match(html, new RegExp(`data-tunelito-theme="${themeName}"`));
+    assert.match(html, new RegExp(`data-tunelito-theme-css="${themeName}"`));
+    assert.match(html, /data-tunelito-config-css/);
+    assert.ok(html.indexOf("data-tunelito-theme-css") < html.indexOf("data-tunelito-config-css"));
+    assert.ok(html.indexOf("data-tunelito-config-css") < html.indexOf('href="/final.css"'));
+  }
+});
+
+test("renderMarkdownDocument hides HTML comments without rewriting surrounding Markdown or fenced code", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      "# Visible",
+      "",
+      "Before <!-- inline author note --> after.",
+      "",
+      "<!--",
+      "multiline author note",
+      "-->",
+      "",
+      "Left<!-- adjacent note -->right.",
+      "",
+      "`<!-- literal inline code comment -->`",
+      "",
+      "```html",
+      "<!-- literal code comment -->",
+      "```",
+    ].join("\n"),
+  });
+
+  assert.match(html, /<h1>Visible<\/h1>/);
+  assert.match(html, /Before\s+after\./);
+  assert.match(html, /Leftright\./);
+  assert.doesNotMatch(html, /inline author note|multiline author note|adjacent note/);
+  assert.match(html, /<code>&lt;!-- literal inline code comment --&gt;<\/code>/);
+  assert.match(html, /&lt;!-- literal code comment --&gt;/);
+});
+
+test("renderMarkdownDocument rejects unknown themes and prevents CSS from closing its style element", () => {
+  assert.throws(
+    () => renderMarkdownDocument({ markdownSource: "# Notes", themeName: "neon" }),
+    /Unknown theme "neon"/,
+  );
+  const html = renderMarkdownDocument({
+    markdownSource: "# Notes",
+    cssText: 'body::after { content: "</style><script>bad()</script>"; }',
+  });
+  assert.doesNotMatch(html, /<\/style><script>bad/);
+  assert.match(html, /<\\\/style><script>bad/);
 });
 
 test("renderMarkdownDocument turns Mermaid fences into source-preserving diagram figures", () => {

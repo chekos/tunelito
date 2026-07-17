@@ -46,6 +46,10 @@ Expected behavior:
 - Parse only complete leading YAML front matter with explicit size, nesting, and alias bounds. Escape keys and values, keep invalid YAML readable, and never evaluate tags or use metadata to select files, URLs, or code paths.
 - Escape wiki targets and labels, preserve wiki syntax inside code, escaped literals, raw HTML, and unsupported embeds, and do not invent navigable `href` values before a real vault-resolution policy exists.
 - Derive the document map from the rendered page only. Generated heading ids and reading state belong to the served response and browser memory, never the source Markdown.
+- Resolve `tunelito.config.json` as JSON data only, validate known string settings, and block a target-local config file from folder-mode serving.
+- Resolve local configured Markdown CSS relative to the owning config file, escape `</style` before embedding it, and keep `--markdown-css` URL validation in place.
+- Keep built-in themes offline and packaged. Do not add font downloads, CDN CSS, or request-selected theme files.
+- Omit only complete Markdown HTML comments from reader prose. Preserve comment-like text inside inline and fenced code and leave the source Markdown byte-for-byte unchanged.
 
 ## Tunnel Behavior
 

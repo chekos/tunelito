@@ -1,5 +1,6 @@
 import { Marked, Renderer } from "marked";
 import { extractFrontMatter, propertyDisplay } from "./frontmatter.js";
+import { normalizeThemeName, themeCss } from "./themes.js";
 
 export const MERMAID_LIBRARY_ROUTE = "/__tunelito/mermaid.js";
 export const MERMAID_CLIENT_ROUTE = "/__tunelito/mermaid-client.js";
@@ -8,14 +9,61 @@ export const MARKDOWN_CLIENT_ROUTE = "/__tunelito/markdown-client.js";
 const DEFAULT_MARKDOWN_CSS = `
 :root {
   color-scheme: light dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.55;
-  background: #f7f8fb;
-  color: #1f2937;
+  --tl-heading-line-height: 1.2;
+  --tl-h1-size: 2.25rem;
+  --tl-h2-size: 1.45rem;
+  --tl-h3-size: 1.15rem;
+  --tl-h4-size: 1rem;
+  --tl-h5-size: 0.9rem;
+  --tl-h6-size: 0.9rem;
+  --tl-h1-weight: 750;
+  --tl-h2-weight: 700;
+  --tl-h3-weight: 700;
+  --tl-h4-weight: 700;
+  --tl-h5-weight: 700;
+  --tl-h6-weight: 700;
+  --tl-h1-margin: 0 0 1.5rem;
+  --tl-h2-margin: 2rem 0 0.8rem;
+  --tl-h3-margin: 1.6rem 0 0.6rem;
+  --tl-h4-margin: 1.35rem 0 0.5rem;
+  --tl-h5-margin: 1.15rem 0 0.45rem;
+  --tl-h6-margin: 1.15rem 0 0.45rem;
+  --tl-link: var(--tl-accent);
+  --tl-link-external: var(--tl-accent);
+  --tl-link-hover: var(--tl-accent-strong);
+  --tl-wikilink: var(--tl-accent);
+  --tl-wikilink-hover: var(--tl-accent-strong);
+  --tl-strong: var(--tl-heading-3);
+  --tl-emphasis: var(--tl-muted);
+  --tl-list-marker: var(--tl-muted);
+  --tl-focus-ring: var(--tl-selection);
+  --tl-ruler-unread: var(--tl-faint);
+  --tl-ruler-consumed: var(--tl-border);
+  --tl-ruler-current: var(--tl-accent);
+  --tl-mermaid-background: var(--tl-paper-bg);
+  --tl-mermaid-primary: var(--tl-soft);
+  --tl-mermaid-primary-text: var(--tl-text);
+  --tl-mermaid-border: var(--tl-muted);
+  --tl-mermaid-secondary: var(--tl-pill-bg);
+  --tl-mermaid-tertiary: var(--tl-inline-code-bg);
+  --tl-mermaid-line: var(--tl-muted);
+  --tl-mermaid-edge-label: var(--tl-paper-bg);
+  --tl-code-keyword: var(--tl-accent);
+  --tl-code-string: var(--tl-heading-3);
+  --tl-code-comment: var(--tl-muted);
+  font-family: var(--tl-font-body);
+  line-height: var(--tl-line-height);
+  background: var(--tl-page-bg);
+  color: var(--tl-text);
 }
 body {
   margin: 0;
   overflow-x: hidden;
+  background: var(--tl-page-bg);
+  color: var(--tl-text);
+}
+::selection {
+  background: var(--tl-selection);
 }
 .tunelito-page-frame {
   box-sizing: border-box;
@@ -27,11 +75,13 @@ body {
 }
 .tunelito-markdown {
   box-sizing: border-box;
-  max-width: 760px;
+  max-width: var(--tl-reading-measure);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 48px 24px 72px;
-  background: #ffffff;
+  padding: var(--tl-page-padding);
+  background: var(--tl-paper-bg);
+  color: var(--tl-text);
+  font-family: var(--tl-font-body);
 }
 .tunelito-markdown > :first-child {
   margin-top: 0;
@@ -45,33 +95,45 @@ body {
 .tunelito-markdown h4,
 .tunelito-markdown h5,
 .tunelito-markdown h6 {
-  line-height: 1.2;
+  font-family: var(--tl-font-display);
+  line-height: var(--tl-heading-line-height);
   letter-spacing: 0;
-  color: #111827;
 }
+.tunelito-markdown h1 { color: var(--tl-heading-1); }
+.tunelito-markdown h2 { color: var(--tl-heading-2); }
+.tunelito-markdown h3 { color: var(--tl-heading-3); }
+.tunelito-markdown h4 { color: var(--tl-heading-4); }
+.tunelito-markdown h5 { color: var(--tl-heading-5); }
+.tunelito-markdown h6 { color: var(--tl-heading-6); }
 .tunelito-markdown h1 {
-  font-size: 2.25rem;
-  margin: 0 0 1.5rem;
+  margin: var(--tl-h1-margin);
+  font-size: var(--tl-h1-size);
+  font-weight: var(--tl-h1-weight);
 }
 .tunelito-markdown h2 {
-  font-size: 1.45rem;
-  margin: 2rem 0 0.8rem;
+  margin: var(--tl-h2-margin);
+  font-size: var(--tl-h2-size);
+  font-weight: var(--tl-h2-weight);
 }
 .tunelito-markdown h3 {
-  font-size: 1.15rem;
-  margin: 1.6rem 0 0.6rem;
+  margin: var(--tl-h3-margin);
+  font-size: var(--tl-h3-size);
+  font-weight: var(--tl-h3-weight);
 }
 .tunelito-markdown h4 {
-  font-size: 1rem;
-  margin: 1.35rem 0 0.5rem;
+  margin: var(--tl-h4-margin);
+  font-size: var(--tl-h4-size);
+  font-weight: var(--tl-h4-weight);
 }
-.tunelito-markdown h5,
-.tunelito-markdown h6 {
-  font-size: 0.9rem;
-  margin: 1.15rem 0 0.45rem;
+.tunelito-markdown h5 {
+  margin: var(--tl-h5-margin);
+  font-size: var(--tl-h5-size);
+  font-weight: var(--tl-h5-weight);
 }
 .tunelito-markdown h6 {
-  color: #334155;
+  margin: var(--tl-h6-margin);
+  font-size: var(--tl-h6-size);
+  font-weight: var(--tl-h6-weight);
   letter-spacing: 0.02em;
 }
 .tunelito-markdown p,
@@ -80,15 +142,23 @@ body {
 .tunelito-markdown blockquote,
 .tunelito-markdown pre,
 .tunelito-markdown table {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--tl-paragraph-rhythm);
 }
 .tunelito-markdown a {
-  color: #0f766e;
+  color: var(--tl-link);
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.16em;
 }
+.tunelito-markdown a[href^="http://"],
+.tunelito-markdown a[href^="https://"] {
+  color: var(--tl-link-external);
+}
+.tunelito-markdown a:hover,
+.tunelito-markdown a:focus-visible {
+  color: var(--tl-link-hover);
+}
 .tunelito-wikilink {
-  color: #0f766e;
+  color: var(--tl-wikilink);
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-thickness: 0.08em;
@@ -96,6 +166,7 @@ body {
   cursor: text;
 }
 .tunelito-wikilink:hover {
+  color: var(--tl-wikilink-hover);
   text-decoration-style: solid;
 }
 .tunelito-properties {
@@ -105,10 +176,10 @@ body {
   box-sizing: border-box;
   width: 272px;
   overflow: auto;
-  border-right: 1px solid #d8e0e8;
-  background: #f3f5f4;
-  color: #334155;
-  box-shadow: 12px 0 36px rgba(15, 23, 42, 0.06);
+  border-right: 1px solid var(--tl-border);
+  background: var(--tl-properties-bg);
+  color: var(--tl-text);
+  box-shadow: 12px 0 36px var(--tl-properties-shadow);
   transition: transform 180ms ease, visibility 180ms ease;
 }
 .tunelito-properties-header {
@@ -119,13 +190,13 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 24px 20px 16px;
-  border-bottom: 1px solid #dfe5e9;
-  background: color-mix(in srgb, #f3f5f4 92%, transparent);
+  border-bottom: 1px solid var(--tl-border);
+  background: color-mix(in srgb, var(--tl-properties-bg) 92%, transparent);
   backdrop-filter: blur(12px);
 }
 .tunelito-properties-kicker {
   margin: 0 0 3px;
-  color: #566477;
+  color: var(--tl-muted);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -133,18 +204,18 @@ body {
 }
 .tunelito-properties-title {
   margin: 0;
-  color: #1f2937;
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  color: var(--tl-text);
+  font-family: var(--tl-font-display);
   font-size: 1.05rem;
   font-weight: 650;
 }
 .tunelito-properties-collapse,
 .tunelito-properties-tab {
-  border: 1px solid #cbd5df;
-  background: #fff;
-  color: #475569;
+  border: 1px solid var(--tl-border);
+  background: var(--tl-paper-bg);
+  color: var(--tl-muted);
   cursor: pointer;
-  font: 700 0.75rem/1 ui-sans-serif, system-ui, sans-serif;
+  font: 700 0.75rem/1 var(--tl-font-display);
 }
 .tunelito-properties-collapse {
   width: 34px;
@@ -153,12 +224,12 @@ body {
 }
 .tunelito-properties-collapse:hover,
 .tunelito-properties-tab:hover {
-  border-color: #0f766e;
-  color: #0f766e;
+  border-color: var(--tl-accent);
+  color: var(--tl-accent);
 }
 .tunelito-properties-collapse:focus-visible,
 .tunelito-properties-tab:focus-visible {
-  outline: 3px solid rgba(20, 184, 166, 0.32);
+  outline: 3px solid var(--tl-selection);
   outline-offset: 3px;
 }
 .tunelito-properties-list {
@@ -172,7 +243,7 @@ body {
   gap: 5px;
 }
 .tunelito-property dt {
-  color: #566477;
+  color: var(--tl-muted);
   font-size: 0.7rem;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -181,7 +252,7 @@ body {
 .tunelito-property dd {
   min-width: 0;
   margin: 0;
-  color: #263445;
+  color: var(--tl-text);
   font-size: 0.86rem;
   overflow-wrap: anywhere;
 }
@@ -194,25 +265,25 @@ body {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  border: 1px solid #c9ddd9;
+  border: 1px solid var(--tl-pill-border);
   border-radius: 999px;
-  background: #e8f2ef;
-  color: #305d57;
+  background: var(--tl-pill-bg);
+  color: var(--tl-pill-text);
   padding: 2px 8px;
   font-size: 0.76rem;
 }
 .tunelito-property-complex {
   margin: 0;
   white-space: pre-wrap;
-  font: 0.72rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 0.72rem/1.45 var(--tl-font-mono);
 }
 .tunelito-properties-error {
   margin: 20px;
-  border: 1px solid #e3b6a7;
+  border: 1px solid var(--tl-error-border);
   border-radius: 8px;
-  background: #fff7ed;
+  background: var(--tl-error-bg);
   padding: 14px;
-  color: #7c2d12;
+  color: var(--tl-error-text);
   font-size: 0.82rem;
 }
 .tunelito-properties-error p {
@@ -243,9 +314,9 @@ body {
   display: none;
 }
 .tunelito-document-map {
-  --ruler-unread: #64748b;
-  --ruler-consumed: #dbe2e8;
-  --ruler-accent: #0f766e;
+  --ruler-unread: var(--tl-ruler-unread);
+  --ruler-consumed: var(--tl-ruler-consumed);
+  --ruler-accent: var(--tl-ruler-current);
   --ruler-track-height: min(500px, calc(100vh - 120px));
   position: fixed;
   top: 50%;
@@ -254,7 +325,7 @@ body {
   z-index: 2147483598;
   width: 58px;
   height: var(--ruler-track-height);
-  color: #334155;
+  color: var(--tl-muted);
   transform: translateY(-50%);
   transition: width 160ms ease, right 160ms ease, opacity 160ms ease;
 }
@@ -310,8 +381,8 @@ body {
   right: 48px;
   max-width: 205px;
   overflow: hidden;
-  color: #475569;
-  font: 650 0.73rem/1.2 ui-sans-serif, system-ui, sans-serif;
+  color: var(--tl-muted);
+  font: 650 0.73rem/1.2 var(--tl-font-display);
   opacity: 0;
   pointer-events: none;
   text-align: right;
@@ -332,7 +403,7 @@ body {
   color: var(--ruler-accent);
 }
 .tunelito-ruler-marker:focus-visible {
-  outline: 2px solid rgba(20, 184, 166, 0.4);
+  outline: 2px solid var(--tl-selection);
   outline-offset: 2px;
 }
 .tunelito-ruler-scrubber {
@@ -388,26 +459,26 @@ body.tunelito-comments-open .tunelito-document-map {
   }
 }
 .tunelito-markdown blockquote {
-  border-left: 4px solid #cbd5e1;
+  border-left: 4px solid var(--tl-quote-border);
   padding-left: 1rem;
-  color: #475569;
+  color: var(--tl-quote);
 }
 .tunelito-markdown code,
 .tunelito-markdown pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--tl-font-mono);
 }
 .tunelito-markdown code {
   border-radius: 4px;
   padding: 0.1rem 0.28rem;
-  background: #edf2f7;
+  background: var(--tl-inline-code-bg);
 }
 .tunelito-markdown pre {
   overflow-x: auto;
-  border: 1px solid #dbe3ee;
+  border: 1px solid var(--tl-border);
   border-radius: 8px;
   padding: 1rem;
-  background: #111827;
-  color: #f9fafb;
+  background: var(--tl-code-bg);
+  color: var(--tl-code-text);
 }
 .tunelito-markdown pre code {
   padding: 0;
@@ -415,11 +486,11 @@ body.tunelito-comments-open .tunelito-document-map {
   color: inherit;
 }
 .tunelito-mermaid {
-  margin: 0 0 1rem;
-  border: 1px solid #dbe3ee;
+  margin: 0 0 var(--tl-paragraph-rhythm);
+  border: 1px solid var(--tl-border);
   border-radius: 8px;
   padding: 1rem;
-  background: #f8fafc;
+  background: var(--tl-soft);
 }
 .tunelito-mermaid-canvas {
   overflow-x: auto;
@@ -433,7 +504,7 @@ body.tunelito-comments-open .tunelito-document-map {
 }
 .tunelito-mermaid-status {
   margin: 0.75rem 0 0;
-  color: #475569;
+  color: var(--tl-muted);
   font-size: 0.9rem;
 }
 .tunelito-mermaid[data-mermaid-state="rendered"] .tunelito-mermaid-status {
@@ -448,11 +519,11 @@ body.tunelito-comments-open .tunelito-document-map {
   border: 0;
 }
 .tunelito-mermaid[data-mermaid-state="error"] {
-  border-color: #dc2626;
-  background: #fef2f2;
+  border-color: var(--tl-error-border);
+  background: var(--tl-error-bg);
 }
 .tunelito-mermaid[data-mermaid-state="error"] .tunelito-mermaid-status {
-  color: #991b1b;
+  color: var(--tl-error-text);
   font-weight: 600;
 }
 .tunelito-mermaid details {
@@ -467,114 +538,38 @@ body.tunelito-comments-open .tunelito-document-map {
 }
 .tunelito-markdown th,
 .tunelito-markdown td {
-  border: 1px solid #dbe3ee;
+  border: 1px solid var(--tl-border);
   padding: 0.5rem 0.65rem;
   text-align: left;
 }
 .tunelito-markdown th {
-  background: #f1f5f9;
+  background: var(--tl-soft);
+  font-family: var(--tl-font-display);
 }
 .tunelito-markdown img {
   max-width: 100%;
   height: auto;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    background: #111827;
-    color: #e5e7eb;
-  }
-  .tunelito-markdown {
-    background: #18202f;
-  }
-  .tunelito-markdown h1,
-  .tunelito-markdown h2,
-  .tunelito-markdown h3,
-  .tunelito-markdown h4,
-  .tunelito-markdown h5,
-  .tunelito-markdown h6 {
-    color: #f9fafb;
-  }
-  .tunelito-markdown h6 {
-    color: #cbd5e1;
-  }
-  .tunelito-markdown a {
-    color: #5eead4;
-  }
-  .tunelito-wikilink {
-    color: #5eead4;
-  }
-  .tunelito-properties {
-    border-right-color: #334155;
-    background: #151d2a;
-    color: #cbd5e1;
-    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.18);
-  }
-  .tunelito-properties-header {
-    border-bottom-color: #334155;
-    background: color-mix(in srgb, #151d2a 92%, transparent);
-  }
-  .tunelito-properties-kicker,
-  .tunelito-property dt {
-    color: #94a3b8;
-  }
-  .tunelito-properties-title,
-  .tunelito-property dd {
-    color: #e5e7eb;
-  }
-  .tunelito-properties-collapse,
-  .tunelito-properties-tab {
-    border-color: #475569;
-    background: #1f2937;
-    color: #cbd5e1;
-  }
-  .tunelito-property-pill {
-    border-color: #285b55;
-    background: #183c39;
-    color: #99f6e4;
-  }
-  .tunelito-properties-error {
-    border-color: #9a5a42;
-    background: #351f1b;
-    color: #fed7aa;
-  }
-  .tunelito-document-map {
-    --ruler-unread: #94a3b8;
-    --ruler-consumed: #263244;
-    --ruler-accent: #5eead4;
-    color: #cbd5e1;
-  }
-  .tunelito-ruler-label {
-    color: #cbd5e1;
-  }
-  .tunelito-markdown blockquote {
-    border-left-color: #475569;
-    color: #cbd5e1;
-  }
-  .tunelito-markdown code {
-    background: #243044;
-  }
-  .tunelito-markdown th,
-  .tunelito-markdown td,
-  .tunelito-markdown pre {
-    border-color: #334155;
-  }
-  .tunelito-markdown th {
-    background: #243044;
-  }
-  .tunelito-mermaid {
-    border-color: #334155;
-    background: #111827;
-  }
-  .tunelito-mermaid-status {
-    color: #cbd5e1;
-  }
-  .tunelito-mermaid[data-mermaid-state="error"] {
-    border-color: #f87171;
-    background: #351b22;
-  }
-  .tunelito-mermaid[data-mermaid-state="error"] .tunelito-mermaid-status {
-    color: #fecaca;
-  }
+.tunelito-markdown strong {
+  color: var(--tl-strong);
+}
+.tunelito-markdown em,
+.tunelito-markdown figcaption {
+  color: var(--tl-emphasis);
+}
+.tunelito-markdown li::marker {
+  color: var(--tl-list-marker);
+}
+.tunelito-markdown figcaption {
+  font-size: 0.88rem;
+}
+.tunelito-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--tl-border);
+}
+.tunelito-markdown :focus-visible {
+  outline: 3px solid var(--tl-focus-ring);
+  outline-offset: 3px;
 }
 `;
 
@@ -637,7 +632,9 @@ function createMarkdownParser() {
     ],
     renderer: {
       html(token) {
-        return escapeHtml(token?.raw || token?.text || "");
+        const raw = token?.raw || token?.text || "";
+        if (/^\s*<!--[\s\S]*?-->\s*$/.test(raw)) return "";
+        return escapeHtml(raw);
       },
       link(token) {
         const href = safeHref(token?.href, { media: false });
@@ -669,13 +666,23 @@ export function isMarkdownPath(pathname) {
   return /\.md$/i.test(String(pathname || ""));
 }
 
-export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown page", cssHref = "" } = {}) {
+export function renderMarkdownDocument({
+  markdownSource,
+  sourceName = "Markdown page",
+  cssHref = "",
+  cssText = "",
+  themeName = "default",
+} = {}) {
   const title = String(sourceName || "Markdown page");
+  const theme = normalizeThemeName(themeName);
   const frontMatter = extractFrontMatter(markdownSource);
   const markdown = createMarkdownParser();
   const body = markdown.parser.parse(frontMatter.body);
   const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
   const customCss = customCssHref ? `  <link rel="stylesheet" href="${escapeAttribute(customCssHref)}">\n` : "";
+  const configCss = String(cssText || "").trim()
+    ? `  <style data-tunelito-config-css>\n${escapeStyleText(cssText).trim()}\n  </style>`
+    : "";
   const properties = renderProperties(frontMatter);
   const bodyClasses = frontMatter.kind === "none" ? "" : ' class="tunelito-has-properties tunelito-properties-open"';
   const mermaidScripts = markdown.hasMermaid()
@@ -687,7 +694,7 @@ export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown 
 
   return [
     "<!doctype html>",
-    '<html lang="en">',
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}">`,
     "<head>",
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -695,6 +702,10 @@ export function renderMarkdownDocument({ markdownSource, sourceName = "Markdown 
     "  <style>",
     DEFAULT_MARKDOWN_CSS.trim(),
     "  </style>",
+    `  <style data-tunelito-theme-css="${escapeAttribute(theme)}">`,
+    themeCss(theme),
+    "  </style>",
+    configCss,
     customCss.trimEnd(),
     ...mermaidScripts,
     `  <script src="${MARKDOWN_CLIENT_ROUTE}" defer></script>`,
@@ -830,4 +841,8 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
   return escapeHtml(value).replace(/'/g, "&#39;");
+}
+
+function escapeStyleText(value) {
+  return String(value).replace(/<\/style/gi, "<\\/style");
 }

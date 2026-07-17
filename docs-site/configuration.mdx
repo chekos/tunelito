@@ -1,0 +1,109 @@
+---
+title: "Markdown themes and configuration"
+description: "Choose a built-in Markdown theme and persist project or global presentation settings."
+---
+
+Tunelito keeps Markdown presentation separate from Markdown content. Themes and custom CSS affect only the served review page; the source file stays untouched.
+
+## Built-in themes
+
+| Theme | Best for | Color modes |
+| --- | --- | --- |
+| `default` | General review with Tunelito's neutral system-sans surface | Light and dark |
+| `editorial` | Essays, reports, and long-form drafts | Light and dark |
+| `technical` | Code, tables, Mermaid diagrams, and dense documentation | Light and dark |
+| `bns-pitaya` | Dark, low-glare reading inspired by BNS Obsidian Pitaya | Dark |
+
+Select a theme for one session:
+
+```bash
+tunelito ./notes.md --theme editorial
+```
+
+All themes are packaged with Tunelito, work offline, and use system font fallbacks. `bns-pitaya` adapts reading tokens from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme); it names optional local fonts but does not copy the Obsidian stylesheet, bundle font data, or download assets.
+
+## Project configuration
+
+Create `tunelito.config.json` beside a selected file or inside a selected folder:
+
+```json
+{
+  "theme": "technical",
+  "markdownCss": "./review.css"
+}
+```
+
+A local `markdownCss` path is resolved relative to the config file, then loaded into the rendered Markdown response. The config file itself is not served in folder mode.
+
+## Global configuration
+
+Global defaults live at:
+
+```text
+$XDG_CONFIG_HOME/tunelito/config.json
+```
+
+When `XDG_CONFIG_HOME` is unset, Tunelito uses:
+
+```text
+~/.config/tunelito/config.json
+```
+
+The file has the same JSON shape as project configuration.
+
+## Precedence
+
+Tunelito resolves each setting independently:
+
+```text
+CLI flags > project config > global config > Tunelito defaults
+```
+
+For example, a project can choose `technical` while one session temporarily uses `--theme editorial`.
+
+Styles load in this order:
+
+1. Tunelito's structural Markdown CSS
+2. The selected built-in theme
+3. CSS loaded from project or global configuration
+4. The stylesheet link passed with `--markdown-css`
+
+That order preserves the existing `--markdown-css` override behavior.
+
+## Theme token contract
+
+Bundled themes and custom CSS share stable `--tl-*` properties. The structural renderer consumes these tokens instead of reaching into the comments panel:
+
+| Group | Custom properties |
+| --- | --- |
+| Typography | `--tl-font-body`, `--tl-font-display`, `--tl-font-mono`, `--tl-line-height`, `--tl-paragraph-rhythm` |
+| Reading geometry | `--tl-reading-measure`, `--tl-page-padding` |
+| Heading hierarchy | `--tl-heading-line-height`; `--tl-h1-*` through `--tl-h6-*` for size, weight, and margin; `--tl-heading-1` through `--tl-heading-6` for color |
+| Core color | `--tl-page-bg`, `--tl-paper-bg`, `--tl-text`, `--tl-muted`, `--tl-faint`, `--tl-accent`, `--tl-border`, `--tl-soft`, `--tl-selection` |
+| Links and emphasis | `--tl-link`, `--tl-link-external`, `--tl-link-hover`, `--tl-wikilink`, `--tl-wikilink-hover`, `--tl-strong`, `--tl-emphasis`, `--tl-list-marker` |
+| Code and errors | `--tl-code-bg`, `--tl-code-text`, `--tl-inline-code-bg`, `--tl-code-keyword`, `--tl-code-string`, `--tl-code-comment`, `--tl-error-*` |
+| Review chrome | `--tl-properties-*`, `--tl-pill-*`, `--tl-ruler-unread`, `--tl-ruler-consumed`, `--tl-ruler-current`, `--tl-focus-ring` |
+| Mermaid | `--tl-mermaid-background`, `--tl-mermaid-primary`, `--tl-mermaid-primary-text`, `--tl-mermaid-border`, `--tl-mermaid-secondary`, `--tl-mermaid-tertiary`, `--tl-mermaid-line`, `--tl-mermaid-edge-label` |
+
+Custom CSS may override these tokens or style `.tunelito-markdown`. Themes must not hide review controls, remove focus visibility, or style undocumented comments-panel internals.
+
+## Inspect resolved settings
+
+`config show` is read-only and does not start a server, tunnel, or browser:
+
+```bash
+tunelito config show ./notes.md
+tunelito config show ./notes.md --json
+```
+
+The report includes the resolved theme, stylesheet, config file locations, source layer for each value, and the available theme catalog.
+
+## Author-only HTML comments
+
+Complete Markdown HTML comments are omitted from the rendered reader surface:
+
+```md
+Visible sentence. <!-- Author note hidden from reviewers. -->
+```
+
+Block and multiline comments are hidden too. Literal `<!-- ... -->` syntax inside inline or fenced code stays visible. The source Markdown is never rewritten.

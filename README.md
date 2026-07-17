@@ -99,6 +99,14 @@ To diagnose local setup, target paths, comments inbox health, agent ledger JSON,
 tunelito doctor ./page.html --json
 ```
 
+To use a named Markdown theme:
+
+```bash
+tunelito ./notes.md --theme editorial
+```
+
+Tunelito includes `default`, `editorial`, `technical`, and dark-only `bns-pitaya`. See [Markdown themes and configuration](#markdown-themes-and-configuration) for persistent project and global settings.
+
 For in-meeting collaboration without writing comments to disk:
 
 ```bash
@@ -129,11 +137,55 @@ tunelito ./page.html --live
 
 Markdown reviews keep the source file untouched while adding three presentation-only surfaces to the served response:
 
+- HTML comments are author-only source notes: complete inline and block `<!-- ... -->` comments are omitted from the rendered review surface. Literal comment syntax inside inline or fenced code remains visible, and Tunelito never rewrites the Markdown file.
 - A leading YAML front-matter mapping appears in a collapsible left `Properties` drawer. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure.
 - Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
 - A compact, vertically centered document-map dial at the desktop right edge derives one tick from every real top-level heading, paragraph, list, blockquote, code block, table, figure, Mermaid figure, or thematic break. Its track is capped at 500px and preserves 60px of vertical breathing room on shorter desktop viewports. Heading ticks step from h1 (longest) through h6; h5 and h6 remain navigable 14px and 12px heading marks rather than disappearing. The current block is teal, consumed marks recede toward the theme background, and heading labels expand while the dial is hovered or visibly keyboard-focused, then retreat when the pointer leaves. Every tick navigates; Arrow keys, Page keys, Home, End, and Escape support keyboard use without a separate pin control, paragraph hashes, or a visual progress number.
 
 Properties open on a first desktop visit and remember their collapsed/open preference across full-page reloads. Narrow layouts start with a collapsed sheet, and the document map is hidden at 760px and below. On wide desktops the map shifts beside an open comments panel; at narrower desktop widths it temporarily hides while comments are open. Both surfaces respect dark mode and `prefers-reduced-motion`, and `--markdown-css` still loads after the built-in Markdown styles.
+
+## Markdown Themes and Configuration
+
+Tunelito ships four dependency-free themes:
+
+- `default`: the existing neutral, system-sans review surface
+- `editorial`: a spacious serif-led layout for essays and long-form drafts
+- `technical`: a wider, denser sans/mono layout for code, tables, diagrams, and documentation
+- `bns-pitaya`: a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), using local font names with system fallbacks and no copied stylesheet, bundled fonts, or network assets
+
+Choose one for a session:
+
+```bash
+tunelito ./notes.md --theme technical
+```
+
+Persist a project setting beside the selected file or inside the selected folder as `tunelito.config.json`:
+
+```json
+{
+  "theme": "editorial",
+  "markdownCss": "./review.css"
+}
+```
+
+Global defaults live at `$XDG_CONFIG_HOME/tunelito/config.json`, or `~/.config/tunelito/config.json` when `XDG_CONFIG_HOME` is unset. Resolution is deterministic:
+
+```text
+CLI flags > project config > global config > Tunelito defaults
+```
+
+For config-file `markdownCss`, local file paths are resolved relative to the config file and loaded into the served Markdown page. HTTP(S) values remain stylesheet links. `--markdown-css` remains a one-session stylesheet link and has final precedence after the built-in shell, selected theme, and configured CSS.
+
+Inspect the effective settings and their source layers without starting a server:
+
+```bash
+tunelito config show ./notes.md
+tunelito config show ./notes.md --json
+```
+
+Project config files affect presentation only and are blocked from folder-mode static serving.
+
+The public [configuration guide](docs-site/configuration.mdx) documents the stable `--tl-*` token contract for typography, H1–H6 hierarchy, links, code, Mermaid, metadata, ruler state, and focus treatments.
 
 ## CLI
 
@@ -146,12 +198,14 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
        tunelito review watch [page.html|notes.md|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
+       tunelito config show [page.html|notes.md|folder] [options]
        tunelito skill <show|setup>
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
+  --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
   --live                Use ephemeral live collaboration mode; do not write comments to disk
@@ -189,6 +243,7 @@ Commands:
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
+  config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
                         for a coding agent to install
@@ -220,12 +275,13 @@ Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing 
 
 ## How It Works
 
-Tunelito serves HTML from disk or renders Markdown into a readable page, then injects small same-origin clients into the response. Markdown front matter, wiki references, Mermaid, and the document map are rendered or discovered only in the served page. For folder targets, every served `.html`, `.htm`, or `.md` page gets the annotation client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
+Tunelito serves HTML from disk or renders Markdown into a readable page, then injects small same-origin clients into the response. Markdown themes, author-comment hiding, front matter, wiki references, Mermaid, and the document map are applied or discovered only in the served page. For folder targets, every served `.html`, `.htm`, or `.md` page gets the annotation client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
 
 The server also:
 
 - serves sibling assets relative to the selected file, or non-hidden files within the selected folder
-- renders Markdown with a built-in readable stylesheet, optionally adding `--markdown-css <href>` for team styling
+- renders Markdown with one of four bundled themes, project/global JSON configuration, and optional final `--markdown-css <href>` team styling
+- omits complete HTML comments from the reader surface while preserving their source text and literal code examples
 - parses bounded leading YAML front matter into an escaped, reload-persistent left properties drawer with a readable invalid-YAML fallback
 - renders common Obsidian wiki references as semantically honest inline references without vault-wide resolution or embed support
 - builds a keyboard-accessible, opacity-based desktop document map from the real rendered Markdown blocks, including explicit h1–h6 navigation
