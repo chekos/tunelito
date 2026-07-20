@@ -9,6 +9,7 @@ import { renderCommentsMarkdown } from "../src/comments.js";
 const cleanDeps = {
   checkPort: async () => ({ available: true }),
   commandExists: () => false,
+  env: {},
   now: () => new Date("2026-06-17T00:00:00.000Z"),
 };
 
@@ -120,6 +121,27 @@ test("doctor reports safety warnings for risky session shapes", async () => {
   assert.equal(findCheck(report, "safety.no-auth-tunnel").status, "warn");
   assert.equal(findCheck(report, "safety.live-agent").status, "fail");
   assert.equal(findCheck(report, "safety.agent-input").status, "warn");
+});
+
+test("doctor advises a detected coding-agent host when no agent mode is configured", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-doctor-agent-host-"));
+  const targetPath = join(dir, "notes.md");
+  writeFileSync(targetPath, "# Notes");
+
+  const report = await buildDoctorReport({ targetPath, tunnel: false }, {
+    ...cleanDeps,
+    env: { CODEX_THREAD_ID: "thread_123" },
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(findCheck(report, "agent.host-without-mode").status, "warn");
+  assert.match(findCheck(report, "agent.host-without-mode").message, /Codex.*--agent-session/);
+
+  const configured = await buildDoctorReport({ targetPath, tunnel: false, agentSession: true }, {
+    ...cleanDeps,
+    env: { CODEX_THREAD_ID: "thread_123" },
+  });
+  assert.equal(configured.checks.some((check) => check.id === "agent.host-without-mode"), false);
 });
 
 test("doctor reports unavailable ports and cloudflared fallback", async () => {

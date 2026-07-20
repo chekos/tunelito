@@ -1001,6 +1001,7 @@ test("server can require a review access key", async () => {
     const denied = await fetch(instance.originUrl);
     assert.equal(denied.status, 401);
     assert.equal(await denied.text(), "Tunelito review link is missing or invalid.");
+    assert.equal(denied.headers.get("x-tunelito-review"), null);
 
     const badCookie = await fetch(instance.originUrl, { headers: { cookie: "tunelito_key=%" } });
     assert.equal(badCookie.status, 401);
@@ -1010,6 +1011,12 @@ test("server can require a review access key", async () => {
     assert.equal(allowed.status, 200);
     assert.match(await allowed.text(), /Private draft/);
     assert.match(allowed.headers.get("set-cookie"), /tunelito_key=secret/);
+    assert.equal(allowed.headers.get("x-tunelito-review"), "1");
+
+    const readiness = await fetch(instance.localUrl, { method: "HEAD" });
+    assert.equal(readiness.status, 200);
+    assert.equal(readiness.headers.get("x-tunelito-review"), "1");
+    assert.equal(await readiness.text(), "");
 
     const clientDenied = await fetch(new URL("/__tunelito/client.js", instance.originUrl));
     assert.equal(clientDenied.status, 401);

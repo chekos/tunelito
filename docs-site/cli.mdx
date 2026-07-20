@@ -15,6 +15,12 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito config show [page.html|notes.md|folder] [options]
        tunelito skill <show|setup>
 
+Coding agents:
+  Before serving a review room, load the bundled workflow:
+    tunelito skill show
+  Installation guidance:
+    tunelito skill setup
+
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
@@ -60,7 +66,6 @@ Commands:
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
-                        for a coding agent to install
 ```
 
 ## Common examples

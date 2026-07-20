@@ -6,6 +6,9 @@ description: "Fix common Tunelito install, tunnel, comment, and browser issues."
 ## No public URL appears
 
 Tunelito starts Cloudflare Tunnel with installed `cloudflared` first, then falls back to `npx cloudflared@latest`.
+It ignores Cloudflare's provisioning endpoint, waits for the generated Quick
+Tunnel hostname, and verifies that the hostname reaches the current Tunelito
+server before printing `Public:`.
 
 If neither works:
 

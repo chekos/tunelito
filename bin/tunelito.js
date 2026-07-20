@@ -38,7 +38,7 @@ import { startCloudflareTunnel } from "../src/tunnel.js";
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 export const VERSION = pkg.version;
 
-function usage() {
+export function usage() {
   return `Tunelito ${VERSION}
 
 Usage: tunelito <page.html|notes.md|folder> [options]
@@ -49,6 +49,12 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
        tunelito config show [page.html|notes.md|folder] [options]
        tunelito skill <show|setup>
+
+Coding agents:
+  Before serving a review room, load the bundled workflow:
+    tunelito skill show
+  Installation guidance:
+    tunelito skill setup
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -95,7 +101,6 @@ Commands:
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
-                        for a coding agent to install
 `;
 }
 
@@ -434,8 +439,9 @@ async function main() {
     console.log(`Agent:   ${agentWorker.description}`);
     agentWorker.start();
   }
+  let agentSessionPath = "";
   if (opts.agentSession) {
-    const sessionPath = writeAgentSessionFile({
+    agentSessionPath = writeAgentSessionFile({
       targetPath: opts.filePath,
       commentsPath: instance.commentsPath,
       statePath: agentStatePath,
@@ -451,7 +457,7 @@ async function main() {
     console.log(`Agent session: watching comments in this process`);
     console.log(`Agent session: tracker ${inboxStatusCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger })}`);
     console.log(`Agent session: record template ${agentSessionRecordCommand}`);
-    console.log(`Agent session: metadata ${sessionPath}`);
+    console.log(`Agent session: metadata ${agentSessionPath}`);
     agentSessionWatcher.start();
   }
   if (opts.live) {
@@ -467,8 +473,11 @@ async function main() {
     console.log("Public:  starting Cloudflare Tunnel...");
     tunnel = startCloudflareTunnel({
       localUrl: instance.originUrl,
+      accessKey,
       onUrl(url) {
-        console.log(`Public:  ${withReviewKey(url, accessKey)}`);
+        const publicUrl = withReviewKey(url, accessKey);
+        if (agentSessionPath) updateAgentSessionPublicUrl(agentSessionPath, publicUrl);
+        console.log(`Public:  ${publicUrl}`);
       },
       onFallback(fallbackPackage) {
         console.log(`Public:  cloudflared not found; trying npx ${fallbackPackage}...`);
@@ -1209,7 +1218,7 @@ function formatInboxRecordResult(recorded, format, { trigger = DEFAULT_AGENT_TRI
   return `Recorded ${recorded.comment.id} as ${recorded.state.status} in ${recorded.statePath}\n\n${tracker}`;
 }
 
-function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend, reviewUrl = "" }) {
+export function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend, reviewUrl = "" }) {
   const workspaceRoot = agentWorkspaceRoot(targetPath);
   const sessionPath = join(workspaceRoot, ".tunelito", "session.json");
   mkdirSync(dirname(sessionPath), { recursive: true });
@@ -1235,6 +1244,14 @@ function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, tr
   };
   writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
   return sessionPath;
+}
+
+export function updateAgentSessionPublicUrl(sessionPath, publicUrl) {
+  const session = JSON.parse(readFileSync(sessionPath, "utf8"));
+  session.publicUrl = publicUrl;
+  session.reviewUrl = publicUrl;
+  session.reviewWatchCommand = reviewWatchCommand({ url: publicUrl });
+  writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
 }
 
 function reviewWatchCommand({ url }) {

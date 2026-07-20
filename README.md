@@ -12,6 +12,15 @@ Tunelito is local-first: your files stay on your machine, the public URL is a te
 
 Tunelito requires Node.js 22 or newer.
 
+If you are a coding agent, load Tunelito's bundled workflow before starting a
+review room:
+
+```bash
+npx --yes tunelito skill show
+```
+
+Use `npx --yes tunelito skill setup` for installation guidance.
+
 ```bash
 npx --yes tunelito ./page.html
 ```
@@ -77,7 +86,11 @@ Access:  review key required by the printed URLs
 Public:  https://example.trycloudflare.com/?tunelito_key=...
 ```
 
-Share the `Public:` URL with the person on your call. Open the `Local:` URL yourself; direct local sessions are marked as the owner, while public tunnel sessions are marked as visitors.
+Tunelito prints `Public:` only after the randomized Quick Tunnel hostname has
+been verified against the running Tunelito server. Agent sessions also persist
+that verified URL in `.tunelito/session.json` for recovery. Share that URL with the
+person on your call. Open the `Local:` URL yourself; direct local sessions are
+marked as the owner, while public tunnel sessions are marked as visitors.
 
 To seed your local owner display name:
 
@@ -201,6 +214,12 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito config show [page.html|notes.md|folder] [options]
        tunelito skill <show|setup>
 
+Coding agents:
+  Before serving a review room, load the bundled workflow:
+    tunelito skill show
+  Installation guidance:
+    tunelito skill setup
+
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
   --host <host>         Host to bind locally (default: 127.0.0.1)
@@ -246,7 +265,6 @@ Commands:
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
-                        for a coding agent to install
 ```
 
 ## Agent Skill
