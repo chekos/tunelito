@@ -70,7 +70,7 @@ body {
   min-height: 100vh;
   transition: padding-left 180ms ease;
 }
-.tunelito-has-properties.tunelito-properties-open .tunelito-page-frame {
+.tunelito-has-sidebar.tunelito-properties-open .tunelito-page-frame {
   padding-left: 288px;
 }
 .tunelito-markdown {
@@ -209,6 +209,130 @@ body {
   font-size: 1.05rem;
   font-weight: 650;
 }
+.tunelito-sidebar-section {
+  padding: 20px;
+}
+.tunelito-sidebar-section + .tunelito-sidebar-section {
+  border-top: 1px solid var(--tl-border);
+}
+.tunelito-sidebar-section-header {
+  margin-bottom: 12px;
+}
+.tunelito-sidebar-section-title {
+  margin: 0;
+  color: var(--tl-text);
+  font-family: var(--tl-font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.tunelito-navigation-list,
+.tunelito-navigation-children {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tunelito-navigation-children {
+  margin: 4px 0 4px 13px;
+  border-left: 1px solid var(--tl-border);
+  padding-left: 10px;
+}
+.tunelito-navigation-link,
+.tunelito-navigation-folder-link,
+.tunelito-navigation-summary {
+  box-sizing: border-box;
+  color: var(--tl-text);
+  font: 600 0.8rem/1.35 var(--tl-font-body);
+}
+.tunelito-navigation-link,
+.tunelito-navigation-folder-link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border-radius: 6px;
+  padding: 7px 8px;
+  text-decoration: none;
+}
+.tunelito-navigation-link:hover,
+.tunelito-navigation-folder-link:hover,
+.tunelito-navigation-link:focus-visible,
+.tunelito-navigation-folder-link:focus-visible {
+  background: var(--tl-soft);
+  color: var(--tl-accent);
+}
+.tunelito-navigation-link:focus-visible,
+.tunelito-navigation-folder-link:focus-visible,
+.tunelito-navigation-summary:focus-visible {
+  outline: 3px solid var(--tl-selection);
+  outline-offset: 2px;
+}
+.tunelito-navigation-link[aria-current="page"] {
+  border: 1px solid var(--tl-accent);
+  background: var(--tl-soft);
+  color: var(--tl-accent-strong);
+  font-weight: 750;
+}
+.tunelito-navigation-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tunelito-navigation-kind {
+  flex: 0 0 auto;
+  color: var(--tl-muted);
+  font-size: 0.72rem;
+}
+.tunelito-navigation-current {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--tl-muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.tunelito-navigation-folder {
+  min-width: 0;
+}
+.tunelito-navigation-summary {
+  display: flex;
+  min-height: 34px;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border-radius: 6px;
+  padding: 7px 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.tunelito-navigation-summary::-webkit-details-marker {
+  display: none;
+}
+.tunelito-navigation-summary::before {
+  flex: 0 0 auto;
+  width: 0.8rem;
+  color: var(--tl-muted);
+  content: "›";
+  font-size: 1rem;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+.tunelito-navigation-folder[open] > .tunelito-navigation-summary::before {
+  transform: rotate(90deg);
+}
+.tunelito-navigation-summary:hover {
+  background: var(--tl-soft);
+  color: var(--tl-accent);
+}
+.tunelito-navigation-empty {
+  margin: 0;
+  color: var(--tl-muted);
+  font-size: 0.8rem;
+}
 .tunelito-properties-collapse,
 .tunelito-properties-tab {
   border: 1px solid var(--tl-border);
@@ -236,7 +360,7 @@ body {
   display: grid;
   gap: 16px;
   margin: 0;
-  padding: 20px;
+  padding: 0;
 }
 .tunelito-property {
   display: grid;
@@ -432,7 +556,7 @@ body.tunelito-comments-open .tunelito-document-map {
   }
 }
 @media (max-width: 960px) {
-  .tunelito-has-properties.tunelito-properties-open .tunelito-page-frame {
+  .tunelito-has-sidebar.tunelito-properties-open .tunelito-page-frame {
     padding-left: 0;
   }
   .tunelito-properties {
@@ -452,6 +576,7 @@ body.tunelito-comments-open .tunelito-document-map {
   .tunelito-page-frame,
   .tunelito-properties,
   .tunelito-document-map,
+  .tunelito-navigation-summary::before,
   .tunelito-ruler-tick,
   .tunelito-ruler-label {
     scroll-behavior: auto;
@@ -672,6 +797,7 @@ export function renderMarkdownDocument({
   cssHref = "",
   cssText = "",
   themeName = "default",
+  navigation = null,
 } = {}) {
   const title = String(sourceName || "Markdown page");
   const theme = normalizeThemeName(themeName);
@@ -683,8 +809,11 @@ export function renderMarkdownDocument({
   const configCss = String(cssText || "").trim()
     ? `  <style data-tunelito-config-css>\n${escapeStyleText(cssText).trim()}\n  </style>`
     : "";
-  const properties = renderProperties(frontMatter);
-  const bodyClasses = frontMatter.kind === "none" ? "" : ' class="tunelito-has-properties tunelito-properties-open"';
+  const sidebar = renderSidebar(frontMatter, navigation);
+  const bodyClassNames = [];
+  if (frontMatter.kind !== "none") bodyClassNames.push("tunelito-has-properties");
+  if (sidebar) bodyClassNames.push("tunelito-has-sidebar", "tunelito-properties-open");
+  const bodyClasses = bodyClassNames.length ? ` class="${bodyClassNames.join(" ")}"` : "";
   const mermaidScripts = markdown.hasMermaid()
     ? [
         `  <script src="${MERMAID_LIBRARY_ROUTE}" defer></script>`,
@@ -712,10 +841,180 @@ export function renderMarkdownDocument({
     "</head>",
     `<body${bodyClasses}>`,
     '  <div class="tunelito-page-frame">',
-    properties,
+    sidebar,
     `    <main class="tunelito-markdown" data-tunelito-source-type="markdown" data-tunelito-comment-surface>\n${body.trimEnd()}\n    </main>`,
     '    <nav class="tunelito-document-map" aria-label="Document map" data-tunelito-document-map data-tunelito-comment-ignore></nav>',
     "  </div>",
+    "</body>",
+    "</html>",
+  ].filter((line) => line !== "").join("\n");
+}
+
+export function renderFolderLandingDocument({
+  folderName = "Folder",
+  pagePath = "/",
+  entries = [],
+  parentHref = "",
+  cssHref = "",
+  cssText = "",
+  themeName = "default",
+} = {}) {
+  const theme = normalizeThemeName(themeName);
+  const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
+  const customCss = customCssHref ? `  <link rel="stylesheet" href="${escapeAttribute(customCssHref)}">\n` : "";
+  const configCss = String(cssText || "").trim()
+    ? `  <style data-tunelito-config-css>\n${escapeStyleText(cssText).trim()}\n  </style>`
+    : "";
+  const cards = entries.map((entry) => {
+    const kind = entry.type === "directory" ? "Folder" : entry.extension === ".md" ? "Markdown" : "HTML";
+    const icon = entry.type === "directory" ? "↳" : "•";
+    return [
+      '        <li class="tunelito-folder-entry">',
+      `          <a class="tunelito-folder-card tunelito-folder-card-${escapeAttribute(entry.type)}" href="${escapeAttribute(entry.href)}">`,
+      `            <span class="tunelito-folder-card-icon" aria-hidden="true">${icon}</span>`,
+      '            <span class="tunelito-folder-card-copy">',
+      `              <strong>${escapeHtml(entry.name)}</strong>`,
+      `              <span>${kind}</span>`,
+      "            </span>",
+      "          </a>",
+      "        </li>",
+    ].join("\n");
+  });
+  const contents = cards.length
+    ? `<ul class="tunelito-folder-grid">\n${cards.join("\n")}\n      </ul>`
+    : '<div class="tunelito-folder-empty"><h2>This folder is empty</h2><p>No served Markdown, HTML, or child folders are available here yet.</p></div>';
+  const parent = parentHref
+    ? `      <a class="tunelito-folder-parent" href="${escapeAttribute(parentHref)}">← Parent folder</a>`
+    : "";
+
+  return [
+    "<!doctype html>",
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}">`,
+    "<head>",
+    '  <meta charset="utf-8">',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+    `  <title>${escapeHtml(folderName)} · Tunelito folder</title>`,
+    "  <style>",
+    DEFAULT_MARKDOWN_CSS.trim(),
+    `
+.tunelito-folder-landing {
+  max-width: min(980px, calc(100% - 32px));
+}
+.tunelito-folder-hero {
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--tl-border);
+  padding-bottom: 24px;
+}
+.tunelito-folder-eyebrow {
+  margin: 0 0 8px;
+  color: var(--tl-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tunelito-folder-path {
+  margin: 10px 0 0;
+  color: var(--tl-muted);
+  font: 0.8rem/1.5 var(--tl-font-mono);
+  overflow-wrap: anywhere;
+}
+.tunelito-folder-parent {
+  display: inline-flex;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  color: var(--tl-accent);
+  font-weight: 700;
+  text-underline-offset: 0.16em;
+}
+.tunelito-folder-parent:focus-visible,
+.tunelito-folder-card:focus-visible {
+  outline: 3px solid var(--tl-selection);
+  outline-offset: 3px;
+}
+.tunelito-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tunelito-folder-card {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--tl-border);
+  border-radius: 10px;
+  background: var(--tl-soft);
+  color: var(--tl-text);
+  padding: 14px;
+  text-decoration: none;
+}
+.tunelito-folder-card-directory {
+  border-style: dashed;
+  background: var(--tl-properties-bg);
+}
+.tunelito-folder-card:hover {
+  border-color: var(--tl-accent);
+  color: var(--tl-accent-strong);
+}
+.tunelito-folder-card-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--tl-paper-bg);
+  color: var(--tl-accent);
+  font-size: 1.2rem;
+}
+.tunelito-folder-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.tunelito-folder-card-copy strong {
+  overflow-wrap: anywhere;
+}
+.tunelito-folder-card-copy span {
+  color: var(--tl-muted);
+  font-size: 0.75rem;
+}
+.tunelito-folder-empty {
+  border: 1px dashed var(--tl-border);
+  border-radius: 10px;
+  background: var(--tl-soft);
+  padding: 28px;
+}
+.tunelito-folder-empty h2 {
+  margin-top: 0;
+}
+@media (max-width: 600px) {
+  .tunelito-folder-landing {
+    max-width: 100%;
+  }
+}`,
+    "  </style>",
+    `  <style data-tunelito-theme-css="${escapeAttribute(theme)}">`,
+    themeCss(theme),
+    "  </style>",
+    configCss,
+    customCss.trimEnd(),
+    "</head>",
+    "<body>",
+    '  <main class="tunelito-markdown tunelito-folder-landing" data-tunelito-source-type="folder" data-tunelito-comment-surface>',
+    parent,
+    '    <header class="tunelito-folder-hero">',
+    '      <p class="tunelito-folder-eyebrow">Tunelito-generated navigation</p>',
+    `      <h1>${escapeHtml(folderName)}</h1>`,
+    "      <p>This folder has no authored index, so Tunelito assembled this landing page from the documents it can safely serve.</p>",
+    `      <p class="tunelito-folder-path">${escapeHtml(pagePath)}</p>`,
+    "    </header>",
+    `    <section aria-label="Folder contents">\n      ${contents}\n    </section>`,
+    "  </main>",
     "</body>",
     "</html>",
   ].filter((line) => line !== "").join("\n");
@@ -742,29 +1041,91 @@ function parseWikiLink(value) {
   };
 }
 
-function renderProperties(frontMatter) {
-  if (frontMatter.kind === "none") return "";
+function renderSidebar(frontMatter, navigation) {
+  const hasProperties = frontMatter.kind !== "none";
+  const hasNavigation = Array.isArray(navigation?.entries);
+  if (!hasProperties && !hasNavigation) return "";
   const count = frontMatter.properties.length;
   const countLabel = frontMatter.kind === "error" ? "issue" : String(count);
-  const content = frontMatter.kind === "error"
+  const propertyContent = frontMatter.kind === "error"
     ? renderPropertiesError(frontMatter)
     : `<dl class="tunelito-properties-list">\n${frontMatter.properties.map(renderProperty).join("\n")}\n      </dl>`;
+  const navigationContent = hasNavigation ? renderNavigation(navigation.entries) : "";
+  const tabLabel = hasNavigation && hasProperties
+    ? "Review context"
+    : hasNavigation ? "Served documents" : `Properties · ${countLabel}`;
 
   return [
     '    <button class="tunelito-properties-tab" type="button" aria-controls="tunelito-properties" aria-expanded="true" data-tunelito-comment-ignore hidden>',
-    `      Properties · ${escapeHtml(countLabel)}`,
+    `      ${escapeHtml(tabLabel)}`,
     "    </button>",
-    '    <aside class="tunelito-properties" id="tunelito-properties" aria-label="Document properties" data-tunelito-comment-ignore>',
+    '    <aside class="tunelito-properties" id="tunelito-properties" aria-label="Tunelito document sidebar" data-tunelito-comment-ignore>',
     '      <header class="tunelito-properties-header">',
     "        <div>",
-    '          <p class="tunelito-properties-kicker">Document metadata</p>',
-    `          <h2 class="tunelito-properties-title">Properties · ${escapeHtml(countLabel)}</h2>`,
+    '          <p class="tunelito-properties-kicker">Tunelito review</p>',
+    '          <h2 class="tunelito-properties-title">Document sidebar</h2>',
     "        </div>",
-    '        <button class="tunelito-properties-collapse" type="button" aria-controls="tunelito-properties" aria-expanded="true" aria-label="Collapse document properties">←</button>',
+    '        <button class="tunelito-properties-collapse" type="button" aria-controls="tunelito-properties" aria-expanded="true" aria-label="Collapse document sidebar">←</button>',
     "      </header>",
-    content,
+    navigationContent,
+    hasProperties ? [
+      '      <section class="tunelito-sidebar-section tunelito-properties-section" aria-labelledby="tunelito-properties-title">',
+      '        <header class="tunelito-sidebar-section-header">',
+      '          <p class="tunelito-properties-kicker">Source metadata</p>',
+      `          <h3 class="tunelito-sidebar-section-title" id="tunelito-properties-title">Properties · ${escapeHtml(countLabel)}</h3>`,
+      "        </header>",
+      propertyContent,
+      "      </section>",
+    ].join("\n") : "",
     "    </aside>",
+  ].filter(Boolean).join("\n");
+}
+
+function renderNavigation(entries) {
+  const content = entries.length
+    ? `<ul class="tunelito-navigation-list">\n${entries.map(renderNavigationEntry).join("\n")}\n        </ul>`
+    : '<p class="tunelito-navigation-empty">No served documents are available.</p>';
+  return [
+    '      <nav class="tunelito-sidebar-section tunelito-navigation" aria-labelledby="tunelito-navigation-title">',
+    '        <header class="tunelito-sidebar-section-header">',
+    '          <p class="tunelito-properties-kicker">Tunelito navigation</p>',
+    '          <h3 class="tunelito-sidebar-section-title" id="tunelito-navigation-title">Served documents</h3>',
+    "        </header>",
+    content,
+    "      </nav>",
   ].join("\n");
+}
+
+function renderNavigationEntry(entry) {
+  if (entry.type === "directory") {
+    const children = entry.children.length
+      ? `<ul class="tunelito-navigation-children">\n${entry.children.map(renderNavigationEntry).join("\n")}\n          </ul>`
+      : '<p class="tunelito-navigation-empty">No served documents</p>';
+    return [
+      '          <li class="tunelito-navigation-item">',
+      '            <details class="tunelito-navigation-folder">',
+      `              <summary class="tunelito-navigation-summary"><span class="tunelito-navigation-label">${escapeHtml(entry.name)}</span></summary>`,
+      `              <a class="tunelito-navigation-folder-link" href="${escapeAttribute(entry.href)}" aria-label="Open ${escapeAttribute(entry.name)} folder"><span class="tunelito-navigation-kind" aria-hidden="true">↳</span><span class="tunelito-navigation-label">Open folder</span></a>`,
+      children,
+      "            </details>",
+      "          </li>",
+    ].join("\n");
+  }
+  const current = entry.current
+    ? ' aria-current="page"'
+    : "";
+  const currentLabel = entry.current
+    ? '<span class="tunelito-navigation-current">Current</span>'
+    : "";
+  return [
+    '          <li class="tunelito-navigation-item">',
+    `            <a class="tunelito-navigation-link" href="${escapeAttribute(entry.href)}"${current}>`,
+    '              <span class="tunelito-navigation-kind" aria-hidden="true">•</span>',
+    `              <span class="tunelito-navigation-label">${escapeHtml(entry.name)}</span>`,
+    currentLabel ? `              ${currentLabel}` : "",
+    "            </a>",
+    "          </li>",
+  ].filter(Boolean).join("\n");
 }
 
 function renderProperty({ key, value }) {

@@ -28,7 +28,7 @@ Use the example fixtures as the shared regression surface for Tunelito UI work. 
 | `examples/markdown/html-comments.md` | Author-only comment boundaries | Inline, block, multiline, and adjacent HTML comments hidden from readers; fenced literal preserved |
 | `examples/markdown/kitchen-sink.md` | Full Markdown integration | Every top-level ruler block, code boundaries, local image, Mermaid, ordinary links, wiki links, metadata |
 | `examples/markdown/ruler-density.md` | Dense document performance | At least 150 meaningful blocks, crowding, measurement, target accuracy, label usability |
-| `examples/markdown-vault/index.md` | Folder/index and Obsidian context | Companion notes, aliases, target-plus-heading and unresolved references, code boundaries, literal embeds |
+| `examples/markdown-vault/index.md` | Folder/index and Obsidian/PARA context | Root documents, collapsed nested folders, a ten-note reference shelf, navigation/property separation, aliases, target-plus-heading and unresolved references |
 
 ## When To Use Them
 

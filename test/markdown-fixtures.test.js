@@ -20,8 +20,12 @@ const fixtureFiles = [
   "examples/markdown-vault/index.md",
   "examples/markdown-vault/Project brief.md",
   "examples/markdown-vault/Security notes.md",
+  "examples/markdown-vault/Projects/Launch plan.md",
+  "examples/markdown-vault/Projects/Plain status.md",
+  "examples/markdown-vault/Resources/Reading list.md",
+  ...Array.from({ length: 10 }, (_, index) => `examples/markdown-vault/Resources/Reference shelf/Reference ${String(index + 1).padStart(2, "0")}.md`),
 ];
-const inventoryFiles = fixtureFiles.filter((path) => !path.endsWith("Project brief.md") && !path.endsWith("Security notes.md"));
+const inventoryFiles = fixtureFiles.filter((path) => !path.startsWith("examples/markdown-vault/") || path.endsWith("index.md"));
 
 test("Markdown fixture inventory stays complete and documented", () => {
   const publicInventory = readFileSync(resolve(repoRoot, "examples/README.md"), "utf8");
@@ -84,7 +88,7 @@ test("committed Markdown fixtures serve through the production renderer without 
     accessKey: "fixture-check",
   });
   try {
-    for (const pathname of ["/", "/Project%20brief.md", "/Security%20notes.md"]) {
+    for (const pathname of ["/", "/Project%20brief.md", "/Security%20notes.md", "/Projects/Launch%20plan.md", "/Projects/Plain%20status.md", "/Resources/Reference%20shelf/Reference%2010.md"]) {
       const pageUrl = new URL(vault.localUrl);
       pageUrl.pathname = pathname;
       const response = await fetch(pageUrl);
