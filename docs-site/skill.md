@@ -177,6 +177,40 @@ the matching source files, then record the result:
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
 
+#### Keep the owning turn attached
+
+Starting a background `--agent-session` process delivers and claims comments,
+but background stdout alone does not wake a coding-agent conversation that has
+already returned its final response. If you tell the user you will remain
+attached during a live review, keep the current turn open:
+
+1. Start Tunelito in a foreground PTY.
+2. Send the review URL as an intermediate update, not the final response.
+3. Poll that PTY with bounded waits of at most 60 seconds and stay quiet when
+   nothing changes.
+4. When Tunelito prints a claim, edit the source and record the exact claim id.
+5. Resume bounded waits only while the user still wants an active review.
+
+The Tunelito server is the only claimer in this lifecycle. Do not run `inbox
+next` or `inbox watch` beside it. If the host supports a lifecycle hook that
+continues the same turn, the hook may observe the already-persisted
+`agent-session` claim, but it must be bounded, cancellable, and guarded against
+recursive stop-hook loops.
+
+If the user sends another message during the wait, treat it as steering,
+cancellation, or an addition to the active request before waiting again. After
+an interrupt or context compaction, run `tunelito session status ./site` and
+inspect the durable tracker; do not edit agent transcripts or `.tunelito/`
+state. When the review ends, stop the PTY with Ctrl-C and verify session status
+reports `stopped`.
+
+Be precise about host limits: Codex and Claude offer supported continuation and
+lifecycle mechanisms, but a local background process is not automatically an
+external wake API for every completed desktop task. If the host cannot keep the
+owning turn attached, tell the user and choose explicitly between durable
+collection for later and the separate unattended `--agent codex|claude`
+worker.
+
 Use `tunelito inbox status ./site` to inspect the same work tracker in the
 terminal. It prints pending and claimed comment work as unchecked tasks, includes
 the active claim id for claimed work, and prints completed work as checked,
@@ -389,6 +423,8 @@ are Tunelito's data store and ledger, not your edit targets.
 | Editing `*.comments.md` or `.tunelito/` directly | Corrupts the inbox/ledger Tunelito round-trips; let the tool own them. |
 | Restarting the server after a tab closes | The original URL/key stay valid while the server runs; reopen the same URL instead. |
 | Running foreground `inbox next/watch` while `--agent-session` is already watching | Creates another claimer against the same workspace; use one claimer or recover with the visible claim id / `--claim auto`. |
+| Returning a final response while promising `--agent-session` is still attached | The server can claim and print new work, but background stdout may not wake the completed host task; keep the turn active with bounded waits or state the fallback mode. |
+| Using an unbounded Stop hook to wait for comments | Can create recursive continuations or a hot loop; check the host's stop-hook guard, use bounded waits, and make cancellation explicit. |
 | Letting `inbox watch` outlive the host shell timeout | The agent shell may kill the wait before Tunelito's `--timeout`; prefer repeated `inbox next` or raise the host timeout. |
 | Declaring done without checking pending status | Later comments can still be unhandled; verify `inbox status` or `comments inspect --json` first. |
 | Mass-editing every page from one vague `site`-scope note | `site` means "shown everywhere," not "edit everywhere"; apply only where it fits, else ask. |

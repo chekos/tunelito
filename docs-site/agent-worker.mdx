@@ -19,6 +19,17 @@ The same Tunelito process serves the room, watches the persistent comments inbox
 npx --yes tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated hero copy." --file index.html
 ```
 
+Keep the owning agent turn open while you promise live attention: send the
+review URL as an intermediate update, poll the Tunelito PTY with bounded waits,
+handle and record each printed claim, then resume waiting. A background
+Tunelito process can deliver and persist a claim, but its stdout does not by
+itself wake every completed Codex or Claude desktop conversation.
+
+If the host cannot retain the owning turn, choose explicitly between collecting
+comments for later and the separate unattended `--agent codex|claude` worker.
+After an interruption or compaction, recover with `tunelito session status`;
+when the review ends, stop the server and verify the session reports `stopped`.
+
 Use repeated `inbox next` calls for non-waiting manual checks from an agent shell. Use `inbox watch` when you need the one-shot waiting primitive without a running `--agent-session` server, and make sure the host command timeout is longer than the `--timeout` value. A foreground `inbox next/watch` call against a workspace already served with `--agent-session` is another claimer; use one active claimer per workspace unless you are deliberately recovering. The active-agent loop and inbox commands use the same comment parser, policy filters, max-pass continuation state, and resolution ledger as the spawned worker.
 
 ## Wait for Done Reviewing
