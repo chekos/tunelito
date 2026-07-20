@@ -128,7 +128,7 @@ Required Markdown subsets:
 - wiki-link behavior or transform boundaries: `kitchen-sink.md`, `markdown-vault/index.md`
 - HTML-comment hiding or code boundaries: `html-comments.md`, `kitchen-sink.md`
 - document ruler hierarchy/navigation: `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md`, `kitchen-sink.md`, `ruler-density.md`
-- folder/index behavior: serve `examples/markdown-vault/`
+- folder/index behavior: serve `examples/markdown-vault/`; verify authored-index precedence, root/nested/empty generated landing pages, collapsed nested folders, current-page state, encoded filenames, keyboard disclosure, navigation/Properties separation, hidden/blocked/symlink exclusions, and the ten-note reference shelf
 
 The committed-fixture validator and production-renderer smoke run in `npm test`; do not replace them with temporary Markdown strings. Capture real-browser screenshot evidence from the committed fixtures for visual changes. Theme changes must run all packaged themes through `npm run browser:check`; capture a review set with `npm run theme:screenshots`.
 

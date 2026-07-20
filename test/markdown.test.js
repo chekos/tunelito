@@ -4,6 +4,7 @@ import {
   MARKDOWN_CLIENT_ROUTE,
   MERMAID_CLIENT_ROUTE,
   MERMAID_LIBRARY_ROUTE,
+  renderFolderLandingDocument,
   renderMarkdownDocument,
 } from "../src/markdown.js";
 
@@ -22,7 +23,7 @@ test("renderMarkdownDocument moves valid YAML front matter into the left propert
     ].join("\n"),
   });
 
-  assert.match(html, /class="tunelito-has-properties tunelito-properties-open"/);
+  assert.match(html, /class="tunelito-has-properties tunelito-has-sidebar tunelito-properties-open"/);
   assert.match(html, /id="tunelito-properties"/);
   assert.match(html, /id="tunelito-properties"[^>]*data-tunelito-comment-ignore/);
   assert.match(html, /data-tunelito-source-type="markdown" data-tunelito-comment-surface/);
@@ -33,6 +34,79 @@ test("renderMarkdownDocument moves valid YAML front matter into the left propert
   assert.doesNotMatch(html, /<img src=x onerror/);
   assert.match(html, /<h1>Review notes<\/h1>/);
   assert.match(html, new RegExp(MARKDOWN_CLIENT_ROUTE));
+});
+
+test("renderMarkdownDocument keeps injected navigation distinct from source properties", () => {
+  const html = renderMarkdownDocument({
+    sourceName: "Project brief.md",
+    markdownSource: "---\nstatus: active\n---\n\n# Project brief",
+    navigation: {
+      entries: [
+        { type: "document", name: "Project brief.md", href: "/Project%20brief.md", current: true },
+        {
+          type: "directory",
+          name: "Resources",
+          href: "/Resources/",
+          children: [
+            { type: "document", name: "Café & notes.md", href: "/Resources/Caf%C3%A9%20%26%20notes.md", current: false },
+            {
+              type: "directory",
+              name: "Deep",
+              href: "/Resources/Deep/",
+              children: [{ type: "document", name: "ten.md", href: "/Resources/Deep/ten.md", current: false }],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.match(html, /Tunelito navigation/);
+  assert.match(html, /Served documents/);
+  assert.match(html, /Source metadata/);
+  assert.match(html, /Properties · 1/);
+  assert.match(html, /href="\/Project%20brief\.md" aria-current="page"/);
+  assert.match(html, />Current<\/span>/);
+  assert.match(html, /<details class="tunelito-navigation-folder">/);
+  assert.doesNotMatch(html, /<details class="tunelito-navigation-folder" open/);
+  assert.match(html, /href="\/Resources\/" aria-label="Open Resources folder">/);
+  assert.match(html, /Café &amp; notes\.md/);
+  assert.match(html, /data-tunelito-comment-ignore/);
+});
+
+test("renderMarkdownDocument shows directory navigation without an empty properties section", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: "# No front matter",
+    navigation: {
+      entries: [{ type: "document", name: "note.md", href: "/note.md", current: true }],
+    },
+  });
+
+  assert.match(html, /class="tunelito-has-sidebar tunelito-properties-open"/);
+  assert.match(html, /Tunelito navigation/);
+  assert.doesNotMatch(html, /Source metadata/);
+  assert.doesNotMatch(html, /Properties · 0/);
+});
+
+test("renderFolderLandingDocument renders a themed, escaped, no-script folder page", () => {
+  const html = renderFolderLandingDocument({
+    folderName: '<Project "alpha">',
+    pagePath: "/Plans/",
+    parentHref: "../",
+    themeName: "technical",
+    entries: [
+      { type: "directory", name: "Resources & links", href: "/Plans/Resources%20%26%20links/", extension: "" },
+      { type: "document", name: "<script>.md", href: "/Plans/%3Cscript%3E.md", extension: ".md" },
+    ],
+  });
+
+  assert.match(html, /data-tunelito-theme="technical"/);
+  assert.match(html, /Tunelito-generated navigation/);
+  assert.match(html, /href="\.\.\/">← Parent folder/);
+  assert.match(html, /Resources &amp; links/);
+  assert.match(html, /&lt;script&gt;\.md/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /data-tunelito-comment-surface/);
 });
 
 test("renderMarkdownDocument keeps invalid front matter inspectable and the article readable", () => {

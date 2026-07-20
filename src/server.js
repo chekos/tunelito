@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
-import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
+import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
 
@@ -431,7 +431,12 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   }
 
   if (directoryMode) {
-    const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, { blockedPaths });
+    const asset = resolveDirectoryRequest(rootDir, rootRealDir, pathname, {
+      blockedPaths,
+      markdownCssHref,
+      markdownCssText,
+      markdownTheme,
+    });
     if (!asset) {
       sendText(res, 404, "Not found", "text/plain; charset=utf-8", req.method, responseHeaders);
       return;
@@ -461,6 +466,14 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         markdownCssHref,
         markdownCssText,
         markdownTheme,
+        navigation: {
+          entries: buildDirectoryNavigation({
+            rootDir,
+            rootRealDir,
+            blockedPaths,
+            currentFilePath: asset.path,
+          }),
+        },
       });
       sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
       return;
@@ -505,8 +518,24 @@ function resolveDirectoryRequest(rootDir, rootRealDir, pathname, options = {}) {
   const markdownIndex = resolveServedAsset(rootDir, rootRealDir, `${directoryPathname}index.md`, options);
   if (markdownIndex) return markdownIndex;
 
+  const entries = collectDirectoryEntries({
+    rootDir,
+    rootRealDir,
+    directoryPath: directory.path,
+    relativeSegments: pathnameSegments(directoryPathname),
+    blockedPaths: options.blockedPaths || [],
+    recursive: false,
+  });
   return {
-    generatedHtml: renderDirectoryIndex({ directoryPath: directory.realPath, pagePath: directoryPathname, blockedPaths: options.blockedPaths || [] }),
+    generatedHtml: renderFolderLandingDocument({
+      folderName: directoryPathname === "/" ? basename(rootDir) : basename(directory.path),
+      pagePath: directoryPathname,
+      entries,
+      parentHref: directoryPathname === "/" ? "" : "../",
+      cssHref: options.markdownCssHref,
+      cssText: options.markdownCssText,
+      themeName: options.markdownTheme,
+    }),
     path: directory.path,
     realPath: directory.realPath,
     sourceName: `${relativeSourceName(rootDir, directory.path) || basename(rootDir)} index`,
@@ -548,41 +577,89 @@ function resolveServedDirectory(rootDir, rootRealDir, pathname) {
   }
 }
 
-function renderDirectoryIndex({ directoryPath, pagePath, blockedPaths = [] }) {
-  const entries = readdirSync(directoryPath, { withFileTypes: true })
-    .filter((entry) => !entry.name.startsWith("."))
-    .filter((entry) => entry.isDirectory() || isHtmlPath(entry.name) || isMarkdownPath(entry.name))
-    .filter((entry) => !isBlockedDirectoryEntry(directoryPath, entry.name, blockedPaths))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const basePath = pagePath.endsWith("/") ? pagePath : `${pagePath}/`;
-  const links = entries.map((entry) => {
-    const href = `${basePath}${encodePathSegment(entry.name)}${entry.isDirectory() ? "/" : ""}`.replace(/\/{2,}/g, "/");
-    const label = `${entry.name}${entry.isDirectory() ? "/" : ""}`;
-    return `<li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`;
+function buildDirectoryNavigation({ rootDir, rootRealDir, blockedPaths = [], currentFilePath = "" }) {
+  return collectDirectoryEntries({
+    rootDir,
+    rootRealDir,
+    directoryPath: rootDir,
+    relativeSegments: [],
+    blockedPaths,
+    recursive: true,
+    currentFilePath,
   });
-
-  return [
-    "<!doctype html>",
-    "<html>",
-    "<head>",
-    '  <meta charset="utf-8">',
-    `  <title>Tunelito folder: ${escapeHtml(pagePath)}</title>`,
-    "</head>",
-    "<body>",
-    `  <h1>${escapeHtml(pagePath)}</h1>`,
-    links.length ? `  <ul>\n    ${links.join("\n    ")}\n  </ul>` : "  <p>No HTML or Markdown files found in this folder.</p>",
-    "</body>",
-    "</html>",
-  ].join("\n");
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme }) {
+function collectDirectoryEntries({
+  rootDir,
+  rootRealDir,
+  directoryPath,
+  relativeSegments,
+  blockedPaths,
+  recursive,
+  currentFilePath = "",
+}) {
+  const entries = [];
+  let directoryEntries;
+  try {
+    directoryEntries = readdirSync(directoryPath, { withFileTypes: true });
+  } catch {
+    return entries;
+  }
+  for (const entry of directoryEntries) {
+    if (entry.name.startsWith(".")) continue;
+    const segments = [...relativeSegments, entry.name];
+    const pathname = `/${segments.join("/")}`;
+    const href = `/${segments.map(encodePathSegment).join("/")}`;
+    if (entry.isDirectory()) {
+      const directory = resolveServedDirectory(rootDir, rootRealDir, `${pathname}/`);
+      if (!directory || isBlockedDirectoryEntry(directoryPath, entry.name, blockedPaths)) continue;
+      entries.push({
+        type: "directory",
+        name: entry.name,
+        href: `${href}/`,
+        children: recursive ? collectDirectoryEntries({
+          rootDir,
+          rootRealDir,
+          directoryPath: directory.path,
+          relativeSegments: segments,
+          blockedPaths,
+          recursive: true,
+          currentFilePath,
+        }) : [],
+      });
+      continue;
+    }
+    if (!isHtmlPath(entry.name) && !isMarkdownPath(entry.name)) continue;
+    const asset = resolveServedAsset(rootDir, rootRealDir, pathname, { blockedPaths });
+    if (!asset) continue;
+    entries.push({
+      type: "document",
+      name: entry.name,
+      href,
+      extension: extname(entry.name).toLowerCase(),
+      current: resolve(asset.path) === resolve(currentFilePath),
+    });
+  }
+  return entries.sort(compareDirectoryEntries);
+}
+
+function compareDirectoryEntries(left, right) {
+  if (left.type !== right.type) return left.type === "directory" ? -1 : 1;
+  return left.name.localeCompare(right.name, "en", { numeric: true, sensitivity: "base" });
+}
+
+function pathnameSegments(pathname) {
+  return String(pathname || "/").split("/").filter(Boolean);
+}
+
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
     cssHref: markdownCssHref,
     cssText: markdownCssText,
     themeName: markdownTheme,
+    navigation,
   });
 }
 

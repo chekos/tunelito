@@ -25,6 +25,8 @@ The CLI owns process orchestration:
 The server owns local IO and transport:
 
 - serve the selected HTML file at `/`, render selected Markdown as HTML, or serve a folder root with injected HTML/Markdown pages
+- preserve authored `index.html`/`index.md` precedence and render a themed, response-only landing page for root or nested directory URLs without an index
+- derive a recursively complete served-document navigation model for folder-mode Markdown while exposing only filtered, reachable Markdown/HTML files and safe directories
 - apply the selected packaged Markdown theme and configured CSS only to served Markdown responses
 - omit complete Markdown HTML comments from rendered prose while leaving source files and literal code examples untouched
 - parse only bounded, complete, leading YAML front matter for the served Markdown response; keep malformed metadata visible as escaped review UI and leave the source file untouched
@@ -100,7 +102,7 @@ The browser client owns reviewer interaction:
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
-- manage the Markdown Properties drawer without writing state into the source document
+- manage the shared Markdown left sidebar without writing state into the source document; injected navigation and source-derived Properties remain visibly separate
 - build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, and provide h1-h6 and paragraph navigation with scroll-progress state
 - coordinate the Markdown drawer, document map, Mermaid completion, and comments panel across responsive, dark-mode, keyboard, and reduced-motion states
 - initialize Mermaid once per rendered Markdown page with strict security and render each pending figure once, preserving readable source on success or failure
@@ -111,6 +113,8 @@ The browser client owns reviewer interaction:
 - Never let Markdown themes or configuration rewrite the selected Markdown source.
 - Never serve files outside the selected source file directory or selected folder root.
 - Never serve a target-local `tunelito.config.json` through folder mode.
+- Never include hidden, blocked, unsupported, or escaping paths in generated folder landing pages or Markdown navigation.
+- Keep nested folder disclosures closed by default and keep generated navigation outside text-selection comment anchoring.
 - Never expose a tunnel URL without the generated review key unless `--no-auth` is explicit.
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.

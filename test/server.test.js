@@ -728,14 +728,23 @@ test("single-file watcher survives repeated atomic saves", async () => {
   }
 });
 
-test("directory mode renders a basic HTML index when no index file exists", async () => {
+test("directory mode renders intentional root, nested, and empty folder landing pages", async () => {
   const siteDir = mkdtempSync(join(tmpdir(), "tunelito-directory-index-"));
   const commentsPath = join(siteDir, "comments.html");
-  writeFileSync(join(siteDir, "page.html"), "<!doctype html><html><body>Listed page</body></html>");
-  writeFileSync(join(siteDir, "notes.md"), "# Listed notes");
+  writeFileSync(join(siteDir, "zeta.html"), "<!doctype html><html><body>Listed page</body></html>");
+  writeFileSync(join(siteDir, "Alpha notes.md"), "# Listed notes");
+  writeFileSync(join(siteDir, "<unsafe>.md"), "# Escaped filename");
   writeFileSync(commentsPath, "private comments");
   writeFileSync(`${commentsPath}.tmp`, "private comments temp");
   writeFileSync(join(siteDir, "notes.txt"), "not listed");
+  writeFileSync(join(siteDir, "tunelito.config.json"), "{}");
+  mkdirSync(join(siteDir, ".tunelito"));
+  writeFileSync(join(siteDir, ".tunelito", "session.json"), "{}");
+  const nestedDir = join(siteDir, "Projects");
+  const emptyDir = join(siteDir, "Empty");
+  mkdirSync(nestedDir);
+  mkdirSync(emptyDir);
+  writeFileSync(join(nestedDir, "brief.md"), "# Brief");
 
   const instance = await createTunelitoServer({
     filePath: siteDir,
@@ -746,17 +755,109 @@ test("directory mode renders a basic HTML index when no index file exists", asyn
 
   try {
     const html = await fetch(instance.localUrl).then((res) => res.text());
-    assert.match(html, /page\.html/);
-    assert.match(html, /notes\.md/);
+    assert.match(html, /Tunelito-generated navigation/);
+    assert.match(html, /has no authored index/);
+    assert.match(html, /tunelito-folder-card-directory/);
+    assert.match(html, /Projects/);
+    assert.match(html, /Empty/);
+    assert.match(html, /zeta\.html/);
+    assert.match(html, /Alpha notes\.md/);
+    assert.match(html, /&lt;unsafe&gt;\.md/);
+    assert.doesNotMatch(html, /<unsafe>/);
+    assert.doesNotMatch(html, /<a class="tunelito-folder-parent"/);
+    assert.ok(html.indexOf("Empty") < html.indexOf("Alpha notes.md"), "folders should be grouped before documents");
     assert.doesNotMatch(html, /notes\.txt/);
     assert.doesNotMatch(html, /comments\.html/);
+    assert.doesNotMatch(html, /tunelito\.config\.json/);
+    assert.doesNotMatch(html, /session\.json/);
     assert.match(html, new RegExp(CLIENT_ROUTE));
+
+    const nested = await fetch(new URL("/Projects/", instance.localUrl)).then((res) => res.text());
+    assert.match(nested, /href="\.\.\/">← Parent folder/);
+    assert.match(nested, /brief\.md/);
+    assert.doesNotMatch(nested, /href="\.\.\/\.\.\//);
+
+    const empty = await fetch(new URL("/Empty/", instance.localUrl)).then((res) => res.text());
+    assert.match(empty, /This folder is empty/);
+    assert.match(empty, /No served Markdown, HTML, or child folders/);
 
     const staticComments = await fetch(new URL("/comments.html", instance.localUrl));
     assert.equal(staticComments.status, 404);
 
     const tempComments = await fetch(new URL("/comments.html.tmp", instance.localUrl));
     assert.equal(tempComments.status, 404);
+  } finally {
+    await instance.close();
+  }
+});
+
+test("directory Markdown pages receive a collapsed, filtered navigation tree", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-directory-navigation-"));
+  const outsideDir = mkdtempSync(join(tmpdir(), "tunelito-directory-navigation-outside-"));
+  const commentsPath = join(siteDir, "vault.comments.md");
+  writeFileSync(join(siteDir, "index.md"), "---\nstatus: active\n---\n\n# Home");
+  writeFileSync(join(siteDir, "No front matter.md"), "# Plain note");
+  writeFileSync(join(siteDir, "Overview.html"), "<h1>Overview</h1>");
+  writeFileSync(join(siteDir, "asset.txt"), "not served");
+  writeFileSync(commentsPath, "private comments");
+  writeFileSync(join(siteDir, "tunelito.config.json"), "{}");
+  mkdirSync(join(siteDir, ".tunelito"));
+  writeFileSync(join(siteDir, ".tunelito", "session.json"), "{}");
+
+  const projectDir = join(siteDir, "Projects & café");
+  const deeperDir = join(projectDir, "Deep plans");
+  mkdirSync(projectDir);
+  mkdirSync(deeperDir);
+  for (let index = 1; index <= 10; index += 1) {
+    writeFileSync(join(projectDir, `Note ${index}.md`), `# Note ${index}`);
+  }
+  writeFileSync(join(deeperDir, "Now.md"), "# Current deep note");
+  writeFileSync(join(outsideDir, "outside.md"), "# Outside");
+  let linkedOutside = false;
+  try {
+    symlinkSync(join(outsideDir, "outside.md"), join(siteDir, "escaped.md"));
+    symlinkSync(outsideDir, join(siteDir, "escaped-folder"));
+    linkedOutside = true;
+  } catch {
+    // Symlink creation may be unavailable in restricted environments.
+  }
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const plainHtml = await fetch(new URL("/No%20front%20matter.md", instance.localUrl)).then((res) => res.text());
+    assert.match(plainHtml, /Tunelito navigation/);
+    assert.match(plainHtml, /Served documents/);
+    assert.doesNotMatch(plainHtml, /Source metadata/);
+    assert.match(plainHtml, /href="\/No%20front%20matter\.md" aria-current="page"/);
+    assert.match(plainHtml, /href="\/Projects%20%26%20caf%C3%A9\/"/);
+    assert.match(plainHtml, /<details class="tunelito-navigation-folder">/);
+    assert.doesNotMatch(plainHtml, /<details class="tunelito-navigation-folder" open/);
+    assert.match(plainHtml, /Note 10\.md/);
+    assert.match(plainHtml, /Deep plans/);
+    assert.doesNotMatch(plainHtml, /asset\.txt|vault\.comments\.md|tunelito\.config\.json|session\.json/);
+    if (linkedOutside) assert.doesNotMatch(plainHtml, /escaped\.md|escaped-folder/);
+
+    const homeHtml = await fetch(new URL("/index.md", instance.localUrl)).then((res) => res.text());
+    assert.match(homeHtml, /Tunelito navigation/);
+    assert.match(homeHtml, /Source metadata/);
+    assert.match(homeHtml, /Properties · 1/);
+
+    const deepHtml = await fetch(new URL("/Projects%20%26%20caf%C3%A9/Deep%20plans/Now.md", instance.localUrl)).then((res) => res.text());
+    assert.match(deepHtml, /href="\/Projects%20%26%20caf%C3%A9\/Deep%20plans\/Now\.md" aria-current="page"/);
+
+    const firstFolder = plainHtml.indexOf('href="/Projects%20%26%20caf%C3%A9/"');
+    const firstDocument = plainHtml.indexOf('href="/No%20front%20matter.md"');
+    assert.ok(firstFolder >= 0 && firstFolder < firstDocument, "root folders should precede root documents");
+
+    writeFileSync(join(projectDir, "Added later.md"), "# Added after startup");
+    const refreshedHtml = await fetch(new URL("/No%20front%20matter.md", instance.localUrl)).then((res) => res.text());
+    assert.match(refreshedHtml, /href="\/Projects%20%26%20caf%C3%A9\/Added%20later\.md"/);
   } finally {
     await instance.close();
   }

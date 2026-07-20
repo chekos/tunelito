@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,7 +162,7 @@ async function verifyAccessibility(relativePath) {
 
 async function verifyVault() {
   const filePath = resolve(repoRoot, "examples/markdown-vault");
-  const sources = ["index.md", "Project brief.md", "Security notes.md"].map((name) => [name, readFileSync(resolve(filePath, name), "utf8")]);
+  const sources = readMarkdownTree(filePath);
   const tempDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-vault-browser-"));
   const instance = await createTunelitoServer({
     filePath,
@@ -178,6 +178,43 @@ async function verifyVault() {
     assert.equal(await page.locator(".tunelito-wikilink").count(), 5, "vault should expose every supported wiki reference");
     assert.match(await page.locator(".tunelito-markdown").innerText(), /!\[\[architecture\.png\]\]/, "unsupported embeds must stay literal");
     assert.match(await page.locator("code").first().innerText(), /\[\[Project brief\]\]/, "inline-code wiki syntax must stay literal");
+    assert.equal(await page.locator(".tunelito-navigation").getAttribute("data-tunelito-comment-ignore"), null, "the shared sidebar ignore boundary should own navigation");
+    assert.equal(await page.locator("#tunelito-properties").getAttribute("data-tunelito-comment-ignore"), "", "the injected tree must stay outside comment anchoring");
+    assert.equal(await page.locator(".tunelito-navigation").getByText("Tunelito navigation").count(), 1, "navigation must identify its injected provenance");
+    assert.equal(await page.locator(".tunelito-properties-section").getByText("Source metadata").count(), 1, "properties must remain a separate source-derived section");
+    await page.locator("#tunelito-navigation-title").evaluate((title) => {
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".selection").classList.contains("visible")), false, "injected navigation text must not open the comment composer");
+    await page.evaluate(() => window.getSelection().removeAllRanges());
+
+    const rootFolders = page.locator(".tunelito-navigation-list > .tunelito-navigation-item > .tunelito-navigation-folder");
+    assert.equal(await rootFolders.count(), 2, "the PARA fixture should expose its two root folders");
+    assert.equal(await rootFolders.evaluateAll((folders) => folders.every((folder) => !folder.open)), true, "all nested folders should start collapsed");
+    assert.equal(await page.locator('.tunelito-navigation-link[href*="Reference%2001"]').isVisible(), false, "ten-note nested folders must not flood the initial sidebar");
+
+    const projects = rootFolders.filter({ hasText: "Projects" });
+    const projectsSummary = projects.locator(":scope > .tunelito-navigation-summary");
+    await projectsSummary.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await projects.evaluate((folder) => folder.open), true, "keyboard activation should expand one folder");
+    assert.equal(await projects.locator(":scope > .tunelito-navigation-children > li > .tunelito-navigation-link").count(), 2, "expansion should reveal the folder's immediate documents");
+    const resources = rootFolders.filter({ hasText: "Resources" });
+    assert.equal(await resources.evaluate((folder) => folder.open), false, "expanding Projects must not expand Resources");
+
+    await resources.locator(":scope > .tunelito-navigation-summary").click();
+    const referenceShelf = resources.locator(".tunelito-navigation-folder").filter({ hasText: "Reference shelf" });
+    assert.equal(await referenceShelf.evaluate((folder) => folder.open), false, "deeper folders should remain independently collapsed");
+    assert.equal(await referenceShelf.locator(".tunelito-navigation-link").count(), 10, "the nested stress folder should include all ten documents");
+    assert.equal(await referenceShelf.locator(".tunelito-navigation-link").first().isVisible(), false);
+    await referenceShelf.locator(":scope > .tunelito-navigation-summary").click();
+    assert.equal(await referenceShelf.locator(".tunelito-navigation-link").first().isVisible(), true);
 
     for (const colorScheme of ["light", "dark"]) {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
@@ -186,11 +223,42 @@ async function verifyVault() {
       await assertNoOverflow(page, `markdown vault ${colorScheme} mode`);
     }
 
-    for (const [name, source] of sources) assert.equal(readFileSync(resolve(filePath, name), "utf8"), source, `${name} changed while serving the vault`);
+    await page.goto(new URL("/Projects/Plain%20status.md", instance.localUrl).toString(), { waitUntil: "networkidle" });
+    assert.equal(await page.locator('.tunelito-navigation-link[aria-current="page"]').getAttribute("href"), "/Projects/Plain%20status.md");
+    assert.equal(await page.locator(".tunelito-properties-section").count(), 0, "a note without front matter must not get an empty Properties section");
+    assert.equal(await page.locator(".tunelito-navigation").count(), 1);
+
+    await page.goto(new URL("/Projects/", instance.localUrl).toString(), { waitUntil: "networkidle" });
+    assert.equal(await page.locator(".tunelito-folder-parent").getAttribute("href"), "../");
+    assert.match(await page.locator(".tunelito-folder-hero").innerText(), /Tunelito-generated navigation/i);
+    assert.equal(await page.locator(".tunelito-folder-card").count(), 2);
+    await assertAccessible(page, "nested generated folder landing");
+    await assertNoOverflow(page, "nested generated folder landing");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await assertAccessible(page, "nested generated folder landing mobile dark");
+    await assertNoOverflow(page, "nested generated folder landing mobile dark");
+
+    for (const [name, source] of Object.entries(sources)) assert.equal(readFileSync(resolve(filePath, name), "utf8"), source, `${name} changed while serving the vault`);
   } finally {
     await context.close();
     await instance.close();
   }
+}
+
+function readMarkdownTree(root, prefix = "") {
+  const sources = {};
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const absolutePath = resolve(root, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(sources, readMarkdownTree(absolutePath, relativePath));
+    } else if (entry.name.toLowerCase().endsWith(".md")) {
+      sources[relativePath] = readFileSync(absolutePath, "utf8");
+    }
+  }
+  return sources;
 }
 
 async function verifyThemesAndComments() {

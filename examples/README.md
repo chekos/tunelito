@@ -92,6 +92,6 @@ tunelito examples/markdown-vault --no-tunnel --open
 | `markdown/html-comments.md` | Do inline, block, multiline, and adjacent author comments stay hidden while fenced literals remain visible? | `tunelito examples/markdown/html-comments.md --no-tunnel --open` |
 | `markdown/kitchen-sink.md` | Do all ruler block types, transform boundaries, a local image, Mermaid, wiki links, and metadata coexist? | `tunelito examples/markdown/kitchen-sink.md --no-tunnel --open` |
 | `markdown/ruler-density.md` | Do at least 150 real blocks remain accurate and usable without per-scroll layout work? | `tunelito examples/markdown/ruler-density.md --no-tunnel --open` |
-| `markdown-vault/index.md` | Do folder mode, plain/aliased/fragment/unresolved wiki references, code boundaries, and literal embeds behave together? | `tunelito examples/markdown-vault --no-tunnel --open` |
+| `markdown-vault/index.md` | Do folder mode, injected navigation, collapsed nested folders, a ten-note reference shelf, front-matter coexistence, wiki references, and code boundaries behave together? | `tunelito examples/markdown-vault --no-tunnel --open` |
 
 `minimal-text.md`, `paragraphs-only.md`, and `single-long-paragraph.md` intentionally have no h1. They are structural diagnostics, so the normal useful-h1 expectation does not apply. Serving these fixtures must not create committed comments, session files, screenshots, tunnel artifacts, or source edits.
