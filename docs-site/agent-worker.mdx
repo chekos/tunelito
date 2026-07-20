@@ -240,6 +240,6 @@ Codex and Claude Code are prompted to return this shape. Custom commands should 
 
 ## Guardrails
 
-The spawned worker only runs when you pass `--agent` or `--agent-command`. Active-agent inbox mode only prints commands and prompts; the current agent still decides and edits through its normal tools. Neither mode is available in `--live` mode because live comments are ephemeral and no markdown inbox exists.
+The spawned worker only runs when you pass `--agent` or `--agent-command`. Active-agent inbox mode only prints commands and prompts; the current agent still decides and edits through its normal tools. Neither mode is available with `--ephemeral` because ephemeral comments have no markdown inbox.
 
 Treat both `--agent` and active-agent inbox mode as local code execution prompted by reviewer comments. Use them only for trusted review sessions or source folders you are comfortable letting your local agent edit.

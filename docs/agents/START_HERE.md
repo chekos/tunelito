@@ -4,7 +4,7 @@ Tunelito is a small package with a deliberately high bar for agent handoffs. You
 
 ## What Tunelito Does
 
-Tunelito serves one local HTML or Markdown file, or a folder of HTML and Markdown files, injects a same-origin review client at response time, syncs live comments over WebSocket, optionally uses WebRTC data channels for ephemeral `--live` collaboration, writes persistent comments to markdown, reloads clients when source files change, and can expose the local server through a temporary Cloudflare Tunnel.
+Tunelito serves one local HTML or Markdown file, or a folder of HTML and Markdown files, injects a same-origin review client at response time, syncs live comments over WebSocket, optionally uses WebRTC data channels for `--ephemeral` collaboration, writes persistent comments to markdown, reloads clients when source files change, and can expose the local server through a temporary Cloudflare Tunnel.
 
 The source HTML or Markdown is the user's document. Do not mutate it as part of the annotation layer.
 

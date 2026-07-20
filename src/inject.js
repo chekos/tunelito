@@ -1,6 +1,7 @@
 export const CLIENT_ROUTE = "/__tunelito/client.js";
 export const COMMENTS_ROUTE = "/__tunelito/comments.md";
 export const AGENT_STATUS_ROUTE = "/__tunelito/agent-status.json";
+export const SESSION_STATUS_ROUTE = "/__tunelito/session-status.json";
 export const REVIEW_EVENTS_ROUTE = "/__tunelito/review-events";
 export const WS_ROUTE = "/__tunelito/ws";
 export const TUNELITO_RESPONSE_HEADER = "x-tunelito-review";

@@ -159,6 +159,34 @@ test("startCloudflareTunnel bounds discovery when cloudflared never registers", 
   assert.equal(child.killed, true);
 });
 
+test("startCloudflareTunnel reports runtime loss after publishing a verified URL", async () => {
+  const child = fakeChild();
+  let published = "";
+  const runtimeFailure = new Promise((resolveFailure) => {
+    startCloudflareTunnel({
+      localUrl: "http://127.0.0.1:4317/",
+      spawnFn() {
+        return child;
+      },
+      async verifyFn() {},
+      onUrl(url) {
+        published = url;
+      },
+      onError: resolveFailure,
+    });
+  });
+
+  child.stderr.emit("data", "Your quick Tunnel has been created!\n");
+  child.stderr.emit("data", "https://runtime-loss.trycloudflare.com\n");
+  child.stderr.emit("data", "Registered tunnel connection connIndex=0 protocol=quic\n");
+  await Promise.resolve();
+  assert.equal(published, "https://runtime-loss.trycloudflare.com");
+
+  child.emit("exit", 1, null);
+  const error = await runtimeFailure;
+  assert.match(error.message, /exited after publishing the verified tunnel URL/);
+});
+
 test("verifyTunelitoTunnel requires an authenticated Tunelito marker", async () => {
   const requests = [];
   let attempt = 0;

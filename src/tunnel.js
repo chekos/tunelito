@@ -107,7 +107,9 @@ export function startCloudflareTunnel({
       if (sequence !== launchSequence) return;
       childExited = true;
       for (const flush of flushStreams) flush();
-      if (!stopped && !emittedUrl && !startupError && !verifyingUrl) {
+      if (!stopped && emittedUrl) {
+        onError?.(new Error(`${command} exited after publishing the verified tunnel URL (${signal || code})`));
+      } else if (!stopped && !startupError && !verifyingUrl) {
         reportStartupError(new Error(`${command} exited before publishing a URL (${signal || code})`));
       }
     });

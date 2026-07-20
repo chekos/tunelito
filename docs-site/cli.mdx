@@ -4,7 +4,7 @@ description: "Tunelito command-line options and examples."
 ---
 
 ```text
-Tunelito 0.20.0
+Tunelito 0.21.1
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
@@ -12,14 +12,23 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
        tunelito review watch [page.html|notes.md|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
+       tunelito session status [page.html|notes.md|folder] [options]
        tunelito config show [page.html|notes.md|folder] [options]
-       tunelito skill <show|setup>
+       tunelito skill <show|setup|install>
 
 Coding agents:
   Before serving a review room, load the bundled workflow:
     tunelito skill show
   Installation guidance:
     tunelito skill setup
+
+Session model:
+  Default               Persistent Markdown comments plus browser hot reload
+  Real-time sync        WebSocket in every session; WebRTC peers with --ephemeral
+  --ephemeral           In-memory comments that are lost when the server stops
+  --agent-session       Current coding-agent conversation watches persistent feedback
+  --agent               Spawn a separate local coding-agent worker
+  Tunnel exposure       Enabled by default; --no-tunnel keeps the room local
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -28,7 +37,8 @@ Options:
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
-  --live                Use ephemeral live collaboration mode; do not write comments to disk
+  --ephemeral           Keep comments in memory only; all feedback is lost on restart
+  --live                Deprecated alias for --ephemeral
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
@@ -63,9 +73,11 @@ Commands:
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
+  session status        Inspect and recover the last session for a target
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
+  skill install         Install the skill for Codex or Claude at user or project scope
 ```
 
 ## Common examples
@@ -163,7 +175,7 @@ tunelito ./page.html --owner "Chekos"
 Run an ephemeral in-meeting session:
 
 ```bash
-tunelito ./page.html --live
+tunelito ./page.html --ephemeral
 ```
 
 Run Codex against review comments:
@@ -192,6 +204,16 @@ Print the same comment work tracker in the terminal:
 tunelito inbox status ./site
 ```
 
+Inspect or recover the served session from a second shell:
+
+```bash
+tunelito session status ./site
+tunelito session status ./site --json
+tunelito session status ./site --redact
+```
+
+The command verifies the listener's session identity, reports `running`, `degraded`, `stale`, or `stopped`, and includes local/public URLs, persistence, agent work, process, tunnel, viewer, and recovery details.
+
 Wait for the reviewer to click `Done Reviewing` in the browser panel:
 
 ```bash
@@ -212,6 +234,13 @@ Print guided no-write agent setup instructions:
 
 ```bash
 tunelito skill setup
+```
+
+Preview and install the bundled skill:
+
+```bash
+tunelito skill install --agent codex --scope user --dry-run
+tunelito skill install --agent claude --scope project
 ```
 
 Allow broad comments to continue for up to five passes:

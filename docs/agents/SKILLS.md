@@ -2,7 +2,7 @@
 
 Tunelito uses project-local Claude Code skills under `.claude/skills/`. Skills are the repo's prompt-native workflows: they keep repeatable agent behavior out of chat history and close to the code.
 
-Public user-facing setup guidance lives in `tunelito skill setup` and `docs-site/agent-setup.mdx`. Keep `tunelito skill show` as the stable source for the bundled skill body; setup guidance should explain installation without auto-editing global instruction files.
+Public user-facing setup guidance lives in `tunelito skill setup` and `docs-site/agent-setup.mdx`. Keep `tunelito skill show` as the stable source for the bundled skill body. `tunelito skill install` must remain explicit, scoped to Codex or Claude and user or project discovery paths, dry-run capable, no-overwrite by default, and byte-identical to `skill show`.
 
 ## Skill Catalog
 

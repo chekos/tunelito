@@ -5,7 +5,7 @@ description: "Turn local HTML or Markdown into a temporary live review room with
 
 Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown files, into a temporary live review room.
 
-Run one command, share the printed link on a call, and reviewers can select text, leave page notes, or leave site-wide notes live. You keep editing the source in your editor. Connected browsers reload when files change, and reload waits if a reviewer has an open comment composer. Comments are saved as readable Markdown by default, or kept ephemeral with `--live`.
+Run one command, share the printed link on a call, and reviewers can select text, leave page notes, or leave site-wide notes live. You keep editing the source in your editor. Connected browsers reload when files change, and reload waits if a reviewer has an open comment composer. Comments are saved as readable Markdown by default, or kept in memory only with `--ephemeral`.
 
 ## Why it exists
 
@@ -15,7 +15,7 @@ Tunelito gives you that loop:
 
 - local HTML or Markdown stays the source of truth
 - reviewers can comment but cannot edit the files
-- comments sync live, with WebRTC peer-to-peer support in `--live`
+- comments sync live, with WebRTC peer-to-peer support in `--ephemeral`
 - folder reviews share one Markdown inbox with page and site comment scopes
 - an opt-in local agent worker can call Codex, Claude Code, or another CLI to handle comments, or the current agent session can watch and claim comments from the same Tunelito process
 - public sharing uses a temporary Cloudflare Tunnel
@@ -72,5 +72,5 @@ Share the `Public:` URL with the person on your call.
 For ephemeral in-meeting collaboration:
 
 ```bash
-tunelito ./page.html --live
+tunelito ./page.html --ephemeral
 ```

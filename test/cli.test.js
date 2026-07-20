@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, updateAgentSessionPublicUrl, usage, VERSION, withReviewKey, writeAgentSessionFile } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, installSkill, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, parseSessionArgs, parseSkillInstallArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, skillInstallDestination, updateAgentSessionPublicUrl, usage, VERSION, withReviewKey, writeAgentSessionFile } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -75,9 +75,14 @@ test("parseArgs enables review-key auth by default and can disable it", () => {
   assert.equal(parseArgs(["page.html", "--no-auth"]).auth, false);
 });
 
-test("parseArgs supports ephemeral live mode", () => {
-  const opts = parseArgs(["page.html", "--live"]);
+test("parseArgs supports canonical ephemeral mode and deprecated live alias", () => {
+  const opts = parseArgs(["page.html", "--ephemeral"]);
+  const alias = parseArgs(["page.html", "--live"]);
+  assert.equal(opts.ephemeral, true);
   assert.equal(opts.live, true);
+  assert.equal(opts.liveAlias, undefined);
+  assert.equal(alias.ephemeral, true);
+  assert.equal(alias.liveAlias, true);
   assert.equal(opts.filePath, resolve("page.html"));
 });
 
@@ -205,11 +210,11 @@ test("agentBlockedPaths includes the derived local agent log", () => {
 });
 
 test("parseArgs rejects agent mode with live comments", () => {
-  assert.throws(() => parseArgs(["site", "--live", "--agent", "codex"]), /--agent requires persistent comments/);
+  assert.throws(() => parseArgs(["site", "--ephemeral", "--agent", "codex"]), /--agent requires persistent comments.*default persistent mode/);
 });
 
 test("parseArgs rejects agent session conflicts", () => {
-  assert.throws(() => parseArgs(["site", "--live", "--agent-session"]), /--agent-session requires persistent comments/);
+  assert.throws(() => parseArgs(["site", "--live", "--agent-session"]), /--agent-session requires persistent comments.*--ephemeral/);
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-session"]), /Use either --agent or --agent-session/);
   assert.throws(() => parseArgs(["site", "--agent-session", "--agent-prompt", "A"]), /--agent-prompt is only supported/);
   assert.throws(() => parseArgs(["site", "--agent-session", "--agent-interval", "30"]), /--agent-session watches automatically/);
@@ -872,16 +877,83 @@ test("skill setup prints no-write cross-agent onboarding guidance", () => {
     assert.deepEqual(after, before);
     assert.match(stdout.text(), /Tunelito agent setup/);
     assert.match(stdout.text(), /npx --yes tunelito skill show/);
-    assert.match(stdout.text(), /mkdir -p \.claude\/skills\/tunelito/);
-    assert.match(stdout.text(), /Codex and other instruction-file agents/);
-    assert.match(stdout.text(), /Inspect existing instruction files before editing them/);
-    assert.match(stdout.text(), /does not write files or install packages/);
+    assert.match(stdout.text(), /skill install --agent claude --scope project --dry-run/);
+    assert.match(stdout.text(), /skill install --agent codex --scope user/);
+    assert.match(stdout.text(), /~\/\.agents\/skills\/tunelito\/SKILL\.md/);
+    assert.match(stdout.text(), /~\/\.claude\/skills\/tunelito\/SKILL\.md/);
+    assert.match(stdout.text(), /Setup prints guidance only/);
     assert.match(stdout.text(), /Do not present --no-auth as local-only/);
     assert.match(stdout.text(), /--no-tunnel/);
     assert.match(stdout.text(), /https:\/\/tunelito\.dev\/agent-setup/);
   } finally {
     process.chdir(cwd);
   }
+});
+
+test("skill install resolves documented Codex and Claude user and project paths", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-skill-paths-"));
+  const project = join(dir, "project");
+  const nested = join(project, "packages", "site");
+  const home = join(dir, "home");
+  mkdirSync(join(project, ".git"), { recursive: true });
+  mkdirSync(nested, { recursive: true });
+
+  assert.equal(
+    skillInstallDestination({ agent: "codex", scope: "user", cwd: nested, homePath: home }),
+    join(home, ".agents", "skills", "tunelito", "SKILL.md"),
+  );
+  assert.equal(
+    skillInstallDestination({ agent: "codex", scope: "project", cwd: nested, homePath: home }),
+    join(project, ".agents", "skills", "tunelito", "SKILL.md"),
+  );
+  assert.equal(
+    skillInstallDestination({ agent: "claude", scope: "user", cwd: nested, homePath: home }),
+    join(home, ".claude", "skills", "tunelito", "SKILL.md"),
+  );
+  assert.equal(
+    skillInstallDestination({ agent: "claude", scope: "project", cwd: nested, homePath: home }),
+    join(project, ".claude", "skills", "tunelito", "SKILL.md"),
+  );
+});
+
+test("skill install supports dry-run, exact bytes, no-overwrite, and force replacement", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-skill-install-"));
+  mkdirSync(join(dir, ".git"));
+  const content = readBundledSkill();
+  const destination = join(dir, ".agents", "skills", "tunelito", "SKILL.md");
+
+  const preview = installSkill({ agent: "codex", scope: "project", cwd: dir, homePath: dir, dryRun: true, content });
+  assert.equal(preview.action, "would-create");
+  assert.equal(existsSync(destination), false);
+
+  const created = installSkill({ agent: "codex", scope: "project", cwd: dir, homePath: dir, content });
+  assert.equal(created.action, "created");
+  assert.equal(readFileSync(destination, "utf8"), content.endsWith("\n") ? content : `${content}\n`);
+
+  writeFileSync(destination, "locally modified\n");
+  const blocked = installSkill({ agent: "codex", scope: "project", cwd: dir, homePath: dir, content });
+  assert.equal(blocked.action, "blocked");
+  assert.equal(readFileSync(destination, "utf8"), "locally modified\n");
+
+  const replaced = installSkill({ agent: "codex", scope: "project", cwd: dir, homePath: dir, force: true, content });
+  assert.equal(replaced.action, "replaced");
+  assert.equal(readFileSync(destination, "utf8"), content.endsWith("\n") ? content : `${content}\n`);
+});
+
+test("skill install parsing requires an explicit agent and scope", () => {
+  assert.deepEqual(
+    { ...parseSkillInstallArgs(["--agent", "codex", "--scope", "user", "--dry-run"]), cwd: "", homePath: "" },
+    { agent: "codex", scope: "user", force: false, dryRun: true, cwd: "", homePath: "" },
+  );
+  assert.throws(() => parseSkillInstallArgs(["--agent", "codex"]), /--scope must be user or project/);
+  assert.throws(() => parseSkillInstallArgs(["--agent", "cursor", "--scope", "user"]), /--agent must be codex or claude/);
+});
+
+test("session status parsing defaults to cwd and supports JSON redaction", () => {
+  const opts = parseSessionArgs(["status", "--json", "--redact"]);
+  assert.equal(opts.targetPath, resolve(process.cwd()));
+  assert.equal(opts.format, "json");
+  assert.equal(opts.redact, true);
 });
 
 test("skill rejects an unknown subcommand with a nonzero exit", () => {

@@ -399,7 +399,7 @@ function normalizeAgentWorkspaceConfig({
   claimSeconds = null,
   usage = "agent config",
 } = {}) {
-  if (!commentsPath) throw new Error(`${usage} requires persistent comments; remove --live`);
+  if (!commentsPath) throw new Error(`${usage} requires persistent comments; remove --ephemeral`);
   if (!targetPath) throw new Error(`${usage} requires a target HTML, Markdown, or folder path`);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("--agent-max-attempts must be a positive integer");
   if (!Number.isInteger(maxPasses) || maxPasses < 1) throw new Error("--agent-max-passes must be a positive integer");

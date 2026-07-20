@@ -7,7 +7,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
@@ -48,6 +48,12 @@ export async function createTunelitoServer(options) {
   const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
   const markdownCssText = String(options.markdownCssText || "");
   const markdownTheme = String(options.markdownTheme || "default");
+  const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
+  const startedAt = new Date().toISOString();
+  let lastActivityAt = startedAt;
+  const touchActivity = () => {
+    lastActivityAt = new Date().toISOString();
+  };
 
   const server = createServer((req, res) => {
     handleRequest({
@@ -71,6 +77,17 @@ export async function createTunelitoServer(options) {
       markdownCssHref,
       markdownCssText,
       markdownTheme,
+      sessionId,
+      startedAt,
+      sessionSnapshot: () => ({
+        format: "tunelito-session-runtime",
+        schemaVersion: 1,
+        sessionId,
+        viewerCount: hub.size,
+        startedAt,
+        lastActivityAt,
+      }),
+      touchActivity,
     });
   });
 
@@ -103,6 +120,7 @@ export async function createTunelitoServer(options) {
   });
 
   function publishViewerCount() {
+    touchActivity();
     events.emit("viewer-count", hub.size);
     hub.broadcast({ type: "viewer-count", count: hub.size });
   }
@@ -194,6 +212,7 @@ export async function createTunelitoServer(options) {
     publishViewerCount();
   });
   hub.on("message", (client, message) => {
+    touchActivity();
     const peer = peers.get(client);
     let event;
     try {
@@ -303,6 +322,7 @@ export async function createTunelitoServer(options) {
     recursive: directoryMode,
     filename: directoryMode ? "" : basename(filePath),
     onChange: () => {
+      touchActivity();
       if (!directoryMode) {
         const nextSignature = fileSignature(filePath);
         if (nextSignature === sourceFileSignature) return;
@@ -332,6 +352,8 @@ export async function createTunelitoServer(options) {
     liveMode,
     originUrl,
     localUrl,
+    sessionId,
+    startedAt,
     reviewEventsUrl: new URL(REVIEW_EVENTS_ROUTE, localUrl).toString(),
     ownerName,
     ownerSessionId,
@@ -347,7 +369,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, sessionId, startedAt, sessionSnapshot, touchActivity }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -366,7 +388,9 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   const responseHeaders = {
     ...auth.headers,
     [TUNELITO_RESPONSE_HEADER]: "1",
+    "x-tunelito-session": sessionId,
   };
+  if (pathname !== SESSION_STATUS_ROUTE) touchActivity();
   const injectOptions = {
     liveMode,
     defaultAuthor: owner ? ownerName : "",
@@ -418,6 +442,18 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       ? comments.all().filter((comment) => isSiteComment(comment) || normalizePagePath(comment.pagePath) === pagePath)
       : comments.all();
     sendJson(res, 200, agentStatusSnapshot({ agentStatePath, comments: visibleComments }), req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === SESSION_STATUS_ROUTE) {
+    sendJson(res, 200, sessionSnapshot ? sessionSnapshot() : {
+      format: "tunelito-session-runtime",
+      schemaVersion: 1,
+      sessionId,
+      viewerCount: 0,
+      startedAt,
+      lastActivityAt: startedAt,
+    }, req.method, responseHeaders);
     return;
   }
 

@@ -7,11 +7,11 @@ Reviewers can select text and leave anchored comments from the injected Tunelito
 
 Each browser gets a friendly editable display name by default. Direct loopback `Local:` sessions are marked as owner-authored, while public tunnel sessions are marked as visitors. Use `--owner <name>` to seed the local owner display name; owner-authored comments are marked in Markdown and in the local agent worker prompt. Direct local owner sessions can also approve a visitor comment for agent work from the comments panel.
 
-On fine-pointer devices, reviewers can toggle `Pointer` to show a local red halo while presenting. In `--live`, that pointer halo is shared to peers as ephemeral session UI and is never written to Markdown.
+On fine-pointer devices, reviewers can toggle `Pointer` to show a local red halo while presenting. In `--ephemeral`, that pointer halo is shared to peers as ephemeral session UI and is never written to Markdown.
 
 On mobile, Tunelito keeps the always-visible control small: a compact speech-bubble button with a count badge sits above common bottom navigation. Tap it to open the comments sheet.
 
-Use `--live` when comments should be ephemeral and disappear with the local server instead of being written to disk.
+Use `--ephemeral` when comments should disappear with the local server instead of being written to disk.
 
 ## Default file location
 
@@ -152,7 +152,7 @@ For a complete end-to-end example, see the [folder review tutorial](/tutorial) a
 ## Ephemeral live mode
 
 ```bash
-tunelito ./page.html --live
+tunelito ./page.html --ephemeral
 ```
 
 In live mode, comments are held in memory only. The sidebar updates during the session, but no comments file is written and nothing is restored after restart.

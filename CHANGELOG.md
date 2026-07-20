@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.1 - 2026-07-20
+
+- Adds canonical `--ephemeral` semantics with a prominent `--live` deprecation warning, explicit persistence language, and actionable incompatibility guidance for agent-backed reviews.
+- Adds explicit, dry-run-capable `tunelito skill install` support for verified Codex and Claude user/project discovery paths, preserving existing files unless `--force` is requested.
+- Adds `tunelito session status` with authenticated listener-identity verification, atomic private lifecycle metadata for every served target, redacted/JSON output, tunnel and agent health, and recovery guidance.
+
 ## 0.21.0 - 2026-07-20
 
 - Replaces bare no-index directory listings with responsive, themed Tunelito folder landing pages for root, nested, and empty folders while preserving authored-index precedence and existing serving boundaries.

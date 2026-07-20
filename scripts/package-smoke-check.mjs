@@ -29,6 +29,7 @@ try {
   assertVersion(run(installedBin, ["--version"], { cwd: execDir }), "global tarball install");
   assertSkill(run(installedBin, ["skill", "show"], { cwd: execDir }), "global tarball install");
   assertSkillSetup(run(installedBin, ["skill", "setup"], { cwd: execDir }), "global tarball install");
+  assertSkillInstall(run(installedBin, ["skill", "install", "--agent", "codex", "--scope", "project", "--project-root", execDir, "--dry-run"], { cwd: execDir }), "global tarball install");
   assertMermaidDependency(prefixDir);
 
   assertVersion(
@@ -93,6 +94,12 @@ function assertSkill(output, label) {
 function assertSkillSetup(output, label) {
   if (!output.includes("Tunelito agent setup") || !output.includes("npx --yes tunelito skill show")) {
     throw new Error(`${label}: "tunelito skill setup" did not print setup guidance`);
+  }
+}
+
+function assertSkillInstall(output, label) {
+  if (!output.includes("Tunelito skill install") || !output.includes("Action:") || !output.includes("would-create")) {
+    throw new Error(`${label}: "tunelito skill install --dry-run" did not report its proposed action`);
   }
 }
 
