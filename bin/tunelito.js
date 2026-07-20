@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -33,6 +34,15 @@ import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { normalizeMarkdownCssHref } from "../src/markdown.js";
 import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
+import {
+  SESSION_FORMAT,
+  SESSION_VERSION,
+  formatSessionStatus,
+  inspectSession,
+  sessionPathForTarget,
+  updateSessionFile,
+  writeSessionFile,
+} from "../src/session.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -47,14 +57,23 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
        tunelito review watch [page.html|notes.md|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
+       tunelito session status [page.html|notes.md|folder] [options]
        tunelito config show [page.html|notes.md|folder] [options]
-       tunelito skill <show|setup>
+       tunelito skill <show|setup|install>
 
 Coding agents:
   Before serving a review room, load the bundled workflow:
     tunelito skill show
   Installation guidance:
     tunelito skill setup
+
+Session model:
+  Default               Persistent Markdown comments plus browser hot reload
+  Real-time sync        WebSocket in every session; WebRTC peers with --ephemeral
+  --ephemeral           In-memory comments that are lost when the server stops
+  --agent-session       Current coding-agent conversation watches persistent feedback
+  --agent               Spawn a separate local coding-agent worker
+  Tunnel exposure       Enabled by default; --no-tunnel keeps the room local
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -63,7 +82,8 @@ Options:
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
-  --live                Use ephemeral live collaboration mode; do not write comments to disk
+  --ephemeral           Keep comments in memory only; all feedback is lost on restart
+  --live                Deprecated alias for --ephemeral
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
@@ -98,9 +118,11 @@ Commands:
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
+  session status        Inspect and recover the last session for a target
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
+  skill install         Install the skill for Codex or Claude at user or project scope
 `;
 }
 
@@ -127,8 +149,13 @@ export function parseArgs(argv) {
       opts.version = true;
     } else if (arg === "--no-tunnel") {
       opts.tunnel = false;
-    } else if (arg === "--live") {
+    } else if (arg === "--ephemeral") {
+      opts.ephemeral = true;
       opts.live = true;
+    } else if (arg === "--live") {
+      opts.ephemeral = true;
+      opts.live = true;
+      opts.liveAlias = true;
     } else if (arg === "--agent") {
       const value = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom");
       opts.agent = value.toLowerCase();
@@ -223,11 +250,11 @@ export function parseArgs(argv) {
   if (opts.agentPrompt && opts.agentPromptPath) {
     throw new Error("Use either --agent-prompt or --agent-prompt-file, not both");
   }
-  if (opts.live && opts.agent) {
-    throw new Error("--agent requires persistent comments; remove --live");
+  if (opts.ephemeral && opts.agent) {
+    throw new Error("--agent requires persistent comments; remove --ephemeral and use the default persistent mode");
   }
-  if (opts.live && opts.agentSession) {
-    throw new Error("--agent-session requires persistent comments; remove --live");
+  if (opts.ephemeral && opts.agentSession) {
+    throw new Error("--agent-session requires persistent comments; remove --ephemeral and use the default persistent mode");
   }
   if (opts.agent && opts.agentSession) {
     throw new Error("Use either --agent or --agent-session, not both");
@@ -292,6 +319,10 @@ async function main() {
     process.exitCode = await runInboxCommand(argv.slice(1));
     return;
   }
+  if (argv[0] === "session") {
+    process.exitCode = await runSessionCommand(argv.slice(1));
+    return;
+  }
   if (argv[0] === "config") {
     process.exitCode = runConfigCommand(argv.slice(1));
     return;
@@ -331,6 +362,11 @@ async function main() {
     console.error(`File not found: ${opts.filePath}`);
     process.exit(1);
   }
+  if (opts.liveAlias) {
+    console.warn("--live currently means ephemeral comments. Comments will not be saved or watched");
+    console.warn("by an agent. Use --ephemeral for this behavior, or --agent-session for a");
+    console.warn("persistent live agent review.");
+  }
   const targetStat = statSync(opts.filePath);
   if (!targetStat.isFile() && !targetStat.isDirectory()) {
     console.error(`Not a file or folder: ${opts.filePath}`);
@@ -351,6 +387,7 @@ async function main() {
   }
 
   const accessKey = opts.auth ? generateAccessKey() : null;
+  const sessionId = `s_${generateAccessKey()}`;
   const agentStatePath = (opts.agent || opts.agentSession) ? (opts.agentStatePath || defaultAgentStatePath(opts.filePath)) : null;
   const agentPromptOptions = (opts.agent || opts.agentSession) ? loadAgentPromptOptions(opts) : {};
   const instance = await createTunelitoServer({
@@ -361,7 +398,8 @@ async function main() {
     port: opts.port,
     accessKey,
     ownerName: opts.ownerName,
-    liveMode: opts.live,
+    liveMode: opts.ephemeral,
+    sessionId,
     blockedPaths: [
       ...(agentStatePath ? agentBlockedPaths(agentStatePath) : []),
       ...resolvedConfig.blockedPaths,
@@ -430,29 +468,35 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
-  console.log(opts.live ? "Comments: ephemeral (--live; not written to disk)" : `Comments: ${instance.commentsPath}`);
+  console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
     console.log(`Owner:   ${opts.ownerName}`);
+  }
+  let agentSessionPath = "";
+  try {
+    agentSessionPath = writeRuntimeSessionFile({
+      targetPath: opts.filePath,
+      instance,
+      sessionId,
+      commentsPath: instance.commentsPath,
+      statePath: agentStatePath,
+      opts,
+      promptAppend: agentPromptOptions.append,
+    });
+    console.log(`Session:  ${agentSessionPath}`);
+  } catch (error) {
+    if (opts.agentSession) {
+      await instance.close();
+      throw new Error(`Could not write required agent-session metadata: ${error.message}`);
+    }
+    console.warn(`Session:  metadata unavailable (${error.message})`);
   }
   if (agentWorker) {
     console.log(`Agent:   ${agentWorker.description}`);
     agentWorker.start();
   }
-  let agentSessionPath = "";
   if (opts.agentSession) {
-    agentSessionPath = writeAgentSessionFile({
-      targetPath: opts.filePath,
-      commentsPath: instance.commentsPath,
-      statePath: agentStatePath,
-      policy: opts.agentPolicy,
-      trigger: opts.agentTrigger,
-      maxAttempts: opts.agentMaxAttempts,
-      maxPasses: opts.agentMaxPasses,
-      ownerName: opts.ownerName,
-      promptAppend: agentPromptOptions.append,
-      reviewUrl: instance.localUrl,
-    });
     console.log(`Agent session: ${agentSessionWatcher.description}`);
     console.log(`Agent session: watching comments in this process`);
     console.log(`Agent session: tracker ${inboxStatusCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger })}`);
@@ -460,7 +504,7 @@ async function main() {
     console.log(`Agent session: metadata ${agentSessionPath}`);
     agentSessionWatcher.start();
   }
-  if (opts.live) {
+  if (opts.ephemeral) {
     console.log("Live:    WebRTC peer-to-peer when available; WebSocket relay fallback enabled");
   }
   console.log(opts.auth ? "Access:  review key required by the printed URLs" : "Access:  disabled (--no-auth)");
@@ -476,13 +520,24 @@ async function main() {
       accessKey,
       onUrl(url) {
         const publicUrl = withReviewKey(url, accessKey);
-        if (agentSessionPath) updateAgentSessionPublicUrl(agentSessionPath, publicUrl);
+        tryUpdateRuntimeSession(agentSessionPath, () => updateAgentSessionPublicUrl(agentSessionPath, publicUrl));
         console.log(`Public:  ${publicUrl}`);
       },
       onFallback(fallbackPackage) {
+        tryUpdateRuntimeSession(agentSessionPath, () => updateSessionFile(agentSessionPath, (session) => ({
+          ...session,
+          tunnel: { ...session.tunnel, state: "starting", fallbackPackage },
+          lastActivityAt: new Date().toISOString(),
+        })));
         console.log(`Public:  cloudflared not found; trying npx ${fallbackPackage}...`);
       },
       onError(error) {
+        tryUpdateRuntimeSession(agentSessionPath, () => updateSessionFile(agentSessionPath, (session) => ({
+          ...session,
+          lifecycle: "degraded",
+          tunnel: { ...session.tunnel, state: "unavailable", error: error.message },
+          lastActivityAt: new Date().toISOString(),
+        })));
         console.log(`Public:  unavailable (${error.message})`);
         console.log("         Install cloudflared, allow npm/npx network access, or rerun with --no-tunnel.");
       },
@@ -499,11 +554,27 @@ async function main() {
     await agentWorker?.stop();
     await agentSessionWatcher?.stop();
     await instance.close();
+    tryUpdateRuntimeSession(agentSessionPath, () => updateSessionFile(agentSessionPath, (session) => ({
+      ...session,
+      lifecycle: "stopped",
+      stoppedAt: new Date().toISOString(),
+      lastActivityAt: new Date().toISOString(),
+      tunnel: { ...session.tunnel, state: session.tunnel?.enabled ? "stopped" : "disabled" },
+    })));
     process.exit(0);
   }
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function tryUpdateRuntimeSession(sessionPath, update) {
+  if (!sessionPath) return;
+  try {
+    update();
+  } catch (error) {
+    console.warn(`Session:  could not update metadata (${error.message})`);
+  }
 }
 
 function doctorUsage() {
@@ -519,7 +590,8 @@ Options:
   --port <number>           Port to evaluate (default: 4317)
   --no-auth                 Evaluate an unauthenticated session shape
   --no-tunnel               Evaluate a local-only session shape
-  --live                    Evaluate live-mode persistence
+  --ephemeral               Evaluate in-memory-only persistence
+  --live                    Deprecated alias for --ephemeral
   --agent <codex|claude|custom>
                             Evaluate local agent worker compatibility
   --agent-session           Evaluate active-agent session compatibility
@@ -557,7 +629,8 @@ export function parseDoctorArgs(argv) {
       opts.auth = false;
     } else if (arg === "--no-tunnel") {
       opts.tunnel = false;
-    } else if (arg === "--live") {
+    } else if (arg === "--ephemeral" || arg === "--live") {
+      opts.ephemeral = true;
       opts.live = true;
     } else if (arg === "--agent") {
       opts.agent = requiredValue(argv[++i], "--agent", "provider: codex, claude, or custom").toLowerCase();
@@ -1219,15 +1292,23 @@ function formatInboxRecordResult(recorded, format, { trigger = DEFAULT_AGENT_TRI
 }
 
 export function writeAgentSessionFile({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses, ownerName, promptAppend, reviewUrl = "" }) {
+  const sessionId = `s_${generateAccessKey()}`;
   const workspaceRoot = agentWorkspaceRoot(targetPath);
-  const sessionPath = join(workspaceRoot, ".tunelito", "session.json");
-  mkdirSync(dirname(sessionPath), { recursive: true });
+  const sessionPath = sessionPathForTarget(targetPath);
+  const createdAt = new Date().toISOString();
   const session = {
+    format: SESSION_FORMAT,
+    schemaVersion: SESSION_VERSION,
     version: 1,
+    sessionId,
+    tunelitoVersion: VERSION,
     mode: "agent-session",
     targetPath,
     workspaceRoot,
+    sourceRoot: workspaceRoot,
+    directoryMode: existsSync(targetPath) ? statSync(targetPath).isDirectory() : false,
     commentsPath,
+    persistence: "persistent",
     statePath,
     policy,
     trigger,
@@ -1240,18 +1321,190 @@ export function writeAgentSessionFile({ targetPath, commentsPath, statePath, pol
     nextCommand: inboxWatchCommand({ targetPath, commentsPath, statePath, policy, trigger, maxAttempts, maxPasses }),
     statusCommand: inboxStatusCommand({ targetPath, commentsPath, statePath, policy, trigger }),
     recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses }),
-    createdAt: new Date().toISOString(),
+    agent: {
+      mode: "agent-session",
+      provider: "current",
+      statePath,
+      policy,
+      trigger,
+    },
+    pid: process.pid,
+    lifecycle: "running",
+    localUrl: reviewUrl,
+    publicUrl: "",
+    tunnel: { enabled: false, state: "disabled", error: null },
+    createdAt,
+    startedAt: createdAt,
+    lastActivityAt: createdAt,
   };
-  writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
-  return sessionPath;
+  return writeSessionFile(sessionPath, session);
 }
 
 export function updateAgentSessionPublicUrl(sessionPath, publicUrl) {
-  const session = JSON.parse(readFileSync(sessionPath, "utf8"));
-  session.publicUrl = publicUrl;
-  session.reviewUrl = publicUrl;
-  session.reviewWatchCommand = reviewWatchCommand({ url: publicUrl });
-  writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+  updateSessionFile(sessionPath, (session) => ({
+    ...session,
+    lifecycle: "running",
+    publicUrl,
+    reviewUrl: publicUrl,
+    reviewWatchCommand: reviewWatchCommand({ url: publicUrl }),
+    tunnel: { ...session.tunnel, enabled: true, state: "connected", error: null },
+    lastActivityAt: new Date().toISOString(),
+  }));
+}
+
+function writeRuntimeSessionFile({ targetPath, instance, sessionId, commentsPath, statePath, opts, promptAppend }) {
+  const workspaceRoot = agentWorkspaceRoot(targetPath);
+  const startedAt = instance.startedAt || new Date().toISOString();
+  const mode = opts.agentSession ? "agent-session" : opts.agent ? "worker" : "none";
+  const session = {
+    format: SESSION_FORMAT,
+    schemaVersion: SESSION_VERSION,
+    version: 1,
+    sessionId,
+    tunelitoVersion: VERSION,
+    mode,
+    targetPath,
+    workspaceRoot,
+    sourceRoot: workspaceRoot,
+    directoryMode: Boolean(instance.directoryMode),
+    commentsPath: commentsPath || null,
+    persistence: opts.ephemeral ? "ephemeral" : "persistent",
+    statePath: statePath || null,
+    policy: mode === "none" ? "" : opts.agentPolicy,
+    trigger: mode === "none" ? "" : opts.agentTrigger,
+    maxAttempts: mode === "none" ? null : opts.agentMaxAttempts,
+    maxPasses: mode === "none" ? null : opts.agentMaxPasses,
+    ownerName: opts.ownerName || "",
+    hasInstructions: Boolean(promptAppend),
+    localUrl: instance.localUrl,
+    publicUrl: "",
+    reviewUrl: instance.localUrl,
+    reviewWatchCommand: reviewWatchCommand({ url: instance.localUrl }),
+    agent: {
+      mode,
+      provider: opts.agent || (opts.agentSession ? "current" : ""),
+      statePath: statePath || null,
+      policy: mode === "none" ? "" : opts.agentPolicy,
+      trigger: mode === "none" ? "" : opts.agentTrigger,
+    },
+    pid: process.pid,
+    lifecycle: "running",
+    tunnel: {
+      enabled: Boolean(opts.tunnel),
+      state: opts.tunnel ? "starting" : "disabled",
+      error: null,
+    },
+    createdAt: startedAt,
+    startedAt,
+    lastActivityAt: startedAt,
+  };
+  if (opts.agentSession) {
+    Object.assign(session, {
+      nextCommand: inboxWatchCommand({
+        targetPath,
+        commentsPath,
+        statePath,
+        policy: opts.agentPolicy,
+        trigger: opts.agentTrigger,
+        maxAttempts: opts.agentMaxAttempts,
+        maxPasses: opts.agentMaxPasses,
+      }),
+      statusCommand: inboxStatusCommand({
+        targetPath,
+        commentsPath,
+        statePath,
+        policy: opts.agentPolicy,
+        trigger: opts.agentTrigger,
+      }),
+      recordCommand: inboxRecordCommand({ targetPath, commentsPath, statePath, maxPasses: opts.agentMaxPasses }),
+    });
+  }
+  return writeSessionFile(sessionPathForTarget(targetPath), session);
+}
+
+function sessionUsage() {
+  return `Tunelito session -- inspect a recoverable local review session.
+
+Usage:
+  tunelito session status [page.html|notes.md|folder] [options]
+
+Options:
+  --json        Print the versioned machine-readable status report
+  --redact      Redact the review key from URLs
+  -h, --help    Show this message
+`;
+}
+
+export function parseSessionArgs(argv) {
+  const command = argv[0];
+  if (!command || command === "help" || command === "-h" || command === "--help") return { help: true };
+  if (command !== "status") throw new Error(`Unknown session command: ${command}`);
+  const opts = { command, targetPath: resolve(process.cwd()), format: "text", redact: false };
+  const positional = [];
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--json") opts.format = "json";
+    else if (arg === "--redact") opts.redact = true;
+    else if (arg === "-h" || arg === "--help") opts.help = true;
+    else if (arg.startsWith("--")) throw new Error(`Unknown session option: ${arg}`);
+    else positional.push(arg);
+  }
+  if (positional.length > 1) throw new Error(`Expected zero or one HTML file, Markdown file, or folder, got ${positional.length}`);
+  if (positional[0]) opts.targetPath = resolve(positional[0]);
+  return opts;
+}
+
+export async function runSessionCommand(args, {
+  stdout = process.stdout,
+  stderr = process.stderr,
+  inspect = inspectSession,
+  fetchFn,
+  isProcessAlive,
+  now,
+} = {}) {
+  let opts;
+  try {
+    opts = parseSessionArgs(args);
+  } catch (error) {
+    stderr.write(`${error.message}\n\n${sessionUsage()}`);
+    return 1;
+  }
+  if (opts.help) {
+    stdout.write(sessionUsage());
+    return 0;
+  }
+  let commentsIndex = null;
+  try {
+    const { session } = readSessionMetadata(opts.targetPath);
+    if (session.commentsPath) {
+      commentsIndex = buildCommentsIndex({
+        targetPath: session.targetPath,
+        commentsPath: session.commentsPath,
+        agentStatePath: session.agent?.statePath || session.statePath,
+      });
+    }
+  } catch {
+    // inspectSession provides the canonical missing/corrupt metadata error.
+  }
+  try {
+    const report = await inspect(opts.targetPath, {
+      ...(fetchFn ? { fetchFn } : {}),
+      ...(isProcessAlive ? { isProcessAlive } : {}),
+      ...(now ? { now } : {}),
+      redact: opts.redact,
+      commentsIndex,
+    });
+    stdout.write(opts.format === "json" ? `${JSON.stringify(report, null, 2)}\n` : formatSessionStatus(report));
+    return report.status === "running" || report.status === "degraded" ? 0 : 1;
+  } catch (error) {
+    stderr.write(`${error.message}\n`);
+    return 1;
+  }
+}
+
+function readSessionMetadata(targetPath) {
+  const path = sessionPathForTarget(targetPath);
+  return { sessionPath: path, session: JSON.parse(readFileSync(path, "utf8")) };
 }
 
 function reviewWatchCommand({ url }) {
@@ -1374,7 +1627,8 @@ export function loadAgentPromptOptions(opts) {
 }
 
 export function readBundledSkill() {
-  return readFileSync(new URL("../docs-site/skill.md", import.meta.url), "utf8");
+  return readFileSync(new URL("../docs-site/skill.md", import.meta.url), "utf8")
+    .replace("__TUNELITO_VERSION__", VERSION);
 }
 
 function configUsage() {
@@ -1503,14 +1757,22 @@ function skillUsage() {
   return `Tunelito skill -- the distributable agent skill for coding agents.
 
 Usage: tunelito skill <command>
+       tunelito skill install --agent <codex|claude> --scope <user|project> [options]
 
 Commands:
-  show        Print the Tunelito agent skill (SKILL.md) to stdout
-  setup       Print no-write setup guidance for common coding agents
+  tunelito skill show
+              Print the Tunelito agent skill (SKILL.md) to stdout
+  tunelito skill setup
+              Print no-write setup guidance for common coding agents
+  tunelito skill install
+              Explicitly install SKILL.md at a supported discovery path
   help        Show this message
 
-Install it for your coding agent, for example with Claude Code:
-  tunelito skill show > .claude/skills/tunelito/SKILL.md
+Install examples:
+  tunelito skill install --agent codex --scope user --dry-run
+  tunelito skill install --agent codex --scope project
+  tunelito skill install --agent claude --scope user
+  tunelito skill install --agent claude --scope project --force
 
 For guided setup:
   tunelito skill setup
@@ -1529,23 +1791,30 @@ Runtime: Node.js 22 or newer
 2. Print the bundled skill:
    npx --yes tunelito skill show
 
-3. Install or reference it for your agent:
+3. Preview and explicitly install it for your agent:
 
    Claude Code project skill:
-     mkdir -p .claude/skills/tunelito
-     npx --yes tunelito skill show > .claude/skills/tunelito/SKILL.md
+     npx --yes tunelito skill install --agent claude --scope project --dry-run
+     npx --yes tunelito skill install --agent claude --scope project
 
-   Codex and other instruction-file agents:
-     Add the Tunelito guidance to the project or agent instructions file that your agent actually loads.
-     Inspect existing instruction files before editing them, and preserve user-specific rules.
+   Codex user skill:
+     npx --yes tunelito skill install --agent codex --scope user --dry-run
+     npx --yes tunelito skill install --agent codex --scope user
+
+   Verified discovery paths:
+     Codex user:   ~/.agents/skills/tunelito/SKILL.md
+     Codex project: .agents/skills/tunelito/SKILL.md
+     Claude user:  ~/.claude/skills/tunelito/SKILL.md
+     Claude project: .claude/skills/tunelito/SKILL.md
 
    Cursor, Gemini, opencode, Copilot-style assistants:
      Use the same skill text as an agent instruction block or project rule according to that tool's current docs.
      Do not assume one global path is writable or loaded across machines.
 
 4. Safety reminders:
-   - This setup command prints guidance only; it does not write files or install packages.
-   - Do not present --no-auth as local-only. For sensitive pages, use --no-tunnel, optionally with --live.
+   - Setup prints guidance only. Install writes only after an explicit agent and scope.
+   - Existing files are preserved unless --force is passed; use --dry-run before writing.
+   - Do not present --no-auth as local-only. For sensitive pages, use --no-tunnel, optionally with --ephemeral.
    - Treat --agent and --agent-session as trusted-session behavior because reviewer comments can become local edit instructions.
    - Flags change over time; confirm exact options with npx --yes tunelito --help before quoting them.
 
@@ -1575,9 +1844,121 @@ export function runSkillCommand(args, { stdout = process.stdout, stderr = proces
     stdout.write(skillSetupText());
     return 0;
   }
+  if (sub === "install") {
+    let opts;
+    try {
+      opts = parseSkillInstallArgs(args.slice(1));
+    } catch (error) {
+      stderr.write(`${error.message}\n\n${skillUsage()}`);
+      return 1;
+    }
+    let content;
+    try {
+      content = readSkill();
+    } catch (error) {
+      stderr.write(`Could not read the bundled Tunelito skill: ${error.message}\n`);
+      return 1;
+    }
+    try {
+      const result = installSkill({ ...opts, content });
+      stdout.write(formatSkillInstallResult(result));
+      return result.action === "blocked" ? 1 : 0;
+    } catch (error) {
+      stderr.write(`${error.message}\n`);
+      return 1;
+    }
+  }
   stderr.write(`Unknown skill command: ${sub}\n\n`);
   stderr.write(skillUsage());
   return 1;
+}
+
+export function parseSkillInstallArgs(argv) {
+  const opts = { force: false, dryRun: false, cwd: process.cwd(), homePath: homedir() };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--agent") opts.agent = requiredValue(argv[++i], "--agent").toLowerCase();
+    else if (arg === "--scope") opts.scope = requiredValue(argv[++i], "--scope").toLowerCase();
+    else if (arg === "--project-root") opts.cwd = resolve(requiredValue(argv[++i], "--project-root", "path"));
+    else if (arg === "--dry-run") opts.dryRun = true;
+    else if (arg === "--force") opts.force = true;
+    else throw new Error(`Unknown skill install option: ${arg}`);
+  }
+  if (!["codex", "claude"].includes(opts.agent)) throw new Error("--agent must be codex or claude");
+  if (!["user", "project"].includes(opts.scope)) throw new Error("--scope must be user or project");
+  return opts;
+}
+
+export function skillInstallDestination({ agent, scope, cwd = process.cwd(), homePath = homedir() }) {
+  if (scope === "user") {
+    return agent === "codex"
+      ? join(resolve(homePath), ".agents", "skills", "tunelito", "SKILL.md")
+      : join(resolve(homePath), ".claude", "skills", "tunelito", "SKILL.md");
+  }
+  const projectRoot = findProjectRoot(cwd);
+  return agent === "codex"
+    ? join(projectRoot, ".agents", "skills", "tunelito", "SKILL.md")
+    : join(projectRoot, ".claude", "skills", "tunelito", "SKILL.md");
+}
+
+export function installSkill({ agent, scope, cwd, homePath, force = false, dryRun = false, content }) {
+  const destination = skillInstallDestination({ agent, scope, cwd, homePath });
+  const proposed = content.endsWith("\n") ? content : `${content}\n`;
+  const exists = existsSync(destination);
+  const existing = exists ? readFileSync(destination, "utf8") : "";
+  const existingVersion = skillBodyVersion(existing);
+  const proposedVersion = VERSION;
+  let action = exists ? "blocked" : dryRun ? "would-create" : "created";
+  if (exists && existing === proposed) action = "unchanged";
+  else if (exists && force) action = dryRun ? "would-replace" : "replaced";
+
+  if (!dryRun && (action === "created" || action === "replaced")) {
+    atomicWriteText(destination, proposed);
+  }
+  return { agent, scope, destination, existingVersion, proposedVersion, action, force, dryRun };
+}
+
+function formatSkillInstallResult(result) {
+  const action = result.action === "blocked"
+    ? "blocked (existing file preserved; rerun with --force to replace it)"
+    : result.action;
+  return [
+    "Tunelito skill install",
+    `Agent:            ${result.agent}`,
+    `Scope:            ${result.scope}`,
+    `Destination:      ${result.destination}`,
+    `Existing version: ${result.existingVersion || "(none or modified)"}`,
+    `Proposed version: ${result.proposedVersion}`,
+    `Action:           ${action}`,
+    "",
+  ].join("\n");
+}
+
+function skillBodyVersion(content) {
+  const match = String(content || "").match(/^\s*version:\s*([^\s]+)\s*$/m);
+  return match?.[1] || "";
+}
+
+function atomicWriteText(path, content) {
+  mkdirSync(dirname(path), { recursive: true });
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(tempPath, content, { encoding: "utf8", mode: 0o600 });
+    renameSync(tempPath, path);
+  } finally {
+    if (existsSync(tempPath)) rmSync(tempPath, { force: true });
+  }
+}
+
+function findProjectRoot(startPath) {
+  let current = resolve(startPath);
+  if (existsSync(current) && statSync(current).isFile()) current = dirname(current);
+  while (true) {
+    if (existsSync(join(current, ".git"))) return current;
+    const parent = dirname(current);
+    if (parent === current) return resolve(startPath);
+    current = parent;
+  }
 }
 
 if (isCliEntry(import.meta.url)) {

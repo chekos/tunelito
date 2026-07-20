@@ -2,13 +2,17 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { resolve } from "node:path";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const binPath = resolve(rootDir, "bin/tunelito.js");
-const examplePath = resolve(rootDir, "examples/simple-review.html");
+const tempRoot = mkdtempSync(join(tmpdir(), "tunelito-smoke-"));
+const examplePath = join(tempRoot, "simple-review.html");
 const timeoutMs = 5000;
+copyFileSync(resolve(rootDir, "examples/simple-review.html"), examplePath);
 
 let child;
 
@@ -24,6 +28,7 @@ try {
       new Promise((resolveExit) => setTimeout(resolveExit, 1000)),
     ]);
   }
+  rmSync(tempRoot, { recursive: true, force: true });
 }
 
 async function startTunelito() {

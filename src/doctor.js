@@ -85,7 +85,7 @@ export async function buildDoctorReport(options = {}, deps = {}) {
 
 function addAgentHostCheck(checks, { options, env, targetPath }) {
   const host = detectedAgentHost(env);
-  if (!host || !targetPath || options.agent || options.agentSession || options.live) return;
+  if (!host || !targetPath || options.agent || options.agentSession || options.ephemeral || options.live) return;
   addCheck(checks, {
     id: "agent.host-without-mode",
     severity: "warning",
@@ -261,12 +261,12 @@ function addHostSafetyChecks(checks, options) {
       message: "--no-auth does not disable the tunnel; add --no-tunnel for local-only sessions.",
     });
   }
-  if (options.live && (options.agent || options.agentSession || options.agentStatePath || options.agentPolicyProvided)) {
+  if ((options.ephemeral || options.live) && (options.agent || options.agentSession || options.agentStatePath || options.agentPolicyProvided)) {
     addCheck(checks, {
       id: "safety.live-agent",
       severity: "error",
       status: "fail",
-      message: "--live uses ephemeral comments and is incompatible with agent workflows that require a persistent inbox.",
+      message: "--ephemeral keeps comments in memory and is incompatible with agent workflows that require a persistent inbox.",
     });
   }
   if (options.agent || options.agentSession || options.agentStatePath || options.agentPolicyProvided) {

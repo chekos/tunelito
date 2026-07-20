@@ -9,7 +9,7 @@ Before serving a review room, load Tunelito's bundled workflow:
 npx --yes tunelito skill show
 ```
 
-Use `skill show` as the source of truth for the full agent behavior. The setup command only explains where to put or reference that skill for different tools:
+Use `skill show` as the source of truth for the exact installed bytes. The setup command explains the supported locations:
 
 ```bash
 npx --yes tunelito skill setup
@@ -28,28 +28,27 @@ Tunelito requires Node.js 22 or newer.
 
 Flags can change. Agents should check `tunelito --help` before quoting exact command-line options.
 
-## Claude Code
+## Explicit installation
 
-For a project-local Claude Code skill:
-
-```bash
-mkdir -p .claude/skills/tunelito
-npx --yes tunelito skill show > .claude/skills/tunelito/SKILL.md
-```
-
-Read existing project instructions before editing them, and preserve local rules that already exist.
-
-## Codex
-
-Codex setups vary by project and machine. Add the Tunelito skill text to the project or agent instruction file that your Codex session actually loads. Do not assume one global path is writable or active.
-
-For a manual install:
+Preview the destination first, then install at the scope you intend:
 
 ```bash
-npx --yes tunelito skill show
+npx --yes tunelito skill install --agent codex --scope user --dry-run
+npx --yes tunelito skill install --agent codex --scope project
+npx --yes tunelito skill install --agent claude --scope user
+npx --yes tunelito skill install --agent claude --scope project
 ```
 
-Then add the printed guidance to the relevant project instructions.
+The installer reports its destination, the existing and proposed versions, and the action. It does not replace an existing modified file unless you pass `--force`. Writes are atomic, and the installed `SKILL.md` bytes exactly match `tunelito skill show`.
+
+## Verified discovery paths
+
+| Agent | User scope | Project scope |
+| --- | --- | --- |
+| Codex | `~/.agents/skills/tunelito/SKILL.md` | `<project>/.agents/skills/tunelito/SKILL.md` |
+| Claude Code | `~/.claude/skills/tunelito/SKILL.md` | `<project>/.claude/skills/tunelito/SKILL.md` |
+
+Project scope resolves from the current Git root. Pass `--project-root <path>` when invoking from somewhere else. User scope expands the current user home directly without asking the shell to expand `~`.
 
 ## Cursor, Gemini, opencode, and Copilot-style assistants
 
@@ -57,9 +56,10 @@ Use the printed skill as an instruction block or project rule according to that 
 
 ## Safety notes
 
-- `tunelito skill setup` prints guidance only. It does not write files, create symlinks, install packages, or edit global instructions.
+- `tunelito skill setup` prints guidance only. `skill install` writes only after an explicit agent and scope.
+- Use `--dry-run` to inspect the destination. Existing files are preserved unless `--force` is explicit.
 - Do not present `--no-auth` as local-only. It only removes the review-key gate.
-- For sensitive pages, use `--no-tunnel`, optionally with `--live`.
+- For sensitive pages, use `--no-tunnel`, optionally with `--ephemeral`.
 - Treat `--agent` and `--agent-session` as trusted-session behavior because reviewer comments can become local edit instructions.
 - Inspect existing instruction files before editing them. Agent setup should add Tunelito guidance without deleting project rules, security notes, or user-specific workflow details.
 
@@ -68,4 +68,4 @@ Use the printed skill as an instruction block or project rule according to that 
 1. `tunelito skill show` is the stable source for the bundled skill body.
 2. `tunelito skill setup` explains how to use that skill with different agents.
 3. This page is the linkable guide for humans and agents.
-4. Automatic global instruction-file edits are not part of v1.
+4. `tunelito skill install` performs an explicit, scoped, no-overwrite-by-default installation.

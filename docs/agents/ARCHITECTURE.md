@@ -68,7 +68,8 @@ The active-agent inbox owns comment handoff when `--agent-session` or `tunelito 
 - reuse the same comment parser, owner/mention policies, continuation state, and terminal statuses as the local agent worker
 - print bounded prompts from the `--agent-session` server process, or through `tunelito inbox next` / `tunelito inbox watch` for one-shot manual claims
 - record outcomes through `tunelito inbox record` rather than direct ledger edits
-- write `.tunelito/session.json` when `--agent-session` is enabled so the active session can discover comments, state, tracker, and record commands
+- write a private, atomic `.tunelito/session.json` for every served target so another shell can verify the listener identity and recover URLs, persistence, tunnel, and lifecycle state
+- include agent comments, state, tracker, and record commands when `--agent-session` is enabled
 
 The review handoff event queue owns batch-finished signals when `Done Reviewing` or `tunelito review watch` is used:
 
@@ -76,7 +77,7 @@ The review handoff event queue owns batch-finished signals when `Done Reviewing`
 - include sequence id, created timestamp, target path, comments path when persistent, live mode, directory mode, summary counts, and optional event-only overall comment
 - replay retained events after sequence `0` by default; allow callers to wait for future events with `--after latest`
 - never write handoff events to source files, comments Markdown, or `.tunelito/agent/state.json`
-- keep `--live` handoff events ephemeral and avoid creating a comments file
+- keep `--ephemeral` handoff events in memory and avoid creating a comments file
 
 The MCP adapter owns structured agent access when `tunelito mcp` is used:
 
@@ -94,11 +95,11 @@ The browser client owns reviewer interaction:
 - create unanchored page notes and site-wide notes
 - render comment controls
 - render a `Done Reviewing` handoff action with acknowledged status
-- submit comments over WebSocket and, in `--live`, fan out live events over WebRTC data channels when available
+- submit comments over WebSocket and, in `--ephemeral`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
-- render peer cursors and live selection highlights in `--live`
-- render optional pointer halos locally, and broadcast them as ephemeral live events in `--live`
+- render peer cursors and live selection highlights in `--ephemeral`
+- render optional pointer halos locally, and broadcast them as ephemeral live events in `--ephemeral`
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
@@ -119,7 +120,7 @@ The browser client owns reviewer interaction:
 - Never require an account, database, or hosted backend for the core workflow.
 - Keep comments human-readable in markdown even if hidden metadata is damaged.
 - Keep the `tunelito-comments` JSON index derived from markdown metadata plus optional agent-ledger status; do not make it durable state.
-- Keep `--live` comments ephemeral; do not write them to markdown.
+- Keep `--ephemeral` comments in memory; do not write them to markdown.
 - Keep review handoff events ephemeral; do not write them to source files, comments markdown, or agent state.
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source files.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
@@ -128,7 +129,7 @@ The browser client owns reviewer interaction:
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never spawn a local agent worker for `--agent-session`; active-agent mode watches comments, prints prompts, and writes session metadata for the current agent session.
 - Never spawn a local agent worker, server, tunnel, browser, or editor from `tunelito mcp`.
-- Never use `--agent` with `--live`; the worker needs a persistent comments inbox.
+- Never use `--agent` with `--ephemeral`; the worker needs a persistent comments inbox.
 - Never extract or reuse model provider credentials; provider presets call the user's installed CLI.
 - Keep package installs dependency-light and cross-platform.
 - Keep Markdown front-matter parsing bounded and presentation-only; never evaluate metadata or let it choose file or request paths.

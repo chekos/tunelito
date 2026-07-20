@@ -17,7 +17,7 @@ Expected behavior:
 - Direct loopback `Local:` sessions are marked as owners on the server; public tunnel or forwarded sessions are marked as visitors.
 - `--owner` seeds the local owner display name only; do not treat owner labels as access control.
 - Reviewer IDs support display-name rename behavior only; do not treat them as authentication or authorization.
-- Owner approval of visitor comments requires the direct local owner session, persists only outside `--live`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
+- Owner approval of visitor comments requires the direct local owner session, persists only outside `--ephemeral`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
 
 Tests should cover both allowed and denied paths.
 
@@ -39,6 +39,7 @@ Expected behavior:
 - Do not write the injection back to disk.
 - Remove strict CSP meta tags only from the served response so the same-origin client can run.
 - Avoid leaking the review key in unnecessary places.
+- Keep the internal session-status route behind the same review-key/cookie gate, return only bounded runtime health, and require its session identity to match local metadata before reporting a listener as healthy.
 - Serve Mermaid and its bootstrap from fixed internal routes behind the existing review-key/cookie gate; do not expose arbitrary dependency paths.
 - Serve the packaged Markdown interaction client from a fixed internal route behind the same review-key/cookie gate; do not derive runtime paths from front matter or wiki targets.
 - Initialize Mermaid with `securityLevel: "strict"`, `startOnLoad: false`, HTML labels and click behavior disabled, bounded text/edge limits, and controlled error rendering.
@@ -67,8 +68,8 @@ Expected behavior:
 
 Product-level local agent worker behavior:
 
-- `--agent` is explicit opt-in and rejected with `--live`.
-- `--agent-session` is explicit opt-in, rejected with `--live`, and must not spawn a child agent.
+- `--agent` is explicit opt-in and rejected with `--ephemeral`.
+- `--agent-session` is explicit opt-in, rejected with `--ephemeral`, and must not spawn a child agent.
 - Provider presets call installed local CLIs; Tunelito must not read or copy model credentials.
 - Default `--agent` behavior evaluates every persistent comment as local agent input and must be documented as trusted-session behavior.
 - Active-agent inbox commands (`tunelito inbox next/watch/record`) use the same trust boundary: selected reviewer comments become instructions to the current local agent session.
@@ -80,6 +81,7 @@ Product-level local agent worker behavior:
 - Resolution state belongs in `.tunelito/agent/state.json`, not the comments markdown that the server rewrites.
 - Inbox claims must expire so a crashed or abandoned active-agent session does not permanently hide a pending comment.
 - `.tunelito/` is hidden, must not be served as static content from folder reviews, and must not trigger reload broadcasts when the ledger changes.
+- `.tunelito/session.json` is local lifecycle state for every served target. Write it atomically with owner-only permissions where supported, never send it as telemetry, and never infer health from a PID without verifying the listener's session identity.
 - Custom `--agent-state` paths must also block the derived `log.md` path from static serving.
 - `tunelito doctor` may inspect agent ledger JSON, but it must not create, delete, or rewrite `.tunelito/agent/state.json`.
 - Agent output must be structured by comment ID so handled comments are not retried indefinitely.

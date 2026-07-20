@@ -17,7 +17,7 @@ The browser client handles:
 - assigned reviewer names and explicit renaming
 - unanchored page notes and site-wide notes
 - optional presenter pointer halos on fine-pointer devices
-- live sync over WebSocket, plus WebRTC data channels in `--live`
+- live sync over WebSocket, plus WebRTC data channels in `--ephemeral`
 - highlight rendering when the browser supports it
 - reload notices when the file changes
 
@@ -25,9 +25,9 @@ The server handles:
 
 - review-key access control
 - WebSocket upgrades
-- WebRTC signaling and fallback relay events in `--live`
+- WebRTC signaling and fallback relay events in `--ephemeral`
 - comment validation
-- Markdown persistence, unless `--live` is enabled
+- Markdown persistence, unless `--ephemeral` is enabled
 - file watching
 - packaged same-origin Mermaid assets for Markdown pages that contain diagrams
 - generated root/nested folder landing pages that list only immediate served content
@@ -43,7 +43,7 @@ When `--agent` is enabled, a separate worker handles:
 - recording status in `.tunelito/agent/state.json`
 - writing a readable `.tunelito/agent/log.md`
 
-When `--agent-session` is enabled, Tunelito does not invoke another CLI. The server process writes `.tunelito/session.json`, watches the comments inbox, claims actionable comments for the current coding-agent session, prints bounded prompts, shows reviewer-facing status on comment cards, exposes the same tracker through `tunelito inbox status`, and records results through `tunelito inbox record`.
+Every served target gets an atomic local `.tunelito/session.json` lifecycle record for second-shell status and recovery. When `--agent-session` is enabled, Tunelito does not invoke another CLI: the server process watches the comments inbox, claims actionable comments for the current coding-agent session, prints bounded prompts, shows reviewer-facing status on comment cards, exposes the same tracker through `tunelito inbox status`, and records results through `tunelito inbox record`.
 
 ## Source files are not modified
 
@@ -95,4 +95,4 @@ The local agent worker and active-agent inbox commands do not edit this Markdown
 
 ## Live mode
 
-`--live` stores comments in memory only. The browser client shares comments, cursors, and selection highlights over WebRTC data channels when possible. The WebSocket connection remains the authenticated control channel for room membership, WebRTC signaling, reload notices, and fallback relay when peer-to-peer connectivity is unavailable.
+`--ephemeral` stores comments in memory only. The browser client shares comments, cursors, and selection highlights over WebRTC data channels when possible. The WebSocket connection remains the authenticated control channel for room membership, WebRTC signaling, reload notices, and fallback relay when peer-to-peer connectivity is unavailable.

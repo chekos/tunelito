@@ -4,7 +4,7 @@
 
 Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown files, into a temporary live review room.
 
-Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the source in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept ephemeral with `--live`.
+Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the source in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept in memory only with `--ephemeral`.
 
 Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
 
@@ -123,7 +123,7 @@ Tunelito includes `default`, `editorial`, `technical`, and dark-only `bns-pitaya
 For in-meeting collaboration without writing comments to disk:
 
 ```bash
-tunelito ./page.html --live
+tunelito ./page.html --ephemeral
 ```
 
 ## What Reviewers Can Do
@@ -135,7 +135,7 @@ tunelito ./page.html --live
 - Keep or edit their assigned display name. Renaming updates earlier comments from the same reviewer identity.
 - Toggle a local pointer halo on fine-pointer devices when pointing during a call.
 - See other comments appear live.
-- In `--live`, see peer cursors, live selection highlights, and pointer halos when the browser can connect peer-to-peer.
+- In `--ephemeral`, see peer cursors, live selection highlights, and pointer halos when the browser can connect peer-to-peer.
 - In persistent sessions, open the generated markdown comments file from the panel.
 
 ## What You Control
@@ -144,7 +144,7 @@ tunelito ./page.html --live
 - Edits happen in your editor only.
 - Saved HTML changes trigger a live reload in connected browsers.
 - Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--out`.
-- `--live` keeps comments in memory only; the session disappears when the local server exits.
+- `--ephemeral` keeps comments in memory only; the session disappears when the local server exits.
 
 ## Markdown Review Surfaces
 
@@ -214,14 +214,23 @@ Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
        tunelito review watch [page.html|notes.md|folder] [options]
        tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
+       tunelito session status [page.html|notes.md|folder] [options]
        tunelito config show [page.html|notes.md|folder] [options]
-       tunelito skill <show|setup>
+       tunelito skill <show|setup|install>
 
 Coding agents:
   Before serving a review room, load the bundled workflow:
     tunelito skill show
   Installation guidance:
     tunelito skill setup
+
+Session model:
+  Default               Persistent Markdown comments plus browser hot reload
+  Real-time sync        WebSocket in every session; WebRTC peers with --ephemeral
+  --ephemeral           In-memory comments that are lost when the server stops
+  --agent-session       Current coding-agent conversation watches persistent feedback
+  --agent               Spawn a separate local coding-agent worker
+  Tunnel exposure       Enabled by default; --no-tunnel keeps the room local
 
 Options:
   --port <number>       Port to listen on (default: first free from 4317)
@@ -230,7 +239,8 @@ Options:
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --owner <name>        Seed the editable owner name for the direct local viewer
-  --live                Use ephemeral live collaboration mode; do not write comments to disk
+  --ephemeral           Keep comments in memory only; all feedback is lost on restart
+  --live                Deprecated alias for --ephemeral
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
   --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
@@ -265,34 +275,39 @@ Commands:
   inbox watch           Wait for the next pending comment, then print an agent prompt
   inbox status          Print a live to-do tracker from the comments inbox and ledger
   inbox record          Record the active agent's result for one comment
+  session status        Inspect and recover the last session for a target
   config show           Print resolved Markdown configuration and its source layers
   skill show            Print the distributable Tunelito agent skill (SKILL.md)
   skill setup           Print no-write setup guidance for common coding agents
+  skill install         Install the skill for Codex or Claude at user or project scope
 ```
 
 ## Agent Skill
 
 Tunelito ships an agent skill that teaches a coding agent (Claude Code, Codex, Cursor, and others) how to drive Tunelito: starting and sharing a review session safely, keeping sensitive pages local, and applying the comments from a `*.comments.md` inbox.
 
-The stable installation path is to have your agent print the bundled skill and install that output however the agent expects:
+The stable skill body is:
 
 ```bash
 npx --yes tunelito skill show
 ```
 
-For guided no-write setup instructions across Claude Code, Codex, Cursor, Gemini, opencode, and Copilot-style agents:
+For guided no-write setup instructions:
 
 ```bash
 npx --yes tunelito skill setup
 ```
 
-For Claude Code, for example:
+Preview and explicitly install to a verified discovery path:
 
 ```bash
-tunelito skill show > .claude/skills/tunelito/SKILL.md
+tunelito skill install --agent codex --scope user --dry-run
+tunelito skill install --agent codex --scope project
+tunelito skill install --agent claude --scope user
+tunelito skill install --agent claude --scope project
 ```
 
-Or tell your agent: "run `npx --yes tunelito skill setup`, inspect the existing project instructions, and install the skill without deleting local rules." The setup command prints guidance only; it does not write files, install packages, or edit global agent configuration.
+Codex user skills live under `~/.agents/skills`; Codex project skills live under `.agents/skills`. Claude user skills live under `~/.claude/skills`; Claude project skills live under `.claude/skills`. Installation never happens automatically, preserves existing files by default, reports the existing and proposed versions, and requires `--force` to replace modified content.
 
 ## How It Works
 
@@ -311,7 +326,7 @@ The server also:
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
-- relays WebRTC signaling and ephemeral live fallback events, including peer cursors and pointer halos, in `--live`
+- relays WebRTC signaling and ephemeral fallback events, including peer cursors and pointer halos, in `--ephemeral`
 - starts `cloudflared tunnel --url <local-url>` when available
 - falls back to `npx cloudflared@latest` when `cloudflared` is not installed
 
@@ -327,7 +342,7 @@ Owner-authored comments are marked in Markdown, and the local owner can approve 
 
 `--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
-`--live` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--live`) or avoid sharing the session link.
+`--ephemeral` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--ephemeral`) or avoid sharing the session link. `--live` remains a deprecated alias and prints a warning.
 
 ## Comment Files
 
@@ -398,7 +413,7 @@ tunelito comments inspect ./site.comments.md --json
 
 The JSON index is derived from hidden Tunelito metadata; it does not replace the readable Markdown file or write to source files. For page or folder targets, the index also includes per-comment agent status from `.tunelito/agent/state.json` when a ledger is available, plus top-level pending, unhandled, and completed counts. Missing default comments files for page or folder targets return an empty index, while direct inspection of a missing or unrecognized Markdown file returns diagnostics.
 
-In `--live`, comments are not written to markdown and are not restored after restart.
+In `--ephemeral`, comments are not written to markdown and are not restored after restart.
 
 ## Agent Comment Loop
 
@@ -410,7 +425,7 @@ If you are already inside an agent session, let the current agent own the loop:
 tunelito ./site --agent-session --owner "Chekos" --agent-policy owner-or-mention --agent-trigger "@agent"
 ```
 
-Tunelito serves the review room, writes `.tunelito/session.json` beside the served root, watches the comments markdown in the same process, and prints a bounded prompt whenever it claims an actionable comment for the current agent. It does not spawn a nested worker. After editing the source files, record the outcome with the claim id from the printed command:
+Every served target gets a private, atomic `.tunelito/session.json` lifecycle record beside the served root. `--agent-session` also watches the comments markdown in the same process and prints a bounded prompt whenever it claims an actionable comment for the current agent. It does not spawn a nested worker. After editing the source files, record the outcome with the claim id from the printed command:
 
 ```bash
 tunelito inbox record ./site --id c_... --claim claim_... --status resolved --summary "Updated the hero copy." --file index.html
@@ -418,9 +433,19 @@ tunelito inbox record ./site --id c_... --claim claim_... --status resolved --su
 
 The browser panel shows matching status badges and task details on each comment card. Use `tunelito inbox status ./site` to print the current tracker in the terminal. Pending and claimed comment work appears as unchecked tasks, claimed work includes the active claim id, and completed work is printed as checked and crossed out.
 
+From a second shell, inspect or recover the review room without reaching for `ps` or `lsof`:
+
+```bash
+tunelito session status ./site
+tunelito session status ./site --json
+tunelito session status ./site --redact
+```
+
+Status verifies the listener against the recorded session identity, reports `running`, `degraded`, `stale`, or `stopped`, and includes the target, local and verified public URLs, comment persistence, agent policy and work counts, listener/tunnel health, viewers, activity timestamps, and a recovery or stop suggestion. The metadata remains local, uses owner-only file permissions where supported, and is never telemetry.
+
 Use repeated `tunelito inbox next ./site` calls for non-blocking manual checks from an agent shell, or `tunelito inbox watch ./site` when you need the one-shot waiting primitive without running the server in `--agent-session` mode. Use repeated `--file`, `--completed`, and `--remaining` flags when recording multi-file or `needs_followup` work. Run one active inbox claimer per served workspace; a foreground `inbox next/watch` call against a workspace already served with `--agent-session` is another claimer. Claim ids are local leases that prevent stale recordings and let abandoned claims expire, not a distributed lock. If a foreground record needs to resolve the currently owning claim, pass `--claim auto` instead of opening `.tunelito/agent/state.json`. The same `--agent-policy`, `--agent-trigger`, `--agent-state`, `--agent-max-attempts`, and `--agent-max-passes` controls apply to active-agent mode, inbox commands, and the spawned worker.
 
-For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source files, rewrite the comments markdown, write agent state, or persist across server restarts. In `--live`, the event is still available while the server is running and no comments file is created.
+For review calls where feedback should be batched before an agent starts, the browser panel includes a `Done Reviewing` handoff action. Clicking it emits an in-memory `review.completed` event with a sequence id, timestamp, target path, comments path when persistent, and summary counts. The event does not edit source files, rewrite the comments markdown, write agent state, or persist across server restarts. In `--ephemeral`, the event is still available while the server is running and no comments file is created.
 
 The running server prints a handoff command that waits for the next retained event:
 
@@ -509,7 +534,7 @@ Quick walkthrough:
 
 ## Live Mode
 
-`--live` is for in-the-meeting collaboration. Comments, cursors, and selection highlights stay in memory and disappear when the local server exits.
+`--ephemeral` is for in-the-meeting collaboration. Comments, cursors, and selection highlights stay in memory and disappear when the local server exits.
 
 Tunelito uses WebRTC data channels between browsers when possible. The authenticated WebSocket connection remains open for room membership, WebRTC signaling, file-change reloads, and fallback relay if a peer-to-peer connection cannot be established. Tunelito does not configure third-party STUN or TURN servers, so some remote networks will use the relay fallback.
 
@@ -526,7 +551,7 @@ Before sharing a live session:
 7. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
 8. Edit and save the source file; the phone should reload.
 
-For an ephemeral call, run with `--live` and skip the markdown-file check.
+For an ephemeral call, run with `--ephemeral` and skip the markdown-file check.
 
 ## Packaging a Release Tarball
 
@@ -553,4 +578,4 @@ The package includes the CLI, runtime source, examples, docs, changelog, license
 - If the exact commented text changes, the comment remains in markdown and the sidebar, but the highlight may not reattach.
 - Strict in-page CSP meta tags are removed from the served response so the injected same-origin client can run.
 - Mermaid is served from the installed Tunelito package rather than a CDN, stays behind the same review-key gate, uses `securityLevel: "strict"`, disables HTML labels and diagram click behavior, and preserves escaped source in a collapsible fallback. Diagram authors can add Mermaid `accTitle` and `accDescr` lines for accessible SVG labels.
-- WebRTC peer-to-peer connections depend on browser and network support; the WebSocket relay keeps `--live` usable when direct peer connections fail.
+- WebRTC peer-to-peer connections depend on browser and network support; the WebSocket relay keeps `--ephemeral` usable when direct peer connections fail.
