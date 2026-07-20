@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 - 2026-07-20
 
 - Replaces bare no-index directory listings with responsive, themed Tunelito folder landing pages for root, nested, and empty folders while preserving authored-index precedence and existing serving boundaries.
 - Adds a clearly labeled, collapsible served-document tree to the left sidebar of Markdown directory sessions, with nested folders closed by default, encoded links, current-page state, and a separate source-derived Properties section.
