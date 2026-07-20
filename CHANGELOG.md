@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.1 - 2026-07-20
 
 - Fixes Cloudflare Quick Tunnel discovery so provisioning URLs are ignored, output is parsed safely across stream/chunk boundaries, and `Public:` appears only after the generated hostname is verified against the authenticated Tunelito server and persisted for agent-session recovery.
 - Makes the bundled agent workflow prominent in top-level CLI help and lets `tunelito doctor` advise detected Codex or Claude Code sessions when a target is being evaluated without an agent mode.
