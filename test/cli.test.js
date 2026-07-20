@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlin
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, VERSION, withReviewKey } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, updateAgentSessionPublicUrl, usage, VERSION, withReviewKey, writeAgentSessionFile } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -21,6 +21,43 @@ function escapeRegex(value) {
 test("CLI version matches package metadata", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(VERSION, pkg.version);
+});
+
+test("top-level help directs coding agents to the bundled workflow", () => {
+  const help = usage();
+  const codingAgentsIndex = help.indexOf("Coding agents:");
+  const optionsIndex = help.indexOf("Options:");
+
+  assert.ok(codingAgentsIndex > 0);
+  assert.ok(codingAgentsIndex < optionsIndex);
+  assert.match(help, /Before serving a review room[\s\S]*tunelito skill show/);
+  assert.match(help, /Installation guidance:[\s\S]*tunelito skill setup/);
+});
+
+test("verified public URLs are persisted for agent-session recovery", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-public-session-"));
+  const targetPath = join(dir, "notes.md");
+  writeFileSync(targetPath, "# Notes");
+  const sessionPath = writeAgentSessionFile({
+    targetPath,
+    commentsPath: join(dir, "notes.comments.md"),
+    statePath: join(dir, ".tunelito", "agent-state.json"),
+    policy: "all",
+    trigger: "@tunelito",
+    maxAttempts: 3,
+    maxPasses: 5,
+    ownerName: "",
+    promptAppend: "",
+    reviewUrl: "http://127.0.0.1:4317/?tunelito_key=review-secret",
+  });
+  const publicUrl = "https://verified-session.trycloudflare.com/?tunelito_key=review-secret";
+
+  updateAgentSessionPublicUrl(sessionPath, publicUrl);
+
+  const session = JSON.parse(readFileSync(sessionPath, "utf8"));
+  assert.equal(session.publicUrl, publicUrl);
+  assert.equal(session.reviewUrl, publicUrl);
+  assert.match(session.reviewWatchCommand, /verified-session\.trycloudflare\.com/);
 });
 
 test("parseArgs rejects --out without a value", () => {

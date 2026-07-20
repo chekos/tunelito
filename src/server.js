@@ -7,7 +7,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { WebSocketHub } from "./ws.js";
@@ -363,7 +363,10 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     return;
   }
   const owner = isLocalOwnerRequest(req);
-  const responseHeaders = auth.headers;
+  const responseHeaders = {
+    ...auth.headers,
+    [TUNELITO_RESPONSE_HEADER]: "1",
+  };
   const injectOptions = {
     liveMode,
     defaultAuthor: owner ? ownerName : "",

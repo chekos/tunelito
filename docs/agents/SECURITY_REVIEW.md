@@ -57,6 +57,8 @@ Expected behavior:
 
 - Prefer installed `cloudflared`.
 - Fall back to `npx cloudflared@latest`.
+- Correlate Quick Tunnel hostname discovery with cloudflared's successful creation lifecycle; never treat `api.trycloudflare.com` as the review URL.
+- Verify the candidate hostname through an authenticated `HEAD` request carrying the review key, and require Tunelito's authorized-response marker before printing `Public:`.
 - Print clear failure guidance when no tunnel can start.
 - Stop the tunnel process on shutdown.
 - `tunelito doctor` may report `cloudflared` availability and tunnel/auth risks, but it must not start a tunnel or install packages.

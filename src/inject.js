@@ -3,6 +3,7 @@ export const COMMENTS_ROUTE = "/__tunelito/comments.md";
 export const AGENT_STATUS_ROUTE = "/__tunelito/agent-status.json";
 export const REVIEW_EVENTS_ROUTE = "/__tunelito/review-events";
 export const WS_ROUTE = "/__tunelito/ws";
+export const TUNELITO_RESPONSE_HEADER = "x-tunelito-review";
 
 export function injectTunelitoClient(html, { sourceName, liveMode = false, defaultAuthor = "", viewerRole = "", ownerSession = "" } = {}) {
   const liveAttribute = liveMode ? ` data-live-mode="true"` : "";

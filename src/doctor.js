@@ -16,6 +16,7 @@ export async function buildDoctorReport(options = {}, deps = {}) {
   const now = deps.now || (() => new Date());
   const commandExists = deps.commandExists || defaultCommandExists;
   const checkPort = deps.checkPort || checkPortAvailable;
+  const env = deps.env || process.env;
   const cwd = resolve(options.cwd || process.cwd());
 
   addCheck(checks, {
@@ -64,6 +65,7 @@ export async function buildDoctorReport(options = {}, deps = {}) {
       : null;
   if (statePath) addAgentStateChecks(checks, statePath, now());
 
+  addAgentHostCheck(checks, { options, env, targetPath });
   addHostSafetyChecks(checks, options);
   await addPortCheck(checks, {
     host: options.host || "127.0.0.1",
@@ -79,6 +81,24 @@ export async function buildDoctorReport(options = {}, deps = {}) {
     summary: summarizeChecks(checks),
     checks,
   };
+}
+
+function addAgentHostCheck(checks, { options, env, targetPath }) {
+  const host = detectedAgentHost(env);
+  if (!host || !targetPath || options.agent || options.agentSession || options.live) return;
+  addCheck(checks, {
+    id: "agent.host-without-mode",
+    severity: "warning",
+    status: "warn",
+    message: `${host} was detected without an agent mode. If the current coding-agent conversation should handle reviewer feedback, start the review with --agent-session; otherwise no change is required.`,
+    details: { host, recommendedMode: "agent-session" },
+  });
+}
+
+function detectedAgentHost(env = {}) {
+  if (env.CODEX_THREAD_ID || env.CODEX_CI) return "Codex";
+  if (env.CLAUDECODE || env.CLAUDE_CODE_ENTRYPOINT) return "Claude Code";
+  return "";
 }
 
 function packageVersion() {
