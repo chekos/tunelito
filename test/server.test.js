@@ -756,6 +756,7 @@ test("directory mode renders intentional root, nested, and empty folder landing 
   try {
     const html = await fetch(instance.localUrl).then((res) => res.text());
     assert.match(html, /Tunelito-generated navigation/);
+    assert.match(html, /data-tunelito-theme="bns-pitaya"/);
     assert.match(html, /has no authored index/);
     assert.match(html, /tunelito-folder-card-directory/);
     assert.match(html, /Projects/);
@@ -773,6 +774,7 @@ test("directory mode renders intentional root, nested, and empty folder landing 
     assert.match(html, new RegExp(CLIENT_ROUTE));
 
     const nested = await fetch(new URL("/Projects/", instance.localUrl)).then((res) => res.text());
+    assert.match(nested, /data-tunelito-theme="bns-pitaya"/);
     assert.match(nested, /href="\.\.\/">← Parent folder/);
     assert.match(nested, /brief\.md/);
     assert.doesNotMatch(nested, /href="\.\.\/\.\.\//);
@@ -831,6 +833,7 @@ test("directory Markdown pages receive a collapsed, filtered navigation tree", a
 
   try {
     const plainHtml = await fetch(new URL("/No%20front%20matter.md", instance.localUrl)).then((res) => res.text());
+    assert.match(plainHtml, /data-tunelito-theme="bns-pitaya"/);
     assert.match(plainHtml, /Tunelito navigation/);
     assert.match(plainHtml, /Served documents/);
     assert.doesNotMatch(plainHtml, /Source metadata/);

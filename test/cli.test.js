@@ -731,6 +731,27 @@ test("config show resolves project settings and reports CLI overrides", () => {
   assert.deepEqual(report.availableThemes.map(({ name }) => name), ["default", "editorial", "technical", "bns-pitaya"]);
 });
 
+test("config show reports BNS Pitaya as the implicit theme", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-default-"));
+  const homePath = join(dir, "home");
+  const targetPath = join(dir, "notes.md");
+  mkdirSync(homePath);
+  writeFileSync(targetPath, "# Notes");
+
+  const stdout = streamCollector();
+  const code = runConfigCommand(["show", targetPath, "--json"], {
+    stdout,
+    stderr: streamCollector(),
+    env: {},
+    homePath,
+  });
+
+  assert.equal(code, 0);
+  const report = JSON.parse(stdout.text());
+  assert.equal(report.theme.value, "bns-pitaya");
+  assert.equal(report.theme.source, "default");
+});
+
 test("config show fails clearly for malformed project JSON", () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-invalid-"));
   const homePath = join(dir, "home");

@@ -10,6 +10,7 @@ import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSi
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
+import { DEFAULT_THEME_NAME } from "./themes.js";
 import { WebSocketHub } from "./ws.js";
 
 const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js");
@@ -47,7 +48,7 @@ export async function createTunelitoServer(options) {
   const ownerSessionId = String(options.ownerSessionId || randomBytes(9).toString("base64url"));
   const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
   const markdownCssText = String(options.markdownCssText || "");
-  const markdownTheme = String(options.markdownTheme || "default");
+  const markdownTheme = String(options.markdownTheme || DEFAULT_THEME_NAME);
   const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
   const startedAt = new Date().toISOString();
   let lastActivityAt = startedAt;

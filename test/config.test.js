@@ -39,12 +39,12 @@ test("resolveTunelitoConfig reports stable defaults and available themes", () =>
   assert.equal(config.format, CONFIG_FORMAT);
   assert.equal(config.version, CONFIG_VERSION);
   assert.deepEqual(config.theme, {
-    value: "default",
+    value: "bns-pitaya",
     source: "default",
     configPath: null,
     details: {
-      description: "Tunelito's neutral system-sans reading surface.",
-      colorModes: ["light", "dark"],
+      description: "A dark reading theme adapted from BNS Obsidian Pitaya without bundled or network fonts.",
+      colorModes: ["dark"],
     },
   });
   assert.equal(config.markdownCss.kind, "none");

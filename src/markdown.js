@@ -1,6 +1,6 @@
 import { Marked, Renderer } from "marked";
 import { extractFrontMatter, propertyDisplay } from "./frontmatter.js";
-import { normalizeThemeName, themeCss } from "./themes.js";
+import { DEFAULT_THEME_NAME, normalizeThemeName, themeCss } from "./themes.js";
 
 export const MERMAID_LIBRARY_ROUTE = "/__tunelito/mermaid.js";
 export const MERMAID_CLIENT_ROUTE = "/__tunelito/mermaid-client.js";
@@ -796,7 +796,7 @@ export function renderMarkdownDocument({
   sourceName = "Markdown page",
   cssHref = "",
   cssText = "",
-  themeName = "default",
+  themeName = DEFAULT_THEME_NAME,
   navigation = null,
 } = {}) {
   const title = String(sourceName || "Markdown page");
@@ -857,7 +857,7 @@ export function renderFolderLandingDocument({
   parentHref = "",
   cssHref = "",
   cssText = "",
-  themeName = "default",
+  themeName = DEFAULT_THEME_NAME,
 } = {}) {
   const theme = normalizeThemeName(themeName);
   const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
