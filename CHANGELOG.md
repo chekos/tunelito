@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.2 - 2026-07-21
+
+- Makes dark-only `bns-pitaya` the default theme for Markdown documents and generated folder pages while preserving the original neutral light/dark surface as the explicit `default` theme.
+
 ## 0.21.1 - 2026-07-20
 
 - Adds canonical `--ephemeral` semantics with a prominent `--live` deprecation warning, explicit persistence language, and actionable incompatibility guidance for agent-backed reviews.
