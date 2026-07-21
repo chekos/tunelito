@@ -30,6 +30,13 @@ npm run ci
 - Treat tunnel sharing as security-sensitive. Default posture is keyed links and clear exposure warnings.
 - Commit only after tests pass. Changes to `main` must go through pull requests; the repository ruleset rejects direct pushes to `main`.
 
+## Bundled Skill Distribution
+
+- `docs-site/skill.md` is the authoritative Tunelito skill distributed by `tunelito skill show` and package installs.
+- When a package release includes material bundled-skill changes—commands, flags, modes, lifecycle, safety guidance, or agent workflow—the release is not complete until the BNS Marketplace copy at `/Users/chekos/projects/gh/bns-marketplace/writing/skills/tunelito/SKILL.md` matches it byte-for-byte.
+- In the same BNS Marketplace PR, bump the writing plugin version in both `.claude-plugin/marketplace.json` and `writing/.claude-plugin/plugin.json`, verify the versions match, verify exact skill parity with `cmp`, and merge the PR so the marketplace actually receives the update.
+- If the BNS repository is unavailable or authentication blocks the sync, report the release as blocked and leave a durable BNS issue or PR when BNS is writable; otherwise, leave an issue in this repository that names the blocked BNS sync. Never silently skip the marketplace sync or describe the release as fully complete while the copies differ.
+
 ## Documentation Map
 
 - `docs/agents/START_HERE.md`: repo orientation for any agent.
