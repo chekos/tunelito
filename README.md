@@ -118,7 +118,7 @@ To use a named Markdown theme:
 tunelito ./notes.md --theme editorial
 ```
 
-Tunelito includes `default`, `editorial`, `technical`, and dark-only `bns-pitaya`. See [Markdown themes and configuration](#markdown-themes-and-configuration) for persistent project and global settings.
+Tunelito uses dark-only `bns-pitaya` when no theme is configured. It also includes the named `default`, `editorial`, and `technical` themes. See [Markdown themes and configuration](#markdown-themes-and-configuration) for persistent project and global settings.
 
 For in-meeting collaboration without writing comments to disk:
 
@@ -164,10 +164,12 @@ When a folder URL has no authored `index.html` or `index.md`, Tunelito serves an
 
 Tunelito ships four dependency-free themes:
 
-- `default`: the existing neutral, system-sans review surface
+- `bns-pitaya` (default): a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), using local font names with system fallbacks and no copied stylesheet, bundled fonts, or network assets
+- `default`: the original neutral, system-sans review surface
 - `editorial`: a spacious serif-led layout for essays and long-form drafts
 - `technical`: a wider, denser sans/mono layout for code, tables, diagrams, and documentation
-- `bns-pitaya`: a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), using local font names with system fallbacks and no copied stylesheet, bundled fonts, or network assets
+
+Without a CLI, project, or global theme setting, Markdown documents and generated folder pages use `bns-pitaya`. Choose `--theme default` to retain the original neutral light/dark surface.
 
 Choose one for a session:
 

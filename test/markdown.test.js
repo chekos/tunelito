@@ -109,6 +109,16 @@ test("renderFolderLandingDocument renders a themed, escaped, no-script folder pa
   assert.match(html, /data-tunelito-comment-surface/);
 });
 
+test("Markdown documents and generated folder pages default to BNS Pitaya", () => {
+  const documentHtml = renderMarkdownDocument({ markdownSource: "# Default theme" });
+  const folderHtml = renderFolderLandingDocument({ folderName: "Default theme" });
+
+  for (const html of [documentHtml, folderHtml]) {
+    assert.match(html, /data-tunelito-theme="bns-pitaya"/);
+    assert.match(html, /data-tunelito-theme-css="bns-pitaya"/);
+  }
+});
+
 test("renderMarkdownDocument keeps invalid front matter inspectable and the article readable", () => {
   const html = renderMarkdownDocument({ markdownSource: "---\nstatus: [broken <script>\n---\n\n# Still readable" });
 
@@ -181,7 +191,10 @@ test("wiki links escape hostile text and stay out of code, raw HTML, escaped lit
 });
 
 test("renderMarkdownDocument adds a desktop document-map shell with theme and reduced-motion states", () => {
-  const html = renderMarkdownDocument({ markdownSource: "# Title\n\nParagraph\n\n## Section\n\nMore prose" });
+  const html = renderMarkdownDocument({
+    markdownSource: "# Title\n\nParagraph\n\n## Section\n\nMore prose",
+    themeName: "default",
+  });
 
   assert.match(html, /aria-label="Document map"/);
   assert.match(html, /data-tunelito-document-map/);

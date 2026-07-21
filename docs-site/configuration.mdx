@@ -9,10 +9,10 @@ Tunelito keeps Markdown presentation separate from Markdown content. Themes and 
 
 | Theme | Best for | Color modes |
 | --- | --- | --- |
-| `default` | General review with Tunelito's neutral system-sans surface | Light and dark |
+| `bns-pitaya` (default) | Dark, low-glare reading inspired by BNS Obsidian Pitaya | Dark |
+| `default` | General review with Tunelito's original neutral system-sans surface | Light and dark |
 | `editorial` | Essays, reports, and long-form drafts | Light and dark |
 | `technical` | Code, tables, Mermaid diagrams, and dense documentation | Light and dark |
-| `bns-pitaya` | Dark, low-glare reading inspired by BNS Obsidian Pitaya | Dark |
 
 Select a theme for one session:
 
@@ -21,6 +21,8 @@ tunelito ./notes.md --theme editorial
 ```
 
 All themes are packaged with Tunelito, work offline, and use system font fallbacks. `bns-pitaya` adapts reading tokens from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme); it names optional local fonts but does not copy the Obsidian stylesheet, bundle font data, or download assets.
+
+Without a CLI, project, or global theme setting, Markdown documents and generated folder pages use `bns-pitaya`. Choose `--theme default` to retain the original neutral light/dark surface.
 
 ## Project configuration
 

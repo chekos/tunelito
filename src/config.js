@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { normalizeMarkdownCssHref } from "./markdown.js";
-import { THEME_DETAILS, THEME_NAMES, normalizeThemeName } from "./themes.js";
+import { DEFAULT_THEME_NAME, THEME_DETAILS, THEME_NAMES, normalizeThemeName } from "./themes.js";
 
 export const PROJECT_CONFIG_FILENAME = "tunelito.config.json";
 export const CONFIG_FORMAT = "tunelito-config";
@@ -31,7 +31,7 @@ export function resolveTunelitoConfig({
     cliValue: cliTheme,
     projectConfig,
     globalConfig,
-    defaultValue: "default",
+    defaultValue: DEFAULT_THEME_NAME,
   });
   const theme = normalizeThemeName(themeCandidate.value);
 

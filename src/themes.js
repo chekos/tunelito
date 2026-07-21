@@ -5,6 +5,8 @@ export const THEME_NAMES = Object.freeze([
   "bns-pitaya",
 ]);
 
+export const DEFAULT_THEME_NAME = "bns-pitaya";
+
 export const THEME_DETAILS = Object.freeze({
   default: {
     description: "Tunelito's neutral system-sans reading surface.",
@@ -354,7 +356,7 @@ const THEMES = {
 };
 
 export function normalizeThemeName(value) {
-  const name = String(value || "default").trim().toLowerCase();
+  const name = String(value || DEFAULT_THEME_NAME).trim().toLowerCase();
   if (THEME_NAMES.includes(name)) return name;
   throw new Error(`Unknown theme "${value}". Available themes: ${THEME_NAMES.join(", ")}`);
 }
