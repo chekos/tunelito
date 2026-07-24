@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
+import { renderCommentsMarkdown } from "../src/comments.js";
 import { createTunelitoServer } from "../src/server.js";
 import { THEME_DETAILS, THEME_NAMES } from "../src/themes.js";
 
@@ -23,6 +24,7 @@ const accessibilityFixtures = [
   "examples/markdown/frontmatter-nested.md",
   "examples/markdown/frontmatter-invalid.md",
   "examples/markdown/html-comments.md",
+  "examples/markdown/details-summary.md",
   "examples/markdown/heading-ladder.md",
   "examples/markdown/kitchen-sink.md",
 ];
@@ -33,6 +35,7 @@ try {
   for (const fixture of accessibilityFixtures) await verifyAccessibility(fixture);
   await verifyVault();
   await verifyThemesAndComments();
+  await verifyDetailsAndCollapsedCommentTarget();
   await verifyResponsiveAndComments();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, and the folder vault.\n`);
 } finally {
@@ -364,6 +367,64 @@ async function verifyResponsiveAndComments() {
   }, { viewport: { width: 900, height: 560 } });
 }
 
+async function verifyDetailsAndCollapsedCommentTarget() {
+  await withFixture("examples/markdown/details-summary.md", async (page) => {
+    const disclosures = page.locator(".tunelito-markdown details");
+    assert.equal(await disclosures.count(), 3, "block and inline details elements should render natively");
+    assert.equal(await disclosures.nth(0).evaluate((details) => details.open), false, "the first disclosure should start collapsed");
+    assert.equal(await disclosures.nth(1).evaluate((details) => details.open), true, "the safe open attribute should survive");
+    assert.equal(await disclosures.nth(2).evaluate((details) => details.open), true, "inline details should use the same allowlist");
+    assert.deepEqual(
+      await disclosures.evaluateAll((elements) => elements.map((element) => element.getAttributeNames())),
+      [[], ["open"], ["open"]],
+      "details should strip every attribute except normalized open",
+    );
+    assert.equal(
+      await page.locator(".tunelito-markdown summary").evaluateAll((elements) => elements.every((element) => element.getAttributeNames().length === 0)),
+      true,
+      "summary should strip every attribute",
+    );
+    assert.equal(await page.locator(".tunelito-markdown script, .tunelito-markdown iframe, .tunelito-markdown img").count(), 0, "hostile nested HTML must stay escaped");
+    assert.doesNotMatch(await page.locator(".tunelito-markdown").innerText(), /This private note must stay hidden/);
+    assert.match(
+      await page.locator(".tunelito-markdown code").filter({ hasText: "Inline code stays literal" }).innerText(),
+      /onclick="literal\(\)"/,
+      "inline code should preserve literal details syntax",
+    );
+    assert.match(
+      await page.locator(".tunelito-markdown pre code").filter({ hasText: "Fenced code stays literal" }).innerText(),
+      /onclick="literal\(\)"/,
+      "fenced code should preserve literal details syntax",
+    );
+
+    await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".launcher").click());
+    await page.waitForFunction(() => document.body.classList.contains("tunelito-comments-open"));
+    await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".comment").click());
+    assert.equal(await disclosures.nth(0).evaluate((details) => details.open), true, "targeting a comment should reveal its collapsed details ancestors");
+    assert.equal(
+      await page.locator(".tunelito-markdown p").filter({ hasText: "Targeted review note inside a collapsed section." }).isVisible(),
+      true,
+    );
+  }, {
+    comments: [{
+      id: "c_details_target",
+      author: "Browser check",
+      authorRole: "owner",
+      reviewerId: "r_browser_check",
+      scope: "page",
+      quote: "Targeted review note inside a collapsed section.",
+      body: "Reveal this anchored note.",
+      prefix: "",
+      suffix: "",
+      path: "body > main > details > p",
+      pagePath: "/",
+      textStart: null,
+      textEnd: null,
+      created: "2026-07-24T00:00:00.000Z",
+    }],
+  });
+}
+
 async function windowDispatches(page) {
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("tunelito:markdown-layout"));
@@ -375,13 +436,16 @@ async function windowDispatches(page) {
 async function withFixture(relativePath, callback, {
   viewport = { width: 1440, height: 1000 },
   serverOptions = {},
+  comments = [],
 } = {}) {
   const filePath = resolve(repoRoot, relativePath);
   const original = readFileSync(filePath, "utf8");
   const tempDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-browser-"));
+  const commentsPath = join(tempDir, "comments.md");
+  if (comments.length) writeFileSync(commentsPath, renderCommentsMarkdown({ comments, sourcePath: filePath }), "utf8");
   const instance = await createTunelitoServer({
     filePath,
-    commentsPath: join(tempDir, "comments.md"),
+    commentsPath,
     host: "127.0.0.1",
     port: 0,
     accessKey: "browser-check",

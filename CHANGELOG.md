@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Allows native `<details>` and `<summary>` disclosures in rendered Markdown while stripping all attributes except normalized `open` on `<details>`, preserving arbitrary HTML escaping and code/comment boundaries, and revealing collapsed ancestors when a comment target is opened.
+
 ## 0.21.2 - 2026-07-21
 
 - Makes dark-only `bns-pitaya` the default theme for Markdown documents and generated folder pages while preserving the original neutral light/dark surface as the explicit `default` theme.

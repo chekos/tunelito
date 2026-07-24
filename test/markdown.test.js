@@ -8,6 +8,10 @@ import {
   renderMarkdownDocument,
 } from "../src/markdown.js";
 
+function renderedMarkdownBody(html) {
+  return /data-tunelito-comment-surface>\n([\s\S]*?)\n    <\/main>/.exec(html)?.[1] || "";
+}
+
 test("renderMarkdownDocument moves valid YAML front matter into the left properties drawer", () => {
   const html = renderMarkdownDocument({
     sourceName: "obsidian-note.md",
@@ -248,6 +252,59 @@ test("renderMarkdownDocument hides HTML comments without rewriting surrounding M
   assert.doesNotMatch(html, /inline author note|multiline author note|adjacent note/);
   assert.match(html, /<code>&lt;!-- literal inline code comment --&gt;<\/code>/);
   assert.match(html, /&lt;!-- literal code comment --&gt;/);
+});
+
+test("renderMarkdownDocument allows only sanitized details and summary block HTML", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      '<details open class="project" onclick="alert(1)" data-state="unsafe">',
+      '<summary id="label" onmouseover="alert(2)">Project status</summary>',
+      "",
+      "Safe **Markdown** body.",
+      "",
+      "<!-- private author note -->",
+      '<img src=x onerror="alert(3)">',
+      "<script>alert(4)</script>",
+      "</details>",
+    ].join("\n"),
+  });
+  const body = renderedMarkdownBody(html);
+
+  assert.match(body, /<details open>\s*<summary>Project status<\/summary>/);
+  assert.match(body, /<p>Safe <strong>Markdown<\/strong> body\.<\/p>/);
+  assert.match(body, /&lt;img src=x onerror=&quot;alert\(3\)&quot;&gt;/);
+  assert.match(body, /&lt;script&gt;alert\(4\)&lt;\/script&gt;/);
+  assert.doesNotMatch(body, /<details[^>]*(?:class|onclick|data-state)/i);
+  assert.doesNotMatch(body, /<summary[^>]*(?:id|onmouseover)/i);
+  assert.doesNotMatch(body, /<img\b|<script\b|private author note/i);
+});
+
+test("renderMarkdownDocument applies the details allowlist to inline HTML without changing code boundaries", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      'Before <details data-open="no" open="false"><summary style="color:red">More</summary>Inside <iframe src="https://example.com"></iframe><!-- hidden --></details> after.',
+      "",
+      '<details title="not an open attribute"><summary>Closed</summary>Body</details>',
+      "",
+      "`<details open onclick=\"literal()\"><summary>Code</summary></details>`",
+      "",
+      "```html",
+      '<details open onclick="literal()">',
+      "<summary>Fenced code</summary>",
+      "</details>",
+      "```",
+      "",
+      "<div><summary>Not an allowed container</summary></div>",
+    ].join("\n"),
+  });
+  const body = renderedMarkdownBody(html);
+
+  assert.match(body, /<p>Before <details open><summary>More<\/summary>Inside &lt;iframe src=&quot;https:\/\/example\.com&quot;&gt;&lt;\/iframe&gt;<\/details> after\.<\/p>/);
+  assert.match(body, /<details><summary>Closed<\/summary>Body<\/details>/);
+  assert.match(body, /<code>&lt;details open onclick=&quot;literal\(\)&quot;&gt;&lt;summary&gt;Code&lt;\/summary&gt;&lt;\/details&gt;<\/code>/);
+  assert.match(body, /<code class="language-html">&lt;details open onclick=&quot;literal\(\)&quot;&gt;/);
+  assert.match(body, /&lt;div&gt;<summary>Not an allowed container<\/summary>&lt;\/div&gt;/);
+  assert.doesNotMatch(body, /<iframe\b|style="color:red"|hidden/);
 });
 
 test("renderMarkdownDocument rejects unknown themes and prevents CSS from closing its style element", () => {

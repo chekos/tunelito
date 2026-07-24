@@ -716,7 +716,7 @@ function createMarkdownParser() {
           return { type: "escaped-inline-html", raw: match[0] };
         },
         renderer(token) {
-          return escapeHtml(token.raw);
+          return renderSafeMarkdownHtml(token.raw);
         },
       },
       {
@@ -758,8 +758,7 @@ function createMarkdownParser() {
     renderer: {
       html(token) {
         const raw = token?.raw || token?.text || "";
-        if (/^\s*<!--[\s\S]*?-->\s*$/.test(raw)) return "";
-        return escapeHtml(raw);
+        return renderSafeMarkdownHtml(raw);
       },
       link(token) {
         const href = safeHref(token?.href, { media: false });
@@ -785,6 +784,64 @@ function createMarkdownParser() {
     },
   });
   return { parser, hasMermaid: () => hasMermaid };
+}
+
+function renderSafeMarkdownHtml(value) {
+  const source = String(value || "");
+  const tokens = /<!--[\s\S]*?-->|<\/?[A-Za-z][^<>]*>/g;
+  const parts = [];
+  let offset = 0;
+  let match;
+  while ((match = tokens.exec(source))) {
+    parts.push(escapeHtml(source.slice(offset, match.index)));
+    if (!match[0].startsWith("<!--")) {
+      parts.push(renderAllowedMarkdownTag(match[0]) ?? escapeHtml(match[0]));
+    }
+    offset = match.index + match[0].length;
+  }
+  parts.push(escapeHtml(source.slice(offset)));
+  return parts.join("");
+}
+
+function renderAllowedMarkdownTag(value) {
+  const match = /^<\s*(\/?)\s*(details|summary)\b([\s\S]*?)>$/i.exec(value);
+  if (!match) return null;
+  const [, closing, rawName, rawAttributes] = match;
+  const name = rawName.toLowerCase();
+  const attributes = rawAttributes.trim();
+  if (closing) return attributes ? null : `</${name}>`;
+  if (/\/\s*$/.test(attributes)) return null;
+  if (name === "summary") return "<summary>";
+  return `<details${hasOpenAttribute(attributes) ? " open" : ""}>`;
+}
+
+function hasOpenAttribute(value) {
+  let offset = 0;
+  let foundOpen = false;
+  while (offset < value.length) {
+    while (/\s/.test(value[offset] || "")) offset += 1;
+    if (offset >= value.length) break;
+    const name = /^[^\s"'<>/=]+/.exec(value.slice(offset))?.[0];
+    if (!name) return false;
+    offset += name.length;
+    while (/\s/.test(value[offset] || "")) offset += 1;
+    if (value[offset] === "=") {
+      offset += 1;
+      while (/\s/.test(value[offset] || "")) offset += 1;
+      const quote = value[offset] === '"' || value[offset] === "'" ? value[offset] : "";
+      if (quote) {
+        const end = value.indexOf(quote, offset + 1);
+        if (end < 0) return false;
+        offset = end + 1;
+      } else {
+        const attributeValue = /^[^\s"'=<>`]+/.exec(value.slice(offset))?.[0];
+        if (!attributeValue) return false;
+        offset += attributeValue.length;
+      }
+    }
+    if (name.toLowerCase() === "open") foundOpen = true;
+  }
+  return foundOpen;
 }
 
 export function isMarkdownPath(pathname) {
