@@ -151,6 +151,7 @@ tunelito ./page.html --ephemeral
 Markdown reviews keep the source file untouched while adding presentation-only surfaces to the served response:
 
 - HTML comments are author-only source notes: complete inline and block `<!-- ... -->` comments are omitted from the rendered review surface. Literal comment syntax inside inline or fenced code remains visible, and Tunelito never rewrites the Markdown file.
+- Native `<details>` and `<summary>` disclosures are the only raw HTML elements rendered from Markdown. Tunelito strips every attribute except a normalized boolean `open` on `<details>`, keeps all other HTML escaped, and opens collapsed ancestors when a sidebar comment targets text inside them.
 - In folder sessions, the collapsible left sidebar begins with a clearly labeled `Tunelito navigation` section. Root documents remain visible, folders use independent native disclosures that start closed, every nested Markdown/HTML document remains reachable, and the current document is marked in text and with `aria-current="page"`. Single-file sessions do not receive a one-item tree.
 - A leading YAML front-matter mapping appears as a separate source-derived `Properties` section in that sidebar. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure. Notes without front matter simply omit this section.
 - Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
@@ -320,6 +321,7 @@ The server also:
 - serves sibling assets relative to the selected file, or non-hidden files within the selected folder
 - renders Markdown with one of four bundled themes, project/global JSON configuration, and optional final `--markdown-css <href>` team styling
 - omits complete HTML comments from the reader surface while preserving their source text and literal code examples
+- renders sanitized Markdown `<details>`/`<summary>` disclosures while escaping every other raw HTML element
 - builds security-filtered folder landing pages and a collapsed served-document tree for Markdown directory sessions
 - parses bounded leading YAML front matter into a separate escaped, reload-persistent Properties section with a readable invalid-YAML fallback
 - renders common Obsidian wiki references as semantically honest inline references without vault-wide resolution or embed support

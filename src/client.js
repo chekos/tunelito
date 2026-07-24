@@ -1913,8 +1913,17 @@
     const range = findRangeForComment(comment);
     if (!range) return;
     const node = closestElement(range.startContainer);
+    revealCollapsedAncestors(node);
     node?.scrollIntoView({ behavior: "smooth", block: "center" });
     flashRange(range);
+  }
+
+  function revealCollapsedAncestors(node) {
+    let disclosure = node?.closest?.("details");
+    while (disclosure) {
+      disclosure.open = true;
+      disclosure = disclosure.parentElement?.closest?.("details");
+    }
   }
 
   function findRangeForComment(comment) {

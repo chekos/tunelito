@@ -127,6 +127,7 @@ Required Markdown subsets:
 - front matter or drawer behavior: `frontmatter-flat.md`, `frontmatter-nested.md`, `frontmatter-invalid.md`, `kitchen-sink.md`
 - wiki-link behavior or transform boundaries: `kitchen-sink.md`, `markdown-vault/index.md`
 - HTML-comment hiding or code boundaries: `html-comments.md`, `kitchen-sink.md`
+- details/summary sanitizing or collapsed comment targeting: `details-summary.md`, `html-comments.md`
 - document ruler hierarchy/navigation: `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md`, `kitchen-sink.md`, `ruler-density.md`
 - folder/index behavior: serve `examples/markdown-vault/`; verify authored-index precedence, root/nested/empty generated landing pages, collapsed nested folders, current-page state, encoded filenames, keyboard disclosure, navigation/Properties separation, hidden/blocked/symlink exclusions, and the ten-note reference shelf
 

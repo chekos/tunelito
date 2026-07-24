@@ -51,6 +51,21 @@ The injection happens only in the HTTP response. Your source HTML and Markdown f
 
 Authored `index.html` and `index.md` files keep precedence. Generated folder landing pages and the Markdown navigation tree are response-only UI: they exclude hidden paths, comments/session/config state, unsupported file types, and symlink escapes, and they never create an index file in the served folder.
 
+## Safe collapsible sections
+
+Markdown can use native disclosures without enabling arbitrary raw HTML:
+
+```markdown
+<details>
+<summary>Project group</summary>
+
+Markdown content remains reviewable here.
+
+</details>
+```
+
+Tunelito renders only `<details>` and `<summary>`. It removes every attribute except a normalized boolean `open` on `<details>`, escapes all other raw HTML including scripts and event handlers, keeps literal tags inside inline and fenced code, and leaves complete HTML comments hidden. When a sidebar comment targets text inside a collapsed disclosure, Tunelito opens its containing disclosures before scrolling to the anchor.
+
 ## Mermaid diagrams
 
 Use a normal Mermaid fence in a Markdown document:

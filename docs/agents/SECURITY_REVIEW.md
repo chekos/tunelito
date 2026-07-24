@@ -51,6 +51,7 @@ Expected behavior:
 - Resolve local configured Markdown CSS relative to the owning config file, escape `</style` before embedding it, and keep `--markdown-css` URL validation in place.
 - Keep built-in themes offline and packaged. Do not add font downloads, CDN CSS, or request-selected theme files.
 - Omit only complete Markdown HTML comments from reader prose. Preserve comment-like text inside inline and fenced code and leave the source Markdown byte-for-byte unchanged.
+- Allow only `details` and `summary` from Markdown raw HTML. Normalize a syntactically valid `open` attribute to bare `open` on `details`, strip every other attribute, escape every other HTML element, and preserve literal tags inside inline and fenced code.
 
 ## Tunnel Behavior
 

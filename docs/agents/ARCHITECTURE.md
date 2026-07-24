@@ -29,6 +29,7 @@ The server owns local IO and transport:
 - derive a recursively complete served-document navigation model for folder-mode Markdown while exposing only filtered, reachable Markdown/HTML files and safe directories
 - apply the selected packaged Markdown theme and configured CSS only to served Markdown responses
 - omit complete Markdown HTML comments from rendered prose while leaving source files and literal code examples untouched
+- render only sanitized Markdown `details` and `summary` HTML, preserving only a normalized boolean `open` on `details` and escaping every other raw HTML element
 - parse only bounded, complete, leading YAML front matter for the served Markdown response; keep malformed metadata visible as escaped review UI and leave the source file untouched
 - turn supported Obsidian wiki syntax into escaped, semantically unresolved inline references without performing vault-wide lookup or inventing link destinations
 - serve the fixed packaged Markdown interaction client behind normal review-key authorization
@@ -97,6 +98,7 @@ The browser client owns reviewer interaction:
 - render a `Done Reviewing` handoff action with acknowledged status
 - submit comments over WebSocket and, in `--ephemeral`, fan out live events over WebRTC data channels when available
 - render highlights and sidebar entries
+- reveal collapsed `details` ancestors when navigating to an anchored comment inside them
 - render agent work status on comment cards when `--agent` or `--agent-session` is active
 - render peer cursors and live selection highlights in `--ephemeral`
 - render optional pointer halos locally, and broadcast them as ephemeral live events in `--ephemeral`
@@ -136,6 +138,7 @@ The browser client owns reviewer interaction:
 - Keep Markdown configuration JSON-only and presentation-only; accept only known string settings, resolve local CSS relative to its owning config file, and escape inline CSS closing tags.
 - Keep built-in themes packaged, dependency-free, and offline; theme selection must not fetch fonts or other theme assets.
 - Hide only complete HTML comment tokens in rendered Markdown; preserve inline and fenced code literals and never remove text from the source file.
+- Allow only `details` and `summary` through Markdown raw-HTML escaping, strip all attributes except normalized `open` on `details`, and never activate nested arbitrary HTML.
 - Keep unresolved wiki references semantically honest: escaped visible text and target metadata are allowed, but fake `href` values and vault-wide filesystem discovery are not.
 - Build document-map markers only from rendered blocks in the selected Markdown response; do not mutate source Markdown to add anchors or progress state.
 - Keep Mermaid local/offline and same-origin; do not add a CDN dependency or allow request paths to select arbitrary files from installed dependencies.
