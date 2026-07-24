@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.3 - 2026-07-24
 
 - Allows native `<details>` and `<summary>` disclosures in rendered Markdown while stripping all attributes except normalized `open` on `<details>`, preserving arbitrary HTML escaping and code/comment boundaries, and revealing collapsed ancestors when a comment target is opened.
 
