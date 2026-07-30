@@ -40,6 +40,7 @@
   "keywords": [
     "html",
     "markdown",
+    "footnotes",
     "mermaid",
     "diagrams",
     "review",
@@ -61,6 +62,7 @@
   },
   "dependencies": {
     "marked": "^18.0.5",
+    "marked-footnote": "^1.4.0",
     "mermaid": "11.16.0",
     "yaml": "^2.9.0"
   },

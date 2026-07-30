@@ -24,6 +24,7 @@ const accessibilityFixtures = [
   "examples/markdown/frontmatter-nested.md",
   "examples/markdown/frontmatter-invalid.md",
   "examples/markdown/html-comments.md",
+  "examples/markdown/footnotes.md",
   "examples/markdown/details-summary.md",
   "examples/markdown/heading-ladder.md",
   "examples/markdown/kitchen-sink.md",
@@ -35,6 +36,7 @@ try {
   for (const fixture of accessibilityFixtures) await verifyAccessibility(fixture);
   await verifyVault();
   await verifyThemesAndComments();
+  await verifyFootnotesAndCommentAnchoring();
   await verifyDetailsAndCollapsedCommentTarget();
   await verifyResponsiveAndComments();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, and the folder vault.\n`);
@@ -421,6 +423,70 @@ async function verifyDetailsAndCollapsedCommentTarget() {
       textStart: null,
       textEnd: null,
       created: "2026-07-24T00:00:00.000Z",
+    }],
+  });
+}
+
+async function verifyFootnotesAndCommentAnchoring() {
+  await withFixture("examples/markdown/footnotes.md", async (page) => {
+    assert.equal(await page.locator("[data-footnote-ref]").count(), 4, "every defined reference should render as a footnote link");
+    assert.equal(await page.locator("[data-footnotes] > ol > li").count(), 3, "referenced definitions should render once at the end");
+    assert.equal(await page.locator("[data-footnote-backref]").count(), 4, "every reference should receive a matching back-link");
+    assert.match(await page.locator(".tunelito-markdown").innerText(), /\[\^not-defined\]/, "undefined references must stay literal");
+    assert.match(await page.locator("code").filter({ hasText: "do not render" }).innerText(), /\[\^overview\]/, "inline-code references must stay literal");
+    assert.equal(await page.locator(".tunelito-markdown script").count(), 0, "footnote definitions must preserve raw-HTML escaping");
+
+    const firstReference = page.locator("[data-footnote-ref]").first();
+    assert.equal(await firstReference.getAttribute("href"), "#footnote-overview");
+    await firstReference.click();
+    assert.equal(await page.evaluate(() => location.hash), "#footnote-overview", "reference links should navigate to definitions");
+    await page.locator("#footnote-overview [data-footnote-backref]").click();
+    assert.equal(await page.evaluate(() => location.hash), "#footnote-ref-overview", "definition links should navigate back to references");
+
+    await page.waitForFunction(() => {
+      const highlights = CSS.highlights?.get("tunelito-comments");
+      return highlights && Array.from(highlights).some((range) => range.toString() === "The procurement decision remains pending after the table.");
+    });
+    assert.deepEqual(
+      await page.evaluate(() => Array.from(CSS.highlights.get("tunelito-comments") || []).map((range) => range.toString())),
+      ["The procurement decision remains pending after the table."],
+      "a persisted comment should reattach by quote when footnote rendering invalidates legacy offsets",
+    );
+
+    await page.locator("#footnote-overview p").evaluate((paragraph) => {
+      const text = Array.from(paragraph.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.includes("definition text"));
+      const start = text.textContent.indexOf("definition text");
+      const range = document.createRange();
+      range.setStart(text, start);
+      range.setEnd(text, start + "definition text".length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".selection")?.classList.contains("visible"));
+    assert.equal(
+      await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".selection").classList.contains("visible")),
+      true,
+      "footnote definition text should remain selectable and commentable",
+    );
+    await page.evaluate(() => window.getSelection().removeAllRanges());
+  }, {
+    comments: [{
+      id: "c_footnote_reattach",
+      author: "Browser check",
+      authorRole: "owner",
+      reviewerId: "r_browser_check",
+      scope: "page",
+      quote: "The procurement decision remains pending after the table.",
+      body: "This persisted comment should survive the renderer upgrade.",
+      prefix: "Legacy literal marker [^42-1] before ",
+      suffix: " and stale context",
+      path: "body > main > table > tbody > tr > td",
+      pagePath: "/",
+      textStart: 0,
+      textEnd: 57,
+      created: "2026-07-30T00:00:00.000Z",
     }],
   });
 }

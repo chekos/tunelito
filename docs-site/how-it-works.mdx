@@ -7,7 +7,7 @@ Tunelito is local-first. It does not upload your source HTML or Markdown to a ho
 
 ## Runtime pieces
 
-The CLI starts a local server for one HTML or Markdown file, or a folder of HTML and Markdown files. The server reads HTML from disk or renders Markdown into a readable page, injects the Tunelito browser client into served page responses, and serves non-hidden assets from the selected file directory or folder root. In folder mode, directory URLs without an authored index receive a themed Tunelito landing page, and rendered Markdown pages receive a filtered served-document tree in the left sidebar. In Markdown, fenced `mermaid` blocks render as diagrams while other fenced languages remain code.
+The CLI starts a local server for one HTML or Markdown file, or a folder of HTML and Markdown files. The server reads HTML from disk or renders Markdown into a readable page, injects the Tunelito browser client into served page responses, and serves non-hidden assets from the selected file directory or folder root. In folder mode, directory URLs without an authored index receive a themed Tunelito landing page, and rendered Markdown pages receive a filtered served-document tree in the left sidebar. In Markdown, GFM footnotes become numbered two-way links, fenced `mermaid` blocks render as diagrams, and other fenced languages remain code.
 
 The browser client handles:
 
@@ -65,6 +65,20 @@ Markdown content remains reviewable here.
 ```
 
 Tunelito renders only `<details>` and `<summary>`. It removes every attribute except a normalized boolean `open` on `<details>`, escapes all other raw HTML including scripts and event handlers, keeps literal tags inside inline and fenced code, and leaves complete HTML comments hidden. When a sidebar comment targets text inside a collapsed disclosure, Tunelito opens its containing disclosures before scrolling to the anchor.
+
+## GFM footnotes
+
+Use normal GFM footnote syntax in Markdown:
+
+```markdown
+The procurement decision requires approval.[^approval]
+
+[^approval]: Confirm the final approver before publication.
+```
+
+Tunelito renders each defined reference as a numbered link and collects referenced definitions in an accessible footnotes section at the end of the document. Repeated references receive distinct return links. Definition text stays inside the normal comment surface, so reviewers can annotate it; persisted comments still reattach by quote when the rendered footnote markers change legacy text offsets. Undefined references and footnote syntax inside inline or fenced code remain literal.
+
+Footnote definitions use the same raw-HTML, URL, and media safety rules as the rest of rendered Markdown. Tunelito leaves the source file byte-for-byte unchanged.
 
 ## Mermaid diagrams
 

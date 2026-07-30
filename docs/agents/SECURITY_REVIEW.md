@@ -52,6 +52,7 @@ Expected behavior:
 - Keep built-in themes offline and packaged. Do not add font downloads, CDN CSS, or request-selected theme files.
 - Omit only complete Markdown HTML comments from reader prose. Preserve comment-like text inside inline and fenced code and leave the source Markdown byte-for-byte unchanged.
 - Allow only `details` and `summary` from Markdown raw HTML. Normalize a syntactically valid `open` attribute to bare `open` on `details`, strip every other attribute, escape every other HTML element, and preserve literal tags inside inline and fenced code.
+- Render GFM footnote definitions through the same raw-HTML, URL, and media safety paths as ordinary Markdown. Percent-encode source labels in generated fragment ids, use fixed accessible back-link labels rather than interpolating untrusted source labels into attributes, and keep undefined/code-contained footnote syntax literal.
 
 ## Tunnel Behavior
 
