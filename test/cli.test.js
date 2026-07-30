@@ -856,6 +856,12 @@ test("skill show prints the bundled skill to stdout", () => {
   assert.match(stdout.text(), /## Step 3 -- Process the comments/);
   assert.match(stdout.text(), /Default to the rolling active-agent loop/);
   assert.match(stdout.text(), /Batch review is an explicit opt-in/);
+  assert.match(stdout.text(), /Theme:.*bns-pitaya \(default\)/);
+  assert.match(stdout.text(), /tunelito config show \.\/notes\.md/);
+  assert.match(stdout.text(), /`needs_followup` means the agent made implementation progress/);
+  assert.match(stdout.text(), /It is not a question or reply to the\s+reviewer\./);
+  assert.match(stdout.text(), /Ephemeral sessions cannot be promoted in place/);
+  assert.match(stdout.text(), /edit the source footnote\s+reference or definition/);
   assert.equal(stderr.text(), "");
 });
 

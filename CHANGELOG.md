@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Updates the bundled Tunelito agent skill to surface resolved theme/configuration behavior, distinguish implementation continuations from reviewer clarification, state the ephemeral no-promotion boundary, and direct Markdown feedback to source content instead of generated review UI.
+
 ## 0.22.0 - 2026-07-30
 
 - Renders GFM footnote references and definitions as accessible numbered two-way links, including repeated references and table usage, while preserving source Markdown, existing safe-HTML/link boundaries, and comment reattachment.
