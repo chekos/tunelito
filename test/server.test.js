@@ -86,6 +86,10 @@ test("server renders a Markdown file as an injected commentable page", async () 
     "",
     "[unsafe](javascript:alert(1))",
     "",
+    "Policy review requires approval[^policy].",
+    "",
+    "[^policy]: Confirm the **final approver** before publication.",
+    "",
     "```mermaid",
     "flowchart LR",
     "  Draft --> Review",
@@ -128,6 +132,10 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(html, /&lt;script&gt;alert/);
     assert.doesNotMatch(html, /<script>alert/);
     assert.doesNotMatch(html, /href="javascript:/);
+    assert.match(html, /id="footnote-ref-policy" href="#footnote-policy" data-footnote-ref/);
+    assert.match(html, /<section class="footnotes" data-footnotes>/);
+    assert.match(html, /Confirm the <strong>final approver<\/strong> before publication\./);
+    assert.match(html, /href="#footnote-ref-policy" data-footnote-backref/);
     assert.match(html, /data-tunelito-mermaid/);
     assert.match(html, /flowchart LR/);
     assert.match(html, /<pre><code class="language-js">/);

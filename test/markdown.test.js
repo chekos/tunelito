@@ -254,6 +254,55 @@ test("renderMarkdownDocument hides HTML comments without rewriting surrounding M
   assert.match(html, /&lt;!-- literal code comment --&gt;/);
 });
 
+test("renderMarkdownDocument renders GFM footnotes with numbered two-way links", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      "# Procurement review",
+      "",
+      "| Responsibility |",
+      "| --- |",
+      "| Manage procurement[^42-1] |",
+      "",
+      "The decision remains pending[^42-1].",
+      "",
+      "[^42-1]: Under **executive** approval.",
+    ].join("\n"),
+  });
+  const body = renderedMarkdownBody(html);
+
+  assert.match(body, /<sup><a id="footnote-ref-42-1" href="#footnote-42-1" data-footnote-ref/);
+  assert.match(body, /<sup><a id="footnote-ref-42-1-2" href="#footnote-42-1" data-footnote-ref/);
+  assert.match(body, /<section class="footnotes" data-footnotes>/);
+  assert.match(body, /<h2 id="footnote-label" class="tunelito-footnotes-label">Footnotes<\/h2>/);
+  assert.match(body, /<li id="footnote-42-1">/);
+  assert.match(body, /Under <strong>executive<\/strong> approval\./);
+  assert.match(body, /href="#footnote-ref-42-1" data-footnote-backref/);
+  assert.match(body, /href="#footnote-ref-42-1-2" data-footnote-backref/);
+  assert.doesNotMatch(body, /\[\^42-1\]/);
+});
+
+test("renderMarkdownDocument keeps footnote definitions inside existing HTML and URL safety boundaries", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      'Hostile label[^bad" autofocus onfocus="alert(1)].',
+      "",
+      '[^bad" autofocus onfocus="alert(1)]: <script>alert(2)</script> [unsafe](javascript:alert(3))',
+      "",
+      "Undefined references stay literal[^missing].",
+      "",
+      "`Code references stay literal[^code]`",
+    ].join("\n"),
+  });
+  const body = renderedMarkdownBody(html);
+
+  assert.match(body, /id="footnote-ref-bad%22%20autofocus%20onfocus%3D%22alert\(1\)"/);
+  assert.match(body, /aria-label="Back to footnote reference"/);
+  assert.match(body, /&lt;script&gt;alert\(2\)&lt;\/script&gt;/);
+  assert.doesNotMatch(body, /<script>|href="javascript:|\sonfocus=|\sautofocus(?:\s|=)/);
+  assert.match(body, /\[\^missing\]/);
+  assert.match(body, /<code>Code references stay literal\[\^code\]<\/code>/);
+});
+
 test("renderMarkdownDocument allows only sanitized details and summary block HTML", () => {
   const html = renderMarkdownDocument({
     markdownSource: [

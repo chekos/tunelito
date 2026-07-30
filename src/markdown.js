@@ -1,4 +1,5 @@
 import { Marked, Renderer } from "marked";
+import markedFootnote from "marked-footnote";
 import { extractFrontMatter, propertyDisplay } from "./frontmatter.js";
 import { DEFAULT_THEME_NAME, normalizeThemeName, themeCss } from "./themes.js";
 
@@ -657,6 +658,54 @@ body.tunelito-comments-open .tunelito-document-map {
 .tunelito-mermaid details pre {
   margin: 0.75rem 0 0;
 }
+.tunelito-markdown [data-footnote-ref] {
+  margin-left: 0.08em;
+  font-size: 0.9em;
+  font-weight: 750;
+  text-decoration: none;
+}
+.tunelito-markdown [data-footnotes] {
+  margin-top: var(--tl-section-rhythm);
+  border-top: 1px solid var(--tl-border);
+  padding-top: var(--tl-paragraph-rhythm);
+  color: var(--tl-muted);
+  font-size: 0.9rem;
+}
+.tunelito-markdown [data-footnotes] ol {
+  margin-bottom: 0;
+  padding-left: 1.5rem;
+}
+.tunelito-markdown [data-footnotes] li {
+  scroll-margin-top: 24px;
+  padding-left: 0.25rem;
+}
+.tunelito-markdown [data-footnotes] li:last-child > :last-child {
+  margin-bottom: 0;
+}
+.tunelito-markdown [data-footnote-backref] {
+  display: inline-block;
+  margin-inline-start: 0.22em;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tunelito-markdown [data-footnote-ref]:target,
+.tunelito-markdown [data-footnotes] li:target {
+  border-radius: 3px;
+  outline: 3px solid var(--tl-focus-ring);
+  outline-offset: 3px;
+}
+.tunelito-footnotes-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .tunelito-markdown table {
   width: 100%;
   border-collapse: collapse;
@@ -701,7 +750,10 @@ body.tunelito-comments-open .tunelito-document-map {
 function createMarkdownParser() {
   let hasMermaid = false;
   const defaultRenderer = new Renderer();
-  const parser = new Marked({
+  const parser = new Marked(markedFootnote({
+    headingClass: "tunelito-footnotes-label",
+    backRefLabel: "Back to footnote reference",
+  }), {
     gfm: true,
     extensions: [
       {

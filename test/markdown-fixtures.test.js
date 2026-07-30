@@ -15,6 +15,7 @@ const fixtureFiles = [
   "examples/markdown/frontmatter-nested.md",
   "examples/markdown/frontmatter-invalid.md",
   "examples/markdown/html-comments.md",
+  "examples/markdown/footnotes.md",
   "examples/markdown/kitchen-sink.md",
   "examples/markdown/ruler-density.md",
   "examples/markdown-vault/index.md",
@@ -70,6 +71,12 @@ test("committed Markdown fixtures serve through the production renderer without 
         assert.doesNotMatch(html, /inline author note|This block note is for the author only|adjacent note/);
         assert.match(html, /&lt;!-- Literal comment inside inline code --&gt;/);
         assert.match(html, /&lt;!-- Literal comment inside fenced code --&gt;/);
+      }
+      if (fixture.endsWith("footnotes.md")) {
+        assert.match(html, /data-footnote-ref/);
+        assert.match(html, /data-footnotes/);
+        assert.match(html, /data-footnote-backref/);
+        assert.doesNotMatch(html, /<script>alert/);
       }
       assert.equal(readFileSync(filePath, "utf8"), source, `${fixture} source changed while serving`);
     } finally {
