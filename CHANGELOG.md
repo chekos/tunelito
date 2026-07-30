@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.22.0 - 2026-07-30
 
 - Renders GFM footnote references and definitions as accessible numbered two-way links, including repeated references and table usage, while preserving source Markdown, existing safe-HTML/link boundaries, and comment reattachment.
 
