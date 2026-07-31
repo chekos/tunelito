@@ -93,6 +93,12 @@ test("parseArgs supports named Markdown themes", () => {
   assert.throws(() => parseArgs(["notes.md", "--theme"]), /--theme requires a theme name/);
 });
 
+test("parseArgs supports explicit local Markdown editing", () => {
+  const opts = parseArgs(["notes.md", "--editable"]);
+  assert.equal(opts.editable, true);
+  assert.match(usage(), /--editable\s+Let the direct local owner edit safely served Markdown/);
+});
+
 test("parseArgs supports local agent worker options", () => {
   const opts = parseArgs([
     "site",
@@ -845,6 +851,9 @@ test("readBundledSkill returns the distributable Tunelito skill markdown", () =>
   const content = readBundledSkill();
   assert.match(content, /^---\nname: tunelito/);
   assert.match(content, /## Agent worker reference/);
+  assert.match(content, /tunelito \.\/notes\.md --editable --no-tunnel --open/);
+  assert.match(content, /public\s+and forwarded requests (?:remain|stay) read-only/i);
+  assert.match(content, /refuses the stale save and keeps the browser draft/);
 });
 
 test("skill show prints the bundled skill to stdout", () => {

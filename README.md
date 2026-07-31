@@ -4,9 +4,9 @@
 
 Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown files, into a temporary live review room.
 
-Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You keep editing the source in your normal editor; connected browsers reload when files change, and reload waits when a reviewer has an open comment composer. Comments are saved as readable markdown beside the page or folder by default, or kept in memory only with `--ephemeral`.
+Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You can keep editing the source in your normal editor or add `--editable` to make deliberate Markdown edits from the direct local browser; connected browsers reload when files change, and reload waits while a comment or source draft is open. Comments are saved as readable markdown beside the page or folder by default, or kept in memory only with `--ephemeral`.
 
-Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and edit access never leaves your editor.
+Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and source-edit access never leaves the direct loopback `Local:` URL.
 
 ## Quickstart
 
@@ -29,6 +29,13 @@ For a Markdown memo or draft:
 
 ```bash
 npx --yes tunelito ./notes.md
+```
+
+To edit that Markdown source from Tunelito's local browser while keeping the
+public review link read-only:
+
+```bash
+npx --yes tunelito ./notes.md --editable --open
 ```
 
 For a folder-backed mini-site:
@@ -141,8 +148,9 @@ tunelito ./page.html --ephemeral
 ## What You Control
 
 - The source HTML and Markdown files remain untouched by Tunelito's annotation layer.
-- Edits happen in your editor only.
-- Saved HTML changes trigger a live reload in connected browsers.
+- Source edits happen in your normal editor unless you explicitly enable the direct-local Markdown editor with `--editable`.
+- Browser saves require the source revision that was opened, replace the file atomically, and refuse to overwrite a newer external or agent edit.
+- Saved HTML or Markdown changes trigger a live reload in connected browsers; dirty comment and source drafts defer that reload.
 - Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--out`.
 - `--ephemeral` keeps comments in memory only; the session disappears when the local server exits.
 
@@ -157,6 +165,8 @@ Markdown reviews keep the source file untouched while adding presentation-only s
 - A leading YAML front-matter mapping appears as a separate source-derived `Properties` section in that sidebar. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure. Notes without front matter simply omit this section.
 - Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
 - A compact, vertically centered document-map dial at the desktop right edge derives one tick from every real top-level heading, paragraph, list, blockquote, code block, table, figure, Mermaid figure, or thematic break. Its track is capped at 500px and preserves 60px of vertical breathing room on shorter desktop viewports. Heading ticks step from h1 (longest) through h6; h5 and h6 remain navigable 14px and 12px heading marks rather than disappearing. The current block is teal, consumed marks recede toward the theme background, and heading labels expand while the dial is hovered or visibly keyboard-focused, then retreat when the pointer leaves. Every tick navigates; Arrow keys, Page keys, Home, End, and Escape support keyboard use without a separate pin control, paragraph hashes, or a visual progress number.
+
+With `--editable`, safely served Markdown pages add a focused source editor only to the direct loopback owner response. Save and Cmd/Ctrl-S use a strong base revision, a bounded UTF-8 request, fresh path validation, and atomic replacement that preserves permissions. If another editor or agent changes the file first, Tunelito keeps the browser draft and requires an explicit discard/refresh instead of overwriting the newer source. Generated folder pages, HTML, hidden/blocked files, comments, config, symlink escapes, and `.tunelito/` state are never editable. Comments remain in the sidebar when edited text disappears and are labeled `Selection no longer found in this version`.
 
 The left sidebar opens on a first desktop visit and remembers its collapsed/open preference across full-page reloads. Narrow layouts start with a collapsed sheet, and the document map is hidden at 760px and below. On wide desktops the map shifts beside an open comments panel; at narrower desktop widths it temporarily hides while comments are open. Both surfaces respect dark mode and `prefers-reduced-motion`, and `--markdown-css` still loads after the built-in Markdown styles.
 
@@ -242,6 +252,7 @@ Options:
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
+  --editable            Let the direct local owner edit safely served Markdown
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral
@@ -315,7 +326,7 @@ Codex user skills live under `~/.agents/skills`; Codex project skills live under
 
 ## How It Works
 
-Tunelito serves HTML from disk or renders Markdown into a readable page, then injects small same-origin clients into the response. Markdown themes, author-comment hiding, front matter, wiki references, Mermaid, and the document map are applied or discovered only in the served page. For folder targets, every served `.html`, `.htm`, or `.md` page gets the annotation client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer.
+Tunelito serves HTML from disk or renders Markdown into a readable page, then injects small same-origin clients into the response. Markdown themes, author-comment hiding, front matter, wiki references, Mermaid, and the document map are applied or discovered only in the served page. For folder targets, every served `.html`, `.htm`, or `.md` page gets the annotation client and shares one comments inbox. Page-scoped comments appear only on their current page; site-scoped comments appear on every page in that folder session. The injected client handles selection, unanchored page/site notes, highlights, live sync, optional pointer halos, and reload notices. The original source files are not modified by Tunelito's annotation layer; only an explicit direct-local `--editable` save writes a Markdown source.
 
 The server also:
 
@@ -329,6 +340,7 @@ The server also:
 - renders common Obsidian wiki references as semantically honest inline references without vault-wide resolution or embed support
 - builds a keyboard-accessible, opacity-based desktop document map from the real rendered Markdown blocks, including explicit h1–h6 navigation
 - renders fenced `mermaid` blocks from a packaged same-origin runtime, with Mermaid strict security, bounded diagram complexity, and an accessible source fallback if JavaScript or diagram syntax fails
+- can expose an opt-in, local-owner-only Markdown source route with conditional atomic saves while keeping public tunnel responses read-only
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown
 - can run an opt-in local agent worker against persistent comments
@@ -346,7 +358,7 @@ Tunelito assigns roles on the server. Requests made through the direct loopback 
 
 Owner-authored comments are marked in Markdown, and the local owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name when configured, each comment's author role, and any owner approval metadata. Owner labels are still collaboration metadata, not account authentication; the review key remains the access gate.
 
-`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
+`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and comment on. It still cannot use `--editable`, which requires a direct loopback request, but the reviewed document is exposed. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
 `--ephemeral` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--ephemeral`) or avoid sharing the session link. `--live` remains a deprecated alias and prints a warning.
 

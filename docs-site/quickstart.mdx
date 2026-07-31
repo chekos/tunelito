@@ -21,6 +21,17 @@ For a Markdown memo or draft:
 npx --yes tunelito ./notes.md
 ```
 
+To make small Markdown source edits from the direct local browser while keeping
+the public reviewer URL read-only:
+
+```bash
+npx --yes tunelito ./notes.md --editable --open
+```
+
+Use **Edit source**, then Save or Cmd/Ctrl-S. Tunelito refuses a save if another
+editor or agent changed the file after the browser opened it, preserving the
+browser draft instead of overwriting newer work.
+
 Markdown fences labeled `mermaid` render automatically as diagrams. Ordinary code fences stay as code, and invalid diagrams show their readable source instead of a blank region.
 
 When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.

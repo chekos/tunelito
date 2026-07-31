@@ -25,6 +25,20 @@ Tunelito assigns owner and visitor roles on the server. Direct loopback `Local:`
 
 `--owner <name>` only seeds the editable display name for the local owner. It is not an account login or permission system. If the owner opens the `Public:` URL, that browser is treated as a visitor. Visitors cannot become owners by editing browser state or submitted comment fields.
 
+## Local Markdown source editing
+
+`--editable` is an explicit source-write capability for Markdown, but it does
+not turn the review key or owner display name into edit authorization. Source
+reads and saves additionally require a direct loopback request, a loopback Host,
+no forwarding headers, and—for saves—a matching same-origin request plus the
+source revision that was opened. Public tunnel URLs remain read-only even when
+the session was started with `--editable`, and `--no-auth` does not broaden
+source editing beyond the direct local URL.
+
+Tunelito revalidates the file at save time, accepts only safely served `.md`
+targets and bounded UTF-8 content, and writes through a same-directory atomic
+replacement. A stale revision fails without changing the source.
+
 ## Public tunnels
 
 When tunneling is enabled, Tunelito exposes your local server through Cloudflare Tunnel. Use this only for material you are comfortable sharing with anyone who has the full link.
@@ -53,4 +67,4 @@ tunelito ./page.html --no-tunnel
 tunelito ./page.html --no-auth
 ```
 
-`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and edit. If you want no key, add `--no-tunnel` so the session stays local. Use `--no-auth` only for trusted local networks or throwaway demos.
+`--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and comment on. It cannot use the direct-local Markdown editor, but the document is still exposed. If you want no key, add `--no-tunnel` so the session stays local. Use `--no-auth` only for trusted local networks or throwaway demos.

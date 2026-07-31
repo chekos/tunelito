@@ -20,6 +20,7 @@ The browser client handles:
 - live sync over WebSocket, plus WebRTC data channels in `--ephemeral`
 - highlight rendering when the browser supports it
 - reload notices when the file changes
+- an opt-in local-owner Markdown source editor when `--editable` is enabled
 
 The server handles:
 
@@ -29,6 +30,7 @@ The server handles:
 - comment validation
 - Markdown persistence, unless `--ephemeral` is enabled
 - file watching
+- conditional, atomic Markdown source saves for the direct local owner when explicitly enabled
 - packaged same-origin Mermaid assets for Markdown pages that contain diagrams
 - generated root/nested folder landing pages that list only immediate served content
 - a recursive Markdown navigation model whose folders remain independently collapsed in the browser
@@ -45,9 +47,23 @@ When `--agent` is enabled, a separate worker handles:
 
 Every served target gets an atomic local `.tunelito/session.json` lifecycle record for second-shell status and recovery. When `--agent-session` is enabled, Tunelito does not invoke another CLI: the server process watches the comments inbox, claims actionable comments for the current coding-agent session, prints bounded prompts, shows reviewer-facing status on comment cards, exposes the same tracker through `tunelito inbox status`, and records results through `tunelito inbox record`.
 
-## Source files are not modified
+## Source files change only through an explicit editor save
 
-The injection happens only in the HTTP response. Your source HTML and Markdown files remain untouched by Tunelito's annotation layer.
+The injection happens only in the HTTP response. Your source HTML and Markdown files remain untouched by Tunelito's annotation layer. Without `--editable`, Tunelito has no browser source-write route.
+
+With `--editable`, the direct loopback owner response adds an **Edit source**
+control to safely served Markdown pages. Public tunnel and forwarded responses
+remain read-only. The editor reads exact UTF-8 source, keeps it outside comment
+anchoring, and saves only on an explicit action or Cmd/Ctrl-S. Saves require the
+strong revision opened by that browser, revalidate the served path, enforce a
+2 MiB request limit, and atomically replace the source while preserving its
+permissions. A newer external or agent edit produces a conflict: Tunelito keeps
+the browser draft and will not overwrite the file.
+
+The editor never exposes generated folder landing pages, HTML, hidden or blocked
+paths, symlink escapes, comments files, `tunelito.config.json`, or `.tunelito/`
+state. A comment whose selected text disappears after an edit remains readable
+and is labeled **Selection no longer found in this version**.
 
 Authored `index.html` and `index.md` files keep precedence. Generated folder landing pages and the Markdown navigation tree are response-only UI: they exclude hidden paths, comments/session/config state, unsupported file types, and symlink escapes, and they never create an index file in the served folder.
 
