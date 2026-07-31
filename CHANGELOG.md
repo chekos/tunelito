@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.23.0 - 2026-07-31
 
 - Adds opt-in `--editable` Markdown source editing for direct local owners, with public read-only responses, bounded same-origin writes, strong revision conflicts, atomic permission-preserving saves, dirty-draft reload protection, accessible browser controls, and explicit stale comment-anchor status.
 

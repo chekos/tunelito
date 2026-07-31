@@ -220,7 +220,7 @@ The public [configuration guide](docs-site/configuration.mdx) documents the stab
 ## CLI
 
 ```text
-Tunelito 0.22.1
+Tunelito 0.23.0
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
