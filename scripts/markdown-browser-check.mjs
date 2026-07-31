@@ -534,6 +534,10 @@ async function verifyEditableSource() {
     const editor = page.locator(".tunelito-source-editor");
     const textarea = editor.locator("textarea");
     await textarea.waitFor({ state: "visible" });
+    await page.waitForFunction(() => {
+      const source = document.querySelector(".tunelito-source-editor textarea");
+      return source && !source.disabled && source.value === "# Editable note\n\nOriginal anchored phrase.\n";
+    });
     assert.equal(await textarea.inputValue(), "# Editable note\n\nOriginal anchored phrase.\n");
     assert.equal(await editor.getAttribute("data-tunelito-comment-ignore"), "", "editor UI must stay outside comment anchoring");
     await assertAccessible(page, "editable Markdown editor");
