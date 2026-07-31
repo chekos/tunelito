@@ -31,7 +31,7 @@ import { defaultCommentsPath } from "../src/comments.js";
 import { resolveTunelitoConfig } from "../src/config.js";
 import { buildDoctorReport } from "../src/doctor.js";
 import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
-import { normalizeMarkdownCssHref } from "../src/markdown.js";
+import { isMarkdownPath, normalizeMarkdownCssHref } from "../src/markdown.js";
 import { createMcpServer } from "../src/mcp.js";
 import { createTunelitoServer } from "../src/server.js";
 import {
@@ -81,6 +81,7 @@ Options:
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
+  --editable            Let the direct local owner edit safely served Markdown
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral
@@ -210,6 +211,8 @@ export function parseArgs(argv) {
     } else if (arg === "--markdown-css") {
       opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
       opts.markdownCssProvided = true;
+    } else if (arg === "--editable") {
+      opts.editable = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
     } else if (arg.startsWith("--")) {
@@ -372,6 +375,10 @@ async function main() {
     console.error(`Not a file or folder: ${opts.filePath}`);
     process.exit(1);
   }
+  if (opts.editable && targetStat.isFile() && (!isMarkdownPath(opts.filePath) || opts.filePath.toLowerCase().endsWith(".comments.md"))) {
+    console.error("--editable requires a source Markdown file or a folder containing source Markdown files.");
+    process.exit(1);
+  }
   let resolvedConfig;
   try {
     resolvedConfig = resolveTunelitoConfig({
@@ -407,6 +414,7 @@ async function main() {
     markdownCssHref: resolvedConfig.markdownCssHref,
     markdownCssText: resolvedConfig.markdownCssText,
     markdownTheme: resolvedConfig.theme.value,
+    editable: opts.editable,
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -468,6 +476,7 @@ async function main() {
   console.log("Tunelito is running");
   console.log(`Local:   ${instance.localUrl}`);
   console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
+  if (opts.editable) console.log("Editing: direct local owner only; public links remain read-only");
   console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
@@ -1369,6 +1378,7 @@ function writeRuntimeSessionFile({ targetPath, instance, sessionId, commentsPath
     directoryMode: Boolean(instance.directoryMode),
     commentsPath: commentsPath || null,
     persistence: opts.ephemeral ? "ephemeral" : "persistent",
+    editable: Boolean(opts.editable),
     statePath: statePath || null,
     policy: mode === "none" ? "" : opts.agentPolicy,
     trigger: mode === "none" ? "" : opts.agentTrigger,

@@ -907,6 +907,7 @@ export function renderMarkdownDocument({
   cssText = "",
   themeName = DEFAULT_THEME_NAME,
   navigation = null,
+  editable = false,
 } = {}) {
   const title = String(sourceName || "Markdown page");
   const theme = normalizeThemeName(themeName);
@@ -932,7 +933,7 @@ export function renderMarkdownDocument({
 
   return [
     "<!doctype html>",
-    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}">`,
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}>`,
     "<head>",
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',

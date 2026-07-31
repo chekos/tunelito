@@ -12,6 +12,7 @@ The CLI owns process orchestration:
 - choose persistent or ephemeral live mode
 - choose optional local agent worker settings
 - choose optional owner display identity
+- choose whether direct-local Markdown source editing is explicitly enabled
 - resolve Markdown presentation settings from CLI, target-local project configuration, global configuration, and defaults
 - report the resolved Markdown settings and source layers through read-only `tunelito config show`
 - report read-only setup and safety diagnostics through `tunelito doctor`
@@ -51,6 +52,7 @@ The server owns local IO and transport:
 - keep folder-mode page comments page-specific and site comments visible across the folder while storing one markdown inbox
 - relay WebRTC signaling and fallback live events
 - broadcast reload events when source files change; browser clients defer the actual reload while a comment composer is open
+- when explicitly enabled, expose raw source and conditional atomic saves only for safely resolved Markdown requested through the direct loopback owner URL
 
 The local agent worker owns comment follow-up when `--agent` is enabled:
 
@@ -106,6 +108,8 @@ The browser client owns reviewer interaction:
 - assign friendly editable visitor names, or seed the owner name for direct local owner sessions
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
+- when `--editable` is enabled for a direct local Markdown response, provide a source editor with explicit saves, dirty-draft reload protection, and conflict recovery
+- keep comments whose source quote disappeared readable with an explicit stale-anchor label
 - manage the shared Markdown left sidebar without writing state into the source document; injected navigation and source-derived Properties remain visibly separate
 - build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, and provide h1-h6 and paragraph navigation with scroll-progress state
 - coordinate the Markdown drawer, document map, Mermaid completion, and comments panel across responsive, dark-mode, keyboard, and reduced-motion states
@@ -113,7 +117,7 @@ The browser client owns reviewer interaction:
 
 ## Invariants
 
-- Never modify source HTML or Markdown files to install Tunelito.
+- Never modify source HTML or Markdown files to install Tunelito; only an explicit direct-local `--editable` save may write a served Markdown source.
 - Never let Markdown themes or configuration rewrite the selected Markdown source.
 - Never serve files outside the selected source file directory or selected folder root.
 - Never serve a target-local `tunelito.config.json` through folder mode.
@@ -128,6 +132,9 @@ The browser client owns reviewer interaction:
 - Keep pointer halos ephemeral; do not write pointer events to markdown or source files.
 - Keep agent resolution state out of the comments markdown; the server owns comment persistence.
 - Treat owner identity as server-assigned request metadata, not authentication; direct loopback local sessions are owners, public tunnel or forwarded sessions are visitors, and the review key remains the access gate.
+- Do not authorize source writes from owner labels, reviewer IDs, or client fields. Require the review gate, an explicitly editable session, a direct loopback request and Host with no forwarding headers, same-origin mutation, a safely re-resolved Markdown target, bounded UTF-8, and the opened source revision.
+- Never make generated folder pages, HTML, hidden or blocked paths, symlink escapes, `*.comments.md`, config, or `.tunelito/` state editable.
+- Keep public tunnel and forwarded responses read-only even when `--editable` is enabled or `--no-auth` removes the review-key gate.
 - Treat reviewer identity as rename metadata, not authentication; legacy comments without reviewer IDs must not be rewritten by display-name guesses.
 - Never run a local agent worker unless `--agent` or `--agent-command` is explicit.
 - Never spawn a local agent worker for `--agent-session`; active-agent mode watches comments, prints prompts, and writes session metadata for the current agent session.

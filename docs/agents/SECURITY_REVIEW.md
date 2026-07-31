@@ -18,6 +18,7 @@ Expected behavior:
 - `--owner` seeds the local owner display name only; do not treat owner labels as access control.
 - Reviewer IDs support display-name rename behavior only; do not treat them as authentication or authorization.
 - Owner approval of visitor comments requires the direct local owner session, persists only outside `--ephemeral`, and only authorizes local-agent handling when an agent mode is explicitly enabled.
+- `--editable` source access requires both the normal review gate and a direct loopback request; owner/reviewer identity fields never authorize it.
 
 Tests should cover both allowed and denied paths.
 
@@ -30,6 +31,28 @@ Expected behavior:
 - Reject malformed URL escapes with `400`.
 - Reject traversal and non-file paths with `404`, except generated directory indexes in folder mode.
 - Do not follow a request into dotfiles, `.git/`, parent directories, or unrelated workspace files.
+- Reuse the same realpath, hidden-path, blocked-path, and symlink-escape checks before every editable-source read and again immediately before save.
+- Reject generated folder pages, HTML, `*.comments.md`, config/session/agent state, and unsupported source encodings from the editable-source route.
+
+## Markdown Source Editing
+
+Expected behavior when `--editable` is explicit:
+
+- Omit the edit capability from public tunnel and forwarded Markdown responses.
+- Require a direct loopback socket, loopback Host, and no forwarding headers for source reads and saves.
+- Require an HTTP(S) `Origin` whose host exactly matches the request Host for every save.
+- Accept only `text/markdown` or `text/plain` UTF-8 bodies up to 2 MiB.
+- Return a strong source revision and require it through `If-Match` for every save.
+- Re-read and revalidate the target before replacement; a stale or replaced target fails without mutation.
+- Write a same-directory temporary file, flush it, preserve the existing mode, and atomically rename it over the source.
+- Keep dirty browser text when a watcher event or revision conflict reports an external change.
+- Never log or interpolate raw source text into server errors.
+- Keep `--no-auth` from broadening source edits beyond the direct local request boundary.
+
+Tests should include unauthenticated, forwarded, cross-origin, missing-revision,
+stale-revision, oversized, invalid-encoding, traversal, hidden, blocked,
+comments-file, symlink-escape, HTML, folder-index, and permission-preservation
+cases.
 
 ## HTML Injection
 

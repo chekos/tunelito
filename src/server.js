@@ -7,9 +7,10 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, SOURCE_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
+import { SourceEditError, readBoundedUtf8Body, readMarkdownSourceSnapshot, writeMarkdownSourceSnapshot } from "./source-edit.js";
 import { DEFAULT_THEME_NAME } from "./themes.js";
 import { WebSocketHub } from "./ws.js";
 
@@ -49,6 +50,7 @@ export async function createTunelitoServer(options) {
   const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
   const markdownCssText = String(options.markdownCssText || "");
   const markdownTheme = String(options.markdownTheme || DEFAULT_THEME_NAME);
+  const editable = Boolean(options.editable);
   const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
   const startedAt = new Date().toISOString();
   let lastActivityAt = startedAt;
@@ -78,6 +80,7 @@ export async function createTunelitoServer(options) {
       markdownCssHref,
       markdownCssText,
       markdownTheme,
+      editable,
       sessionId,
       startedAt,
       sessionSnapshot: () => ({
@@ -370,7 +373,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, sessionId, startedAt, sessionSnapshot, touchActivity }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sessionId, startedAt, sessionSnapshot, touchActivity }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -398,6 +401,23 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     viewerRole: owner ? "owner" : "",
     ownerSession: owner ? ownerSessionId : "",
   };
+
+  if (pathname === SOURCE_ROUTE) {
+    handleSourceRequest({
+      req,
+      res,
+      url,
+      filePath,
+      rootDir,
+      rootRealDir,
+      directoryMode,
+      blockedPaths,
+      editable,
+      owner,
+      responseHeaders,
+    });
+    return;
+  }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, responseHeaders);
@@ -503,6 +523,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         markdownCssHref,
         markdownCssText,
         markdownTheme,
+        editable: editable && owner && isEditableMarkdownPath(asset.path),
         navigation: {
           entries: buildDirectoryNavigation({
             rootDir,
@@ -521,8 +542,16 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
+    const sourceEditable = editable && owner && Boolean(resolveEditableMarkdownTarget({
+      filePath,
+      rootDir,
+      rootRealDir,
+      directoryMode,
+      pagePath: pathname,
+      blockedPaths,
+    }));
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -535,6 +564,124 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   }
 
   sendFile(res, asset.realPath, contentTypeFor(asset.path), req.method, responseHeaders);
+}
+
+function handleSourceRequest({ req, res, url, filePath, rootDir, rootRealDir, directoryMode, blockedPaths, editable, owner, responseHeaders }) {
+  const headers = { ...responseHeaders, allow: "GET, HEAD, PUT" };
+  if (!editable) {
+    sendText(res, 404, "Editable Markdown source is not enabled for this session.", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+  if (!owner) {
+    sendText(res, 403, "Markdown source editing is available only from the direct local URL.", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+
+  const initialTarget = resolveEditableMarkdownTarget({
+    filePath,
+    rootDir,
+    rootRealDir,
+    directoryMode,
+    pagePath: url.searchParams.get(PAGE_PARAM),
+    blockedPaths,
+  });
+  if (!initialTarget) {
+    sendText(res, 404, "Editable Markdown source not found.", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+
+  if (req.method === "GET" || req.method === "HEAD") {
+    try {
+      const snapshot = readMarkdownSourceSnapshot(initialTarget.realPath);
+      sendText(res, 200, snapshot.source, "text/markdown; charset=utf-8", req.method, { ...headers, etag: snapshot.etag });
+    } catch (error) {
+      sendSourceEditError(res, req.method, error, headers);
+    }
+    return;
+  }
+
+  if (req.method !== "PUT") {
+    sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+  if (!isSameOriginMutation(req)) {
+    sendText(res, 403, "Markdown source saves require a same-origin local request.", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+  if (!isMarkdownSourceContentType(req.headers["content-type"])) {
+    sendText(res, 415, "Markdown source saves require text/markdown or text/plain UTF-8 content.", "text/plain; charset=utf-8", req.method, headers);
+    return;
+  }
+
+  const expectedEtag = singleHeaderValue(req.headers["if-match"]);
+  readBoundedUtf8Body(req).then((source) => {
+    const latestTarget = resolveEditableMarkdownTarget({
+      filePath,
+      rootDir,
+      rootRealDir,
+      directoryMode,
+      pagePath: url.searchParams.get(PAGE_PARAM),
+      blockedPaths,
+    });
+    if (!latestTarget || latestTarget.realPath !== initialTarget.realPath) {
+      throw new SourceEditError(409, "Markdown source target changed. Your browser draft was not saved.");
+    }
+    const saved = writeMarkdownSourceSnapshot(latestTarget.realPath, source, expectedEtag);
+    sendJson(res, 200, { saved: true, changed: saved.changed }, req.method, { ...headers, etag: saved.etag });
+  }).catch((error) => {
+    if (!res.headersSent) sendSourceEditError(res, req.method, error, headers);
+  });
+}
+
+function resolveEditableMarkdownTarget({ filePath, rootDir, rootRealDir, directoryMode, pagePath, blockedPaths }) {
+  if (!directoryMode) {
+    const normalizedPagePath = normalizePagePath(pagePath || "/");
+    if (!["/", `/${basename(filePath)}`].includes(normalizedPagePath) || !isEditableMarkdownPath(filePath)) return null;
+    try {
+      const realPath = realpathSync.native(filePath);
+      if (
+        hasHiddenPathSegment(`/${basename(filePath)}`) ||
+        !isInside(rootRealDir, realPath) ||
+        hasHiddenRealPathSegment(rootRealDir, realPath) ||
+        isBlockedPath(realPath, blockedPaths)
+      ) return null;
+      return { path: filePath, realPath };
+    } catch {
+      return null;
+    }
+  }
+
+  const asset = resolveDirectoryRequest(rootDir, rootRealDir, normalizePagePath(pagePath || "/"), { blockedPaths });
+  if (!asset || asset.generatedHtml || asset.redirectPath || !isEditableMarkdownPath(asset.path)) return null;
+  return { path: asset.path, realPath: asset.realPath };
+}
+
+function isEditableMarkdownPath(path) {
+  return isMarkdownPath(path) && !String(path || "").toLowerCase().endsWith(".comments.md");
+}
+
+function isSameOriginMutation(req) {
+  if (!req.headers.origin || !isTrustedOrigin(req)) return false;
+  try {
+    return ["http:", "https:"].includes(new URL(req.headers.origin).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isMarkdownSourceContentType(value) {
+  const contentType = singleHeaderValue(value).split(";", 1)[0].trim().toLowerCase();
+  return contentType === "text/markdown" || contentType === "text/plain";
+}
+
+function singleHeaderValue(value) {
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+function sendSourceEditError(res, method, error, headers) {
+  const status = error instanceof SourceEditError ? error.status : 500;
+  const message = error instanceof SourceEditError ? error.message : "Could not process the Markdown source request.";
+  sendJson(res, status, { error: message }, method, headers);
 }
 
 function resolveDirectoryRequest(rootDir, rootRealDir, pathname, options = {}) {
@@ -689,7 +836,7 @@ function pathnameSegments(pathname) {
   return String(pathname || "/").split("/").filter(Boolean);
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null }) {
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
@@ -697,6 +844,7 @@ function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText
     cssText: markdownCssText,
     themeName: markdownTheme,
     navigation,
+    editable,
   });
 }
 

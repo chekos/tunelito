@@ -59,6 +59,7 @@
   updateLaserToggle();
   connect();
   bindSelection();
+  window.addEventListener("tunelito:source-editor-settled", flushQueuedReload);
 
   function connect() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -539,6 +540,16 @@
           color: #64748b;
           border-left-color: #cbd5e1;
         }
+        .anchor-status {
+          display: none;
+          margin: -2px 0 8px 11px;
+          color: #92400e;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.35;
+        }
+        .anchor-status.visible { display: block; }
+        .comment.anchor-stale .quote { border-left-color: #f59e0b; }
         .meta {
           color: #64748b;
           font-size: 12px;
@@ -1331,7 +1342,8 @@
   }
 
   function handleDocumentChanged() {
-    if (isComposerOpen()) {
+    window.dispatchEvent(new CustomEvent("tunelito:document-changed"));
+    if (isDraftBlockingReload()) {
       queueReloadUntilComposerCloses();
       return;
     }
@@ -1340,12 +1352,12 @@
 
   function queueReloadUntilComposerCloses() {
     state.reloadQueued = true;
-    renderStatus("Page changed; reload queued until this comment is submitted or closed.");
+    renderStatus("Page changed; reload queued until the open draft is saved or closed.");
   }
 
   function flushQueuedReload() {
     if (!state.reloadQueued) return;
-    if (isComposerOpen()) return;
+    if (isDraftBlockingReload()) return;
     scheduleDocumentReload();
   }
 
@@ -1355,7 +1367,7 @@
     if (state.reloadTimer) return;
     state.reloadTimer = setTimeout(() => {
       state.reloadTimer = null;
-      if (isComposerOpen()) {
+      if (isDraftBlockingReload()) {
         queueReloadUntilComposerCloses();
         return;
       }
@@ -1365,6 +1377,10 @@
 
   function isComposerOpen() {
     return ui.composer.classList.contains("open");
+  }
+
+  function isDraftBlockingReload() {
+    return isComposerOpen() || document.documentElement.hasAttribute("data-tunelito-source-dirty");
   }
 
   function addComment(comment) {
@@ -1408,6 +1424,7 @@
           <div class="work-badge" hidden></div>
         </div>
         <div class="quote"></div>
+        <div class="anchor-status" role="status"></div>
         <div class="body"></div>
         <div class="approval"></div>
         <div class="work" aria-label="Agent work status">
@@ -1423,6 +1440,14 @@
       item.querySelector(".meta").textContent = `${comment.author}${comment.authorRole === "owner" ? " (owner)" : ""} · ${scope} · ${formatTime(comment.created)}`;
       quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
       quote.classList.toggle("note", !hasQuote);
+      const expectedOnPage = !comment.pagePath || normalizePagePath(comment.pagePath) === normalizePagePath(state.pagePath);
+      const anchorMissing = hasQuote && expectedOnPage && !findRangeForComment(comment);
+      if (anchorMissing) {
+        item.classList.add("anchor-stale");
+        const anchorStatus = item.querySelector(".anchor-status");
+        anchorStatus.textContent = "Selection no longer found in this version";
+        anchorStatus.classList.add("visible");
+      }
       item.querySelector(".body").textContent = comment.body;
       renderCommentApproval(item, comment);
       renderCommentWorkStatus(item, comment);

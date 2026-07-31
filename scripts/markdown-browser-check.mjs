@@ -39,7 +39,8 @@ try {
   await verifyFootnotesAndCommentAnchoring();
   await verifyDetailsAndCollapsedCommentTarget();
   await verifyResponsiveAndComments();
-  process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, and the folder vault.\n`);
+  await verifyEditableSource();
+  process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, the folder vault, and local source editing.\n`);
 } finally {
   await browser.close();
 }
@@ -489,6 +490,95 @@ async function verifyFootnotesAndCommentAnchoring() {
       created: "2026-07-30T00:00:00.000Z",
     }],
   });
+}
+
+async function verifyEditableSource() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-editable-browser-"));
+  const filePath = join(tempDir, "editable.md");
+  const commentsPath = join(tempDir, "editable.comments.md");
+  writeFileSync(filePath, "# Editable note\n\nOriginal anchored phrase.\n", "utf8");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: filePath,
+    comments: [{
+      id: "c_editable_stale",
+      author: "Browser check",
+      authorRole: "owner",
+      reviewerId: "r_browser_check",
+      scope: "page",
+      quote: "Original anchored phrase.",
+      body: "This comment should remain readable after the source changes.",
+      prefix: "",
+      suffix: "",
+      path: "body > main > p",
+      pagePath: "/",
+      textStart: null,
+      textEnd: null,
+      created: "2026-07-31T00:00:00.000Z",
+    }],
+  }), "utf8");
+  const instance = await createTunelitoServer({
+    filePath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+    editable: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    const trigger = page.locator(".tunelito-source-edit-trigger");
+    assert.equal(await trigger.isVisible(), true, "the direct local owner should see Edit source");
+    await trigger.click();
+    const editor = page.locator(".tunelito-source-editor");
+    const textarea = editor.locator("textarea");
+    await textarea.waitFor({ state: "visible" });
+    await page.waitForFunction(() => {
+      const source = document.querySelector(".tunelito-source-editor textarea");
+      return source && !source.disabled && source.value === "# Editable note\n\nOriginal anchored phrase.\n";
+    });
+    assert.equal(await textarea.inputValue(), "# Editable note\n\nOriginal anchored phrase.\n");
+    assert.equal(await editor.getAttribute("data-tunelito-comment-ignore"), "", "editor UI must stay outside comment anchoring");
+    await assertAccessible(page, "editable Markdown editor");
+
+    const draft = "# Browser draft\n\nUnsaved browser wording.\n";
+    await textarea.fill(draft);
+    assert.equal(await page.locator("html").getAttribute("data-tunelito-source-dirty"), "", "editing should mark the browser draft dirty");
+    await page.keyboard.press("Escape");
+    assert.equal(await editor.isVisible(), true, "Escape must not discard a dirty draft");
+    assert.equal(await editor.locator('[data-action="discard"]').isVisible(), true, "dirty close should require an explicit discard action");
+
+    writeFileSync(filePath, "# External edit\n\nChanged outside the browser.\n", "utf8");
+    await page.waitForFunction(() => document.querySelector(".tunelito-source-editor-status")?.textContent.includes("changed on disk"));
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    assert.equal(await textarea.inputValue(), draft, "an external change must preserve the dirty browser buffer");
+    assert.equal(await editor.isVisible(), true, "an external change must not reload over the dirty editor");
+
+    await editor.locator('[data-action="reload"]').click();
+    await page.waitForFunction(() => document.querySelector(".tunelito-markdown")?.textContent.includes("Changed outside the browser"));
+    await trigger.click();
+    await textarea.waitFor({ state: "visible" });
+    await textarea.fill("# Final browser edit\n\nSaved from Tunelito.\n");
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoOverflow(page, "editable Markdown editor mobile dark mode");
+    await assertAccessible(page, "editable Markdown editor mobile dark mode");
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+S" : "Control+S");
+    await page.waitForFunction(() => document.querySelector(".tunelito-markdown")?.textContent.includes("Saved from Tunelito"));
+    assert.equal(readFileSync(filePath, "utf8"), "# Final browser edit\n\nSaved from Tunelito.\n");
+
+    await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".launcher").click());
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".anchor-status.visible"));
+    assert.equal(
+      await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".anchor-status.visible").textContent),
+      "Selection no longer found in this version",
+      "comments whose quote was edited away should remain visible with a stale-anchor label",
+    );
+  } finally {
+    await context.close();
+    await instance.close();
+  }
 }
 
 async function windowDispatches(page) {

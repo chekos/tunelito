@@ -225,6 +225,14 @@ test("renderMarkdownDocument selects each bundled theme and keeps custom CSS las
   }
 });
 
+test("renderMarkdownDocument advertises source editing only when explicitly enabled", () => {
+  const readOnly = renderMarkdownDocument({ markdownSource: "# Read only" });
+  const editable = renderMarkdownDocument({ markdownSource: "# Editable", editable: true });
+
+  assert.doesNotMatch(readOnly, /data-tunelito-editable/);
+  assert.match(editable, /data-tunelito-editable="true"/);
+});
+
 test("renderMarkdownDocument hides HTML comments without rewriting surrounding Markdown or fenced code", () => {
   const html = renderMarkdownDocument({
     markdownSource: [

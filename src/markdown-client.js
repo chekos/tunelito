@@ -4,8 +4,374 @@
   if (!markdown || root.dataset.tunelitoMarkdownUi === "ready") return;
   root.dataset.tunelitoMarkdownUi = "ready";
 
+  setupSourceEditor();
   setupPropertiesDrawer();
   setupDocumentMap();
+
+  function setupSourceEditor() {
+    if (root.dataset.tunelitoEditable !== "true") return;
+
+    const style = element("style", "tunelito-source-editor-style");
+    style.textContent = `
+      .tunelito-source-edit-trigger {
+        position: fixed;
+        z-index: 2147483605;
+        top: 18px;
+        right: 76px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--tl-border);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--tl-paper-bg) 92%, transparent);
+        color: var(--tl-text);
+        box-shadow: 0 8px 28px var(--tl-properties-shadow);
+        font: 750 0.72rem/1 var(--tl-font-body);
+        letter-spacing: 0.025em;
+        padding: 10px 13px;
+        cursor: pointer;
+        backdrop-filter: blur(14px);
+      }
+      .tunelito-source-edit-trigger::before { content: "✎"; color: var(--tl-accent); font-size: 1rem; }
+      .tunelito-source-edit-trigger:hover { border-color: var(--tl-accent); color: var(--tl-accent-strong); }
+      .tunelito-source-edit-trigger:focus-visible,
+      .tunelito-source-editor button:focus-visible,
+      .tunelito-source-editor textarea:focus-visible {
+        outline: 3px solid var(--tl-focus-ring);
+        outline-offset: 3px;
+      }
+      .tunelito-source-editor {
+        position: fixed;
+        z-index: 2147483647;
+        inset: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        background:
+          linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--tl-accent) 20%, transparent) 48px, transparent 49px),
+          var(--tl-page-bg);
+        color: var(--tl-text);
+      }
+      .tunelito-source-editor[hidden] { display: none; }
+      .tunelito-source-editor-header,
+      .tunelito-source-editor-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-color: var(--tl-border);
+        background: color-mix(in srgb, var(--tl-paper-bg) 94%, transparent);
+        padding: 14px clamp(18px, 4vw, 54px);
+        backdrop-filter: blur(16px);
+      }
+      .tunelito-source-editor-header { border-bottom: 1px solid var(--tl-border); }
+      .tunelito-source-editor-footer { border-top: 1px solid var(--tl-border); }
+      .tunelito-source-editor-heading { min-width: 0; }
+      .tunelito-source-editor-kicker {
+        margin: 0 0 3px;
+        color: var(--tl-accent);
+        font: 800 0.65rem/1.2 var(--tl-font-body);
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      .tunelito-source-editor-title {
+        overflow: hidden;
+        margin: 0;
+        color: var(--tl-text);
+        font: 720 clamp(1rem, 2vw, 1.25rem)/1.2 var(--tl-font-display);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tunelito-source-editor-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+      .tunelito-source-editor button {
+        border: 1px solid var(--tl-border);
+        border-radius: 7px;
+        background: var(--tl-soft);
+        color: var(--tl-text);
+        font: 750 0.76rem/1 var(--tl-font-body);
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+      .tunelito-source-editor button:hover { border-color: var(--tl-accent); color: var(--tl-accent-strong); }
+      .tunelito-source-editor button[data-action="save"] { border-color: var(--tl-accent); background: var(--tl-accent); color: var(--tl-paper-bg); }
+      .tunelito-source-editor button[data-action="save"]:hover { background: var(--tl-accent-strong); color: var(--tl-paper-bg); }
+      .tunelito-source-editor button[data-action="discard"],
+      .tunelito-source-editor button[data-action="reload"] { border-color: #b45309; color: #92400e; }
+      .tunelito-source-editor button:disabled { cursor: wait; opacity: 0.58; }
+      .tunelito-source-editor-workspace {
+        min-height: 0;
+        padding: clamp(14px, 3vw, 34px) clamp(16px, 6vw, 84px);
+      }
+      .tunelito-source-editor textarea {
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        min-height: 260px;
+        resize: none;
+        border: 1px solid var(--tl-border);
+        border-radius: 10px;
+        background: var(--tl-paper-bg);
+        color: var(--tl-text);
+        caret-color: var(--tl-accent);
+        box-shadow: 0 18px 55px var(--tl-properties-shadow);
+        font: 500 0.92rem/1.62 var(--tl-font-mono);
+        tab-size: 2;
+        padding: clamp(18px, 3vw, 34px);
+      }
+      .tunelito-source-editor-status {
+        min-width: 0;
+        margin: 0;
+        color: var(--tl-muted);
+        font: 650 0.74rem/1.4 var(--tl-font-body);
+        overflow-wrap: anywhere;
+      }
+      .tunelito-source-editor-status[data-tone="error"] { color: #b45309; }
+      .tunelito-source-editor-stats { flex: 0 0 auto; color: var(--tl-muted); font: 600 0.7rem/1 var(--tl-font-mono); }
+      body.tunelito-source-editor-open { overflow: hidden; }
+      body.tunelito-source-editor-open #tunelito-root { visibility: hidden; }
+      @media (max-width: 680px) {
+        .tunelito-source-edit-trigger { top: 12px; right: 14px; }
+        .tunelito-source-editor-header { align-items: flex-start; flex-direction: column; gap: 10px; }
+        .tunelito-source-editor-actions { width: 100%; flex-wrap: wrap; }
+        .tunelito-source-editor-actions button { flex: 1 1 auto; }
+        .tunelito-source-editor-footer { align-items: flex-start; flex-direction: column; gap: 6px; }
+        .tunelito-source-editor-workspace { padding: 10px; }
+        .tunelito-source-editor textarea { border-radius: 7px; padding: 16px; }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .tunelito-source-edit-trigger { transition: border-color 140ms ease, color 140ms ease, transform 140ms ease; }
+        .tunelito-source-edit-trigger:hover { transform: translateY(-1px); }
+      }
+    `;
+    document.head.append(style);
+
+    const trigger = element("button", "tunelito-source-edit-trigger", "Edit source");
+    trigger.type = "button";
+    trigger.setAttribute("aria-haspopup", "dialog");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("data-tunelito-comment-ignore", "");
+
+    const editor = element("section", "tunelito-source-editor");
+    editor.hidden = true;
+    editor.setAttribute("role", "dialog");
+    editor.setAttribute("aria-modal", "true");
+    editor.setAttribute("aria-labelledby", "tunelito-source-editor-title");
+    editor.setAttribute("data-tunelito-comment-ignore", "");
+    editor.innerHTML = `
+      <header class="tunelito-source-editor-header">
+        <div class="tunelito-source-editor-heading">
+          <p class="tunelito-source-editor-kicker">Local Markdown source</p>
+          <h2 class="tunelito-source-editor-title" id="tunelito-source-editor-title"></h2>
+        </div>
+        <div class="tunelito-source-editor-actions">
+          <button type="button" data-action="discard" hidden>Discard & close</button>
+          <button type="button" data-action="reload" hidden>Discard draft & refresh</button>
+          <button type="button" data-action="close">Close</button>
+          <button type="button" data-action="save">Save & review</button>
+        </div>
+      </header>
+      <div class="tunelito-source-editor-workspace">
+        <textarea aria-label="Markdown source" aria-describedby="tunelito-source-editor-status" autocomplete="off" autocapitalize="sentences" spellcheck="true"></textarea>
+      </div>
+      <footer class="tunelito-source-editor-footer">
+        <p class="tunelito-source-editor-status" id="tunelito-source-editor-status" aria-live="polite">Loading source…</p>
+        <span class="tunelito-source-editor-stats" aria-hidden="true"></span>
+      </footer>
+    `;
+    editor.querySelector(".tunelito-source-editor-title").textContent = document.title.replace(/ · Tunelito$/, "");
+    document.body.append(trigger, editor);
+
+    const textarea = editor.querySelector("textarea");
+    const closeButton = editor.querySelector('[data-action="close"]');
+    const saveButton = editor.querySelector('[data-action="save"]');
+    const discardButton = editor.querySelector('[data-action="discard"]');
+    const reloadButton = editor.querySelector('[data-action="reload"]');
+    const status = editor.querySelector(".tunelito-source-editor-status");
+    const stats = editor.querySelector(".tunelito-source-editor-stats");
+    let etag = "";
+    let original = "";
+    let dirty = false;
+    let saving = false;
+    let previousFocus = null;
+
+    trigger.addEventListener("click", openEditor);
+    closeButton.addEventListener("click", requestClose);
+    discardButton.addEventListener("click", () => closeEditor({ discard: true }));
+    reloadButton.addEventListener("click", () => closeEditor({ discard: true, refresh: true }));
+    saveButton.addEventListener("click", saveSource);
+    textarea.addEventListener("input", () => {
+      dirty = textarea.value !== original;
+      root.toggleAttribute("data-tunelito-source-dirty", dirty);
+      discardButton.hidden = true;
+      if (dirty) setStatus("Unsaved local changes · Cmd/Ctrl-S to save");
+      else setStatus("No unsaved changes");
+      updateStats();
+    });
+    editor.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveSource();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key === "Tab") trapFocus(event);
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    window.addEventListener("tunelito:document-changed", () => {
+      if (!dirty) return;
+      reloadButton.hidden = false;
+      setStatus("Source changed on disk. Your browser draft is preserved and cannot overwrite it.", "error");
+    });
+
+    async function openEditor() {
+      previousFocus = document.activeElement;
+      editor.hidden = false;
+      document.body.classList.add("tunelito-source-editor-open");
+      trigger.setAttribute("aria-expanded", "true");
+      textarea.disabled = true;
+      saveButton.disabled = true;
+      discardButton.hidden = true;
+      reloadButton.hidden = true;
+      setStatus("Loading source…");
+      try {
+        const response = await fetch(sourceUrl(), { cache: "no-store" });
+        if (!response.ok) throw new Error(await responseError(response));
+        original = await response.text();
+        etag = response.headers.get("etag") || "";
+        textarea.value = original;
+        dirty = false;
+        root.removeAttribute("data-tunelito-source-dirty");
+        textarea.disabled = false;
+        saveButton.disabled = false;
+        setStatus("Local owner editor · changes stay on this machine until you save");
+        updateStats();
+        textarea.focus();
+      } catch (error) {
+        setStatus(error.message || "Could not load the Markdown source.", "error");
+        closeButton.focus();
+      }
+    }
+
+    async function saveSource() {
+      if (saving || textarea.disabled) return;
+      if (!dirty) {
+        closeEditor();
+        return;
+      }
+      saving = true;
+      saveButton.disabled = true;
+      closeButton.disabled = true;
+      setStatus("Saving atomically…");
+      try {
+        const response = await fetch(sourceUrl(), {
+          method: "PUT",
+          headers: {
+            "content-type": "text/markdown; charset=utf-8",
+            "if-match": etag,
+          },
+          body: textarea.value,
+        });
+        if (!response.ok) {
+          const message = await responseError(response);
+          if ([409, 412].includes(response.status)) reloadButton.hidden = false;
+          throw new Error(message);
+        }
+        const result = await response.json();
+        original = textarea.value;
+        etag = response.headers.get("etag") || etag;
+        dirty = false;
+        root.removeAttribute("data-tunelito-source-dirty");
+        window.dispatchEvent(new CustomEvent("tunelito:source-editor-settled"));
+        if (result.changed) {
+          setStatus("Saved. Refreshing the rendered review…");
+          setTimeout(() => location.reload(), 120);
+        } else {
+          closeEditor();
+        }
+      } catch (error) {
+        setStatus(error.message || "Could not save the Markdown source.", "error");
+      } finally {
+        saving = false;
+        saveButton.disabled = textarea.disabled;
+        closeButton.disabled = false;
+      }
+    }
+
+    function requestClose() {
+      if (!dirty) {
+        closeEditor();
+        return;
+      }
+      discardButton.hidden = false;
+      setStatus("Unsaved changes are preserved. Save them or choose Discard & close.", "error");
+      discardButton.focus();
+    }
+
+    function closeEditor({ discard = false, refresh = false } = {}) {
+      if (dirty && !discard) return;
+      dirty = false;
+      root.removeAttribute("data-tunelito-source-dirty");
+      editor.hidden = true;
+      document.body.classList.remove("tunelito-source-editor-open");
+      trigger.setAttribute("aria-expanded", "false");
+      window.dispatchEvent(new CustomEvent("tunelito:source-editor-settled"));
+      if (refresh) {
+        location.reload();
+        return;
+      }
+      previousFocus?.focus?.({ preventScroll: true });
+    }
+
+    function trapFocus(event) {
+      const focusable = Array.from(editor.querySelectorAll("button:not([disabled]):not([hidden]), textarea:not([disabled])"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    function setStatus(message, tone = "") {
+      status.textContent = message;
+      if (tone) status.dataset.tone = tone;
+      else delete status.dataset.tone;
+    }
+
+    function updateStats() {
+      const lines = textarea.value === "" ? 1 : textarea.value.split("\n").length;
+      stats.textContent = `${lines} line${lines === 1 ? "" : "s"} · ${textarea.value.length} characters`;
+    }
+
+    function sourceUrl() {
+      const url = new URL("/__tunelito/source", location.href);
+      url.searchParams.set("tunelito_page", location.pathname || "/");
+      const accessKey = new URLSearchParams(location.search).get("tunelito_key");
+      if (accessKey) url.searchParams.set("tunelito_key", accessKey);
+      return `${url.pathname}${url.search}`;
+    }
+
+    async function responseError(response) {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const payload = await response.json().catch(() => null);
+        if (payload?.error) return payload.error;
+      }
+      const message = await response.text().catch(() => "");
+      return message || `Source request failed (${response.status}).`;
+    }
+  }
 
   function setupPropertiesDrawer() {
     const drawer = document.querySelector(".tunelito-properties");

@@ -24,6 +24,18 @@ Also update:
 - `README.md` option table
 - `CHANGELOG.md` when behavior changes
 
+## Editable Source Changes
+
+Required:
+
+- `test/source-edit.test.js`
+- editable-source HTTP/security coverage in `test/server.test.js`
+- CLI capability coverage in `test/cli.test.js`
+- rendered-capability coverage in `test/markdown.test.js`
+- `npm run browser:check` for dirty drafts, conflicts, keyboard save, stale anchors, responsive layout, and accessibility
+- `npm run pack:check`
+- the Markdown, security, and bundled-skill documentation
+
 ## Server or Security Changes
 
 Required:

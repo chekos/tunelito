@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Adds opt-in `--editable` Markdown source editing for direct local owners, with public read-only responses, bounded same-origin writes, strong revision conflicts, atomic permission-preserving saves, dirty-draft reload protection, accessible browser controls, and explicit stale comment-anchor status.
+
 ## 0.22.1 - 2026-07-30
 
 - Updates the bundled Tunelito agent skill to surface resolved theme/configuration behavior, distinguish implementation continuations from reviewer clarification, state the ephemeral no-promotion boundary, and direct Markdown feedback to source content instead of generated review UI.

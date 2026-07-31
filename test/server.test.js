@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { request } from "node:http";
 import { connect } from "node:net";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer, isIgnoredWatchFilename, isLocalOwnerRequest } from "../src/server.js";
-import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE } from "../src/inject.js";
+import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE, SOURCE_ROUTE } from "../src/inject.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE } from "../src/markdown.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
+import { MAX_EDITABLE_SOURCE_BYTES } from "../src/source-edit.js";
 
 test("server serves injected HTML, sibling assets, and live WebSocket comments", async () => {
   const dir = mkdtempSync(join(tmpdir(), "tunelito-server-"));
@@ -189,6 +190,266 @@ test("server renders a Markdown file as an injected commentable page", async () 
   } finally {
     socket?.socket.close();
     await instance.close();
+  }
+});
+
+test("editable Markdown uses local-owner reads and conflict-safe atomic saves", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-editable-markdown-"));
+  const markdownPath = join(dir, "notes.md");
+  const original = "---\ntitle: Café\n---\n\n# First\n";
+  writeFileSync(markdownPath, original);
+  chmodSync(markdownPath, 0o640);
+
+  const instance = await createTunelitoServer({
+    filePath: markdownPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "edit-secret",
+    editable: true,
+  });
+
+  try {
+    const page = await fetch(instance.localUrl);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /data-tunelito-editable="true"/);
+
+    const unkeyedSourceUrl = new URL(SOURCE_ROUTE, instance.originUrl);
+    unkeyedSourceUrl.searchParams.set("tunelito_page", "/");
+    assert.equal((await fetch(unkeyedSourceUrl)).status, 401);
+
+    const sourceUrl = new URL(SOURCE_ROUTE, instance.originUrl);
+    sourceUrl.searchParams.set("tunelito_key", "edit-secret");
+    sourceUrl.searchParams.set("tunelito_page", "/");
+    const source = await fetch(sourceUrl);
+    assert.equal(source.status, 200);
+    assert.equal(await source.text(), original);
+    const etag = source.headers.get("etag");
+    assert.match(etag, /^"tunelito-/);
+
+    const updated = `${original}\nBrowser edit.\n`;
+    const saved = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: new URL(instance.originUrl).origin,
+        "content-type": "text/markdown; charset=utf-8",
+        "if-match": etag,
+      },
+      body: updated,
+    });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(await saved.json(), { saved: true, changed: true });
+    assert.notEqual(saved.headers.get("etag"), etag);
+    const savedEtag = saved.headers.get("etag");
+    assert.equal(readFileSync(markdownPath, "utf8"), updated);
+    assert.equal(statSync(markdownPath).mode & 0o777, 0o640);
+
+    const stale = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: new URL(instance.originUrl).origin,
+        "content-type": "text/markdown",
+        "if-match": etag,
+      },
+      body: "# Stale browser edit\n",
+    });
+    assert.equal(stale.status, 412);
+    assert.match((await stale.json()).error, /changed on disk/);
+    assert.equal(readFileSync(markdownPath, "utf8"), updated);
+
+    const missingRevision = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: new URL(instance.originUrl).origin,
+        "content-type": "text/plain",
+      },
+      body: "# Missing revision\n",
+    });
+    assert.equal(missingRevision.status, 428);
+
+    const crossOrigin = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: "https://attacker.example",
+        "content-type": "text/markdown",
+        "if-match": savedEtag,
+      },
+      body: "# Cross origin\n",
+    });
+    assert.equal(crossOrigin.status, 403);
+
+    const missingOrigin = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        "content-type": "text/markdown",
+        "if-match": savedEtag,
+      },
+      body: "# Missing origin\n",
+    });
+    assert.equal(missingOrigin.status, 403);
+
+    const unsupportedType = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: new URL(instance.originUrl).origin,
+        "content-type": "application/json",
+        "if-match": savedEtag,
+      },
+      body: JSON.stringify({ source: "# Wrong type" }),
+    });
+    assert.equal(unsupportedType.status, 415);
+
+    const oversized = await fetch(sourceUrl, {
+      method: "PUT",
+      headers: {
+        origin: new URL(instance.originUrl).origin,
+        "content-type": "text/markdown",
+        "if-match": savedEtag,
+      },
+      body: "x".repeat(MAX_EDITABLE_SOURCE_BYTES + 1),
+    });
+    assert.equal(oversized.status, 413);
+    assert.equal(readFileSync(markdownPath, "utf8"), updated);
+  } finally {
+    await instance.close();
+  }
+});
+
+test("editable Markdown stays hidden from forwarded visitors and disabled sessions", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-editable-visitor-"));
+  const markdownPath = join(dir, "notes.md");
+  writeFileSync(markdownPath, "# Private source\n");
+
+  const editable = await createTunelitoServer({
+    filePath: markdownPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+    editable: true,
+  });
+  const readOnly = await createTunelitoServer({
+    filePath: markdownPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "review-secret",
+  });
+
+  try {
+    const visitorPage = await rawRequest(editable.originUrl, "/?tunelito_key=review-secret", {
+      headers: {
+        host: "shared.trycloudflare.com",
+        "cf-connecting-ip": "203.0.113.10",
+        "x-forwarded-for": "203.0.113.10",
+        "x-forwarded-proto": "https",
+      },
+    });
+    assert.equal(visitorPage.statusCode, 200);
+    assert.doesNotMatch(visitorPage.body, /data-tunelito-editable/);
+
+    const visitorRead = await rawRequest(editable.originUrl, `${SOURCE_ROUTE}?tunelito_key=review-secret&tunelito_page=%2F`, {
+      headers: {
+        host: "shared.trycloudflare.com",
+        "cf-connecting-ip": "203.0.113.10",
+        "x-forwarded-for": "203.0.113.10",
+        "x-forwarded-proto": "https",
+      },
+    });
+    assert.equal(visitorRead.statusCode, 403);
+
+    const visitorSource = await rawRequest(editable.originUrl, `${SOURCE_ROUTE}?tunelito_key=review-secret&tunelito_page=%2F`, {
+      method: "PUT",
+      headers: {
+        host: "shared.trycloudflare.com",
+        origin: "https://shared.trycloudflare.com",
+        "content-type": "text/markdown",
+        "if-match": '"visitor"',
+        "cf-connecting-ip": "203.0.113.10",
+        "x-forwarded-for": "203.0.113.10",
+        "x-forwarded-proto": "https",
+      },
+      body: "# Visitor edit\n",
+    });
+    assert.equal(visitorSource.statusCode, 403);
+    assert.equal(readFileSync(markdownPath, "utf8"), "# Private source\n");
+
+    const disabledUrl = new URL(SOURCE_ROUTE, readOnly.originUrl);
+    disabledUrl.searchParams.set("tunelito_key", "review-secret");
+    disabledUrl.searchParams.set("tunelito_page", "/");
+    const disabled = await fetch(disabledUrl);
+    assert.equal(disabled.status, 404);
+  } finally {
+    await editable.close();
+    await readOnly.close();
+  }
+});
+
+test("folder editing resolves only safely served Markdown pages", async () => {
+  const siteDir = mkdtempSync(join(tmpdir(), "tunelito-editable-folder-"));
+  const outsideDir = mkdtempSync(join(tmpdir(), "tunelito-editable-outside-"));
+  writeFileSync(join(siteDir, "index.md"), "# Home\n");
+  writeFileSync(join(siteDir, "notes.md"), "# Notes\n");
+  writeFileSync(join(siteDir, "notes.comments.md"), "# Private comments\n");
+  writeFileSync(join(siteDir, "page.html"), "<h1>HTML</h1>");
+  writeFileSync(join(siteDir, ".hidden.md"), "# Hidden\n");
+  writeFileSync(join(outsideDir, "outside.md"), "# Outside\n");
+  symlinkSync(join(outsideDir, "outside.md"), join(siteDir, "escape.md"));
+
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    host: "127.0.0.1",
+    port: 0,
+    editable: true,
+  });
+
+  try {
+    const commentsPage = await fetch(new URL("/notes.comments.md", instance.localUrl));
+    assert.equal(commentsPage.status, 200);
+    assert.doesNotMatch(await commentsPage.text(), /data-tunelito-editable/);
+
+    for (const [pagePath, expectedStatus, expectedBody] of [
+      ["/", 200, "# Home\n"],
+      ["/notes.md", 200, "# Notes\n"],
+      ["/page.html", 404, null],
+      ["/notes.comments.md", 404, null],
+      ["/.hidden.md", 404, null],
+      ["/escape.md", 404, null],
+      ["/../outside.md", 404, null],
+    ]) {
+      const url = new URL(SOURCE_ROUTE, instance.originUrl);
+      url.searchParams.set("tunelito_page", pagePath);
+      const response = await fetch(url);
+      assert.equal(response.status, expectedStatus, pagePath);
+      if (expectedBody != null) assert.equal(await response.text(), expectedBody);
+    }
+  } finally {
+    await instance.close();
+  }
+});
+
+test("single-file editing rejects hidden names and symlink targets", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-editable-hidden-single-"));
+  const hiddenPath = join(dir, ".private.md");
+  const visibleLinkPath = join(dir, "visible.md");
+  writeFileSync(hiddenPath, "# Hidden source\n");
+  symlinkSync(hiddenPath, visibleLinkPath);
+
+  for (const filePath of [hiddenPath, visibleLinkPath]) {
+    const instance = await createTunelitoServer({
+      filePath,
+      host: "127.0.0.1",
+      port: 0,
+      editable: true,
+    });
+    try {
+      const page = await fetch(instance.localUrl);
+      assert.equal(page.status, 200);
+      assert.doesNotMatch(await page.text(), /data-tunelito-editable/);
+
+      const sourceUrl = new URL(SOURCE_ROUTE, instance.originUrl);
+      sourceUrl.searchParams.set("tunelito_page", "/");
+      assert.equal((await fetch(sourceUrl)).status, 404);
+    } finally {
+      await instance.close();
+    }
   }
 });
 
@@ -1633,22 +1894,26 @@ async function waitUntil(predicate, timeout = 1500) {
 }
 
 function rawGet(baseUrl, path, headers = {}) {
+  return rawRequest(baseUrl, path, { headers });
+}
+
+function rawRequest(baseUrl, path, { method = "GET", headers = {}, body = "" } = {}) {
   const url = new URL(baseUrl);
   return new Promise((resolve, reject) => {
     const req = request({
       host: url.hostname,
       port: url.port,
       path,
-      method: "GET",
+      method,
       headers,
     }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => body += chunk);
-      res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+      res.on("end", () => resolve({ statusCode: res.statusCode, headers: res.headers, body }));
     });
     req.on("error", reject);
-    req.end();
+    req.end(body);
   });
 }
 
