@@ -28,9 +28,10 @@ the public reviewer URL read-only:
 npx --yes tunelito ./notes.md --editable --open
 ```
 
-Use **Edit source**, then Save or Cmd/Ctrl-S. Tunelito refuses a save if another
-editor or agent changed the file after the browser opened it, preserving the
-browser draft instead of overwriting newer work.
+Use **Edit source**, then Save or Cmd/Ctrl-S. Tunelito optimistically rechecks
+the opened revision immediately before replacement. If that check observes
+another editor or agent changed the file, it refuses the stale save and
+preserves the browser draft.
 
 Markdown fences labeled `mermaid` render automatically as diagrams. Ordinary code fences stay as code, and invalid diagrams show their readable source instead of a blank region.
 

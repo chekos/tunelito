@@ -57,8 +57,9 @@ remain read-only. The editor reads exact UTF-8 source, keeps it outside comment
 anchoring, and saves only on an explicit action or Cmd/Ctrl-S. Saves require the
 strong revision opened by that browser, revalidate the served path, enforce a
 2 MiB request limit, and atomically replace the source while preserving its
-permissions. A newer external or agent edit produces a conflict: Tunelito keeps
-the browser draft and will not overwrite the file.
+permissions. This is optimistic conflict protection: Tunelito rechecks the
+revision immediately before replacement. A newer external or agent edit it
+observes produces a conflict, and the browser draft remains available.
 
 The editor never exposes generated folder landing pages, HTML, hidden or blocked
 paths, symlink escapes, comments files, `tunelito.config.json`, or `.tunelito/`

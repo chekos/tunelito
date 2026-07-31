@@ -542,8 +542,16 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
   }
 
   if (pathname === "/" || pathname === `/${sourceName}`) {
+    const sourceEditable = editable && owner && Boolean(resolveEditableMarkdownTarget({
+      filePath,
+      rootDir,
+      rootRealDir,
+      directoryMode,
+      pagePath: pathname,
+      blockedPaths,
+    }));
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: editable && owner && isEditableMarkdownPath(filePath) })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -631,7 +639,12 @@ function resolveEditableMarkdownTarget({ filePath, rootDir, rootRealDir, directo
     if (!["/", `/${basename(filePath)}`].includes(normalizedPagePath) || !isEditableMarkdownPath(filePath)) return null;
     try {
       const realPath = realpathSync.native(filePath);
-      if (!isInside(rootRealDir, realPath) || isBlockedPath(realPath, blockedPaths)) return null;
+      if (
+        hasHiddenPathSegment(`/${basename(filePath)}`) ||
+        !isInside(rootRealDir, realPath) ||
+        hasHiddenRealPathSegment(rootRealDir, realPath) ||
+        isBlockedPath(realPath, blockedPaths)
+      ) return null;
       return { path: filePath, realPath };
     } catch {
       return null;

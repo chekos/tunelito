@@ -103,10 +103,10 @@ tunelito ./notes.md --editable --open
 ```
 
 The source editor saves only on an explicit action or Cmd/Ctrl-S. Every save
-requires the revision that was opened and atomically replaces the file while
-preserving its permissions. If an external editor or agent changes the source
-first, Tunelito preserves the browser draft and refuses to overwrite the newer
-file. Generated folder pages, HTML, hidden or blocked paths, symlink escapes,
+requires the revision that was opened, rechecks it immediately before commit,
+and atomically replaces the file while preserving its permissions. If that
+optimistic check observes an external editor or agent changed the source first,
+Tunelito preserves the browser draft. Generated folder pages, HTML, hidden or blocked paths, symlink escapes,
 comments/config/session state, and files larger than 2 MiB are not editable.
 
 Choose a bundled Markdown theme:

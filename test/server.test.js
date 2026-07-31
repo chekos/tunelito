@@ -425,6 +425,34 @@ test("folder editing resolves only safely served Markdown pages", async () => {
   }
 });
 
+test("single-file editing rejects hidden names and symlink targets", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-editable-hidden-single-"));
+  const hiddenPath = join(dir, ".private.md");
+  const visibleLinkPath = join(dir, "visible.md");
+  writeFileSync(hiddenPath, "# Hidden source\n");
+  symlinkSync(hiddenPath, visibleLinkPath);
+
+  for (const filePath of [hiddenPath, visibleLinkPath]) {
+    const instance = await createTunelitoServer({
+      filePath,
+      host: "127.0.0.1",
+      port: 0,
+      editable: true,
+    });
+    try {
+      const page = await fetch(instance.localUrl);
+      assert.equal(page.status, 200);
+      assert.doesNotMatch(await page.text(), /data-tunelito-editable/);
+
+      const sourceUrl = new URL(SOURCE_ROUTE, instance.originUrl);
+      sourceUrl.searchParams.set("tunelito_page", "/");
+      assert.equal((await fetch(sourceUrl)).status, 404);
+    } finally {
+      await instance.close();
+    }
+  }
+});
+
 test("directory mode injects HTML pages and keeps comments page-specific", async () => {
   const parentDir = mkdtempSync(join(tmpdir(), "tunelito-directory-"));
   const siteDir = join(parentDir, "site");

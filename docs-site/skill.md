@@ -160,8 +160,9 @@ tunelito ./notes.md --editable --no-tunnel --open
 
 The editor loads and saves the exact UTF-8 Markdown bytes; it does not round-trip
 the rendered HTML. Saving is explicit, preserves the existing file mode, and
-uses the revision loaded by the browser. If another editor changes the file
-first, Tunelito refuses the stale save and keeps the browser draft for recovery.
+uses the revision loaded by the browser and optimistically rechecks it immediately
+before replacement. If Tunelito observes another editor changed the file first,
+it refuses the stale save and keeps the browser draft for recovery.
 Closing or pressing Escape also requires an explicit discard while the draft is
 dirty. Files larger than 2 MiB, non-UTF-8 files, generated folder pages,
 `*.comments.md`, hidden/internal paths, and sources outside the served root are
