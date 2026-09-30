@@ -7,7 +7,7 @@ description: Drive a local Tunelito review room in a browser and prove comments,
 
 Tunelito's user-facing surface is the browser review room served by the CLI. A second surface is the terminal (`doctor`, `inbox`). This skill drives the browser room. It does not open a public tunnel.
 
-One checkout owns one verification instance. The helper refuses to launch while that instance is alive. Run `cleanup` first.
+One checkout owns one verification instance. `launch` writes `runs/launch.lock` before it starts the server, and refuses to launch while the recorded process is still that server. Run `cleanup` first.
 
 Read [features/README.md](features/README.md) before driving. Follow the matching feature file. A proof that uses one entry point does not cover the others.
 
@@ -86,7 +86,7 @@ A proof shows the action and the result. The comments file must contain the body
 node .cursor/skills/verify-tunelito/scripts/verify-tunelito.mjs cleanup
 ```
 
-Cleanup sends `SIGTERM` to the pid in `runs/current.json`, then `SIGKILL` if it is still alive after 1.5 seconds. It deletes that run directory and `current.json`. It does not delete `evidence/`. A second cleanup with no record prints `no instance` and exits 0.
+Cleanup reads the pid in `runs/current.json`. It sends `SIGTERM`, then `SIGKILL` after 1.5 seconds, only while `ps` still shows `bin/tunelito.js` and the copied fixture. A reused pid is left alone. Cleanup deletes that run directory, `current.json`, and `launch.lock`. It does not delete `evidence/`. A second cleanup with no record prints `no instance` and exits 0.
 
 Kill only that pid. Do not kill by process name.
 

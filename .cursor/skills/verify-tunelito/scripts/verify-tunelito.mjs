@@ -20,6 +20,7 @@ const skillDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(skillDir, "../../..");
 const runsDir = join(skillDir, "runs");
 const statePath = join(runsDir, "current.json");
+const lockPath = join(runsDir, "launch.lock");
 const evidenceRoot = join(skillDir, "evidence");
 const binPath = join(repoRoot, "bin/tunelito.js");
 const anchoredBody = "Selection stays anchored.";
@@ -46,64 +47,66 @@ try {
 async function launch(fixtureRel) {
   if (!fixtureRel) throw new Error("launch requires a repo-relative fixture, such as examples/simple-review.html");
   const existing = readState();
-  if (existing && isAlive(existing.pid)) {
+  if (existing && isRecordedServer(existing)) {
     throw new Error(`pid ${existing.pid} already serves ${originOf(existing.localUrl)}; run cleanup before launch`);
   }
-  if (existing) rmSync(existing.runDir, { recursive: true, force: true });
-
-  const fixtureAbs = resolve(repoRoot, fixtureRel);
-  assertInsideRepo(fixtureAbs);
-  if (!existsSync(fixtureAbs)) throw new Error(`fixture not found: ${fixtureRel}`);
-
-  const runDir = join(runsDir, Date.now().toString(36));
-  const workspace = join(runDir, "workspace");
-  mkdirSync(workspace, { recursive: true });
-  const targetCopy = join(workspace, basename(fixtureAbs));
-  cpSync(fixtureAbs, targetCopy, { recursive: true });
-  const commentsPath = join(runDir, "comments.md");
-  const logPath = join(runDir, "server.log");
-  const logFd = openSync(logPath, "a");
-  const child = spawn(process.execPath, [
-    binPath,
-    targetCopy,
-    "--no-tunnel",
-    "--port",
-    "0",
-    "--out",
-    commentsPath,
-  ], {
-    cwd: repoRoot,
-    detached: true,
-    stdio: ["ignore", logFd, logFd],
-  });
-  child.unref();
-
-  let localUrl;
+  reserveInstance();
+  let child;
   try {
-    localUrl = await waitForLocalUrl(logPath, child.pid);
-  } catch (error) {
-    if (isAlive(child.pid)) process.kill(child.pid, "SIGTERM");
-    throw error;
-  }
+    if (existing) rmSync(existing.runDir, { recursive: true, force: true });
 
-  const state = {
-    pid: child.pid,
-    localUrl,
-    port: Number(new URL(localUrl).port),
-    commentsPath,
-    runDir,
-    targetCopy,
-    fixture: relative(repoRoot, fixtureAbs),
-    sourceHash: hashFile(fixtureAbs),
-    logPath,
-  };
-  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
-  process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
+    const fixtureAbs = resolve(repoRoot, fixtureRel);
+    assertInsideRepo(fixtureAbs);
+    if (!existsSync(fixtureAbs)) throw new Error(`fixture not found: ${fixtureRel}`);
+
+    const runDir = join(runsDir, Date.now().toString(36));
+    const workspace = join(runDir, "workspace");
+    mkdirSync(workspace, { recursive: true });
+    const targetCopy = join(workspace, basename(fixtureAbs));
+    cpSync(fixtureAbs, targetCopy, { recursive: true });
+    const commentsPath = join(runDir, "comments.md");
+    const logPath = join(runDir, "server.log");
+    const logFd = openSync(logPath, "a");
+    child = spawn(process.execPath, [
+      binPath,
+      targetCopy,
+      "--no-tunnel",
+      "--port",
+      "0",
+      "--out",
+      commentsPath,
+    ], {
+      cwd: repoRoot,
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+    });
+    child.unref();
+
+    const localUrl = await waitForLocalUrl(logPath, child.pid);
+    const state = {
+      pid: child.pid,
+      localUrl,
+      port: Number(new URL(localUrl).port),
+      commentsPath,
+      runDir,
+      targetCopy,
+      fixture: relative(repoRoot, fixtureAbs),
+      sourceHash: hashFile(fixtureAbs),
+      logPath,
+    };
+    writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
+  } catch (error) {
+    if (child && isAlive(child.pid)) process.kill(child.pid, "SIGTERM");
+    throw error;
+  } finally {
+    releaseInstance();
+  }
 }
 
 async function doctor() {
   const state = requireState();
-  const alive = isAlive(state.pid);
+  const alive = isRecordedServer(state);
   const listeners = listenerPids(state.port);
   const portOwned = listeners === null ? null : listeners.includes(String(state.pid));
   let pageStatus = 0;
@@ -144,9 +147,7 @@ async function drive(feature) {
   }
   const state = requireState();
   if (!state.sourceHash) throw new Error("anchored-comment requires a file fixture, not a folder");
-  if (hashFile(state.targetCopy) !== state.sourceHash) {
-    throw new Error("copied fixture already differs from the repo file before driving");
-  }
+  assertCopyMatchesRepo(state);
 
   const evidenceDir = join(evidenceRoot, "anchored-comment");
   mkdirSync(evidenceDir, { recursive: true });
@@ -182,7 +183,7 @@ async function drive(feature) {
   const comments = readFileSync(state.commentsPath, "utf8");
   if (!comments.includes(anchoredBody)) throw new Error("comments file is missing the comment body");
   if (!comments.includes(anchoredQuote)) throw new Error("comments file is missing the selected quote");
-  if (hashFile(state.targetCopy) !== state.sourceHash) throw new Error("served HTML copy changed");
+  assertCopyMatchesRepo(state);
   writeFileSync(join(evidenceDir, "comments.md"), comments);
   const proof = {
     feature: "anchored-comment",
@@ -201,17 +202,19 @@ async function drive(feature) {
 async function cleanup() {
   const state = readState();
   if (!state) {
+    releaseInstance();
     process.stdout.write("no instance\n");
     return;
   }
-  if (isAlive(state.pid)) {
+  if (isRecordedServer(state)) {
     process.kill(state.pid, "SIGTERM");
     const deadline = Date.now() + 1500;
-    while (isAlive(state.pid) && Date.now() < deadline) await sleep(50);
-    if (isAlive(state.pid)) process.kill(state.pid, "SIGKILL");
+    while (isRecordedServer(state) && Date.now() < deadline) await sleep(50);
+    if (isRecordedServer(state)) process.kill(state.pid, "SIGKILL");
   }
   rmSync(state.runDir, { recursive: true, force: true });
   rmSync(statePath, { force: true });
+  releaseInstance();
   process.stdout.write(`cleaned pid ${state.pid}; evidence kept in ${evidenceRoot}\n`);
 }
 
@@ -224,6 +227,50 @@ function requireState() {
 function readState() {
   if (!existsSync(statePath)) return null;
   return JSON.parse(readFileSync(statePath, "utf8"));
+}
+
+function isRecordedServer(state) {
+  if (!state || !isAlive(state.pid)) return false;
+  let command = "";
+  try {
+    command = execFileSync("ps", ["-p", String(state.pid), "-o", "command="], { encoding: "utf8" });
+  } catch {
+    return false;
+  }
+  return command.includes(binPath) && command.includes(state.targetCopy);
+}
+
+function reserveInstance() {
+  mkdirSync(runsDir, { recursive: true });
+  const payload = `${process.pid}\n`;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      writeFileSync(lockPath, payload, { flag: "wx" });
+      return;
+    } catch (error) {
+      if (!error || error.code !== "EEXIST") throw error;
+      const owner = Number(readFileSync(lockPath, "utf8"));
+      if (Number.isInteger(owner) && owner > 0 && owner !== process.pid && isAlive(owner)) {
+        throw new Error("another launch is in progress; wait for it to finish");
+      }
+      rmSync(lockPath, { force: true });
+    }
+  }
+  throw new Error("could not reserve the verification instance");
+}
+
+function releaseInstance() {
+  rmSync(lockPath, { force: true });
+}
+
+function assertCopyMatchesRepo(state) {
+  const repoFixture = resolve(repoRoot, state.fixture);
+  assertInsideRepo(repoFixture);
+  const repoHash = hashFile(repoFixture);
+  const copyHash = hashFile(state.targetCopy);
+  if (!repoHash || repoHash !== copyHash) {
+    throw new Error("served copy does not match the current repo fixture");
+  }
 }
 
 function isAlive(pid) {

@@ -25,7 +25,7 @@ Preconditions:
 
 - **Scripted proof.** Run `node .cursor/skills/verify-tunelito/scripts/verify-tunelito.mjs drive anchored-comment`. The command triple-clicks the sentence, fills `Selection stays anchored.`, saves, and opens the panel.
 - **Visible result.** `evidence/anchored-comment/after.png` shows the body. `panel.aria.txt` includes that body. `comments.md` includes `Selection stays anchored.` and `Select this sentence`.
-- **Source unchanged.** `proof.json` reports `sourceUnchanged: true`. The copied HTML hash still matches `examples/simple-review.html`.
+- **Source unchanged.** `proof.json` reports `sourceUnchanged: true`. The drive compares the served copy with the current bytes of `examples/simple-review.html`, not with the hash saved at launch.
 
 ## Gotchas
 
