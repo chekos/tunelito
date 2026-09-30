@@ -733,3 +733,22 @@ test("renderCommentsMarkdown handles an empty comment list", () => {
   const markdown = renderCommentsMarkdown({ comments: [], sourcePath: "/tmp/example.html" });
   assert.match(markdown, /_No comments yet\._/);
 });
+
+test("comments keep explicit anchors across a markdown round trip", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-comment-anchors-"));
+  const commentsPath = join(dir, "notes.comments.md");
+  const sourcePath = join(dir, "notes.md");
+  const store = createCommentStore({ commentsPath, sourcePath });
+  store.add({
+    author: "Ada",
+    body: "Keep this on the launch section.",
+    quote: "old line",
+    anchorId: "tll-563",
+    sectionId: "launch",
+  });
+
+  const loaded = loadCommentsFromMarkdown(commentsPath);
+  assert.equal(loaded[0].anchorId, "tll-563");
+  assert.equal(loaded[0].sectionId, "launch");
+  assert.equal(loaded[0].body, "Keep this on the launch section.");
+});

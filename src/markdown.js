@@ -584,6 +584,89 @@ body.tunelito-comments-open .tunelito-document-map {
     transition: none;
   }
 }
+.tunelito-badge {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.15rem;
+  border: 1px solid var(--tl-border);
+  border-radius: 999px;
+  background: var(--tl-soft);
+  color: var(--tl-text);
+  padding: 0.05rem 0.45rem;
+  font: 700 0.72rem/1.4 var(--tl-font-body);
+  letter-spacing: 0.02em;
+  vertical-align: 0.08em;
+}
+.tunelito-badge[data-tone="active"] { border-color: #5eead4; }
+.tunelito-badge[data-tone="done"] { border-color: #86efac; }
+.tunelito-badge[data-tone="warning"] { border-color: #facc15; }
+.tunelito-badge[data-tone="danger"] { border-color: #fca5a5; }
+.tunelito-fold {
+  float: right;
+  margin: 0.2rem 0 0 10px;
+  border: 1px solid var(--tl-border);
+  border-radius: 999px;
+  background: var(--tl-soft);
+  color: var(--tl-text);
+  cursor: pointer;
+  font: 700 0.68rem/1 var(--tl-font-body);
+  padding: 5px 8px;
+}
+.tunelito-section-count {
+  margin-left: 6px;
+}
+.tunelito-section-count[hidden] { display: none; }
+.tunelito-section-index {
+  position: fixed;
+  z-index: 4;
+  top: 18px;
+  left: 16px;
+  width: min(200px, 22vw);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid var(--tl-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tl-paper-bg) 92%, transparent);
+  color: var(--tl-text);
+  padding: 10px 12px;
+  font: 650 0.78rem/1.35 var(--tl-font-body);
+}
+.tunelito-section-index ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tunelito-section-index a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  padding: 3px 0;
+}
+.tunelito-section-index a[data-level="3"] { padding-left: 12px; }
+.tunelito-section-index a[aria-current="location"] { font-weight: 750; }
+.tunelito-section-count-inline {
+  margin-left: 6px;
+  color: var(--tl-quote);
+}
+.tunelito-link-card {
+  position: fixed;
+  z-index: 30;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--tl-border);
+  border-radius: 8px;
+  background: var(--tl-paper-bg);
+  color: var(--tl-text);
+  box-shadow: 0 8px 28px var(--tl-properties-shadow);
+  font: 650 0.78rem/1.35 var(--tl-font-body);
+  pointer-events: none;
+}
+.tunelito-link-card p { margin: 0; }
+.tunelito-link-card .meta { color: var(--tl-quote); }
+@media (max-width: 1100px) {
+  .tunelito-section-index { display: none; }
+}
+.tunelito-has-sidebar .tunelito-section-index { display: none; }
 .tunelito-markdown blockquote {
   border-left: 4px solid var(--tl-quote-border);
   padding-left: 1rem;
@@ -900,6 +983,40 @@ export function isMarkdownPath(pathname) {
   return /\.md$/i.test(String(pathname || ""));
 }
 
+const REVIEW_BADGES = {
+  todo: "pending",
+  in_progress: "active",
+  blocked: "danger",
+  done: "done",
+  resolved: "done",
+  high: "warning",
+  critical: "danger",
+  medium: "pending",
+  low: "muted",
+};
+
+function stampExplicitAnchors(html) {
+  return String(html || "").replace(/<(h[1-6]|li|p)(\s[^>]*)?>([\s\S]*?)\s\{#([A-Za-z][\w:-]*)\}<\/\1>/g, (_, tag, attrs = "", inner, id) => {
+    if (/\sid\s*=/i.test(attrs)) return `<${tag}${attrs}>${inner}</${tag}>`;
+    return `<${tag}${attrs} id="${escapeAttribute(id)}">${inner}</${tag}>`;
+  });
+}
+
+function stampReviewTokens(html) {
+  return String(html || "").split(/(<pre\b[^>]*>[\s\S]*?<\/pre>|<code\b[^>]*>[\s\S]*?<\/code>)/gi).map((part) => {
+    if (/^<(pre|code)\b/i.test(part)) return part;
+    return part.split(/(<[^>]+>)/g).map((slice) => slice.startsWith("<") ? slice : replaceReviewTokens(slice)).join("");
+  }).join("");
+}
+
+function replaceReviewTokens(text) {
+  return text.replace(/\{([A-Za-z][\w-]*)\}/g, (match, token) => {
+    const tone = REVIEW_BADGES[token.toLowerCase()];
+    if (!tone) return match;
+    return `<span class="tunelito-badge" data-tone="${tone}">${escapeHtml(token.replace(/_/g, " "))}</span>`;
+  });
+}
+
 export function renderMarkdownDocument({
   markdownSource,
   sourceName = "Markdown page",
@@ -908,12 +1025,13 @@ export function renderMarkdownDocument({
   themeName = DEFAULT_THEME_NAME,
   navigation = null,
   editable = false,
+  sectionIndex = false,
 } = {}) {
   const title = String(sourceName || "Markdown page");
   const theme = normalizeThemeName(themeName);
   const frontMatter = extractFrontMatter(markdownSource);
   const markdown = createMarkdownParser();
-  const body = markdown.parser.parse(frontMatter.body);
+  const body = stampReviewTokens(stampExplicitAnchors(markdown.parser.parse(frontMatter.body)));
   const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
   const customCss = customCssHref ? `  <link rel="stylesheet" href="${escapeAttribute(customCssHref)}">\n` : "";
   const configCss = String(cssText || "").trim()
@@ -933,7 +1051,7 @@ export function renderMarkdownDocument({
 
   return [
     "<!doctype html>",
-    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}>`,
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}${sectionIndex ? ' data-tunelito-section-index="true"' : ""}>`,
     "<head>",
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',

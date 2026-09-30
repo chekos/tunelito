@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Keeps Markdown comments on an explicit `{#id}` or the nearest heading when the quoted text changes, and labels them stale only when that anchor is gone too.
+- Renders known `{todo}` and `{high}` tokens as pills outside code, folds H2 and H3 sections per browser, and adds opt-in `--section-index` for a sticky section list on wide screens.
+- Shows the recorded agent summary on comment cards and lets a reviewer hide resolved cards.
+- Shows a local hover card for Markdown link titles.
+- Selects the first document-map block at the top of a Markdown page and the last block at the bottom.
+
 ## 0.23.0 - 2026-07-31
 
 - Adds opt-in `--editable` Markdown source editing for direct local owners, with public read-only responses, bounded same-origin writes, strong revision conflicts, atomic permission-preserving saves, dirty-draft reload protection, accessible browser controls, and explicit stale comment-anchor status.

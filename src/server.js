@@ -81,6 +81,7 @@ export async function createTunelitoServer(options) {
       markdownCssText,
       markdownTheme,
       editable,
+      sectionIndex: Boolean(options.sectionIndex),
       sessionId,
       startedAt,
       sessionSnapshot: () => ({
@@ -373,7 +374,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sessionId, startedAt, sessionSnapshot, touchActivity }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sectionIndex, sessionId, startedAt, sessionSnapshot, touchActivity }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -524,6 +525,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         markdownCssText,
         markdownTheme,
         editable: editable && owner && isEditableMarkdownPath(asset.path),
+        sectionIndex,
         navigation: {
           entries: buildDirectoryNavigation({
             rootDir,
@@ -551,7 +553,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       blockedPaths,
     }));
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable, sectionIndex })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -836,7 +838,7 @@ function pathnameSegments(pathname) {
   return String(pathname || "/").split("/").filter(Boolean);
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false }) {
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false, sectionIndex = false }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
@@ -845,6 +847,7 @@ function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText
     themeName: markdownTheme,
     navigation,
     editable,
+    sectionIndex,
   });
 }
 

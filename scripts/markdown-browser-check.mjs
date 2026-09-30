@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
+import { saveAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 import { createTunelitoServer } from "../src/server.js";
 import { THEME_DETAILS, THEME_NAMES } from "../src/themes.js";
@@ -38,6 +39,7 @@ try {
   await verifyThemesAndComments();
   await verifyFootnotesAndCommentAnchoring();
   await verifyDetailsAndCollapsedCommentTarget();
+  await verifyReviewRoom();
   await verifyResponsiveAndComments();
   await verifyEditableSource();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, the folder vault, and local source editing.\n`);
@@ -107,7 +109,11 @@ async function verifyMarkerFixture(relativePath) {
       assert.equal(await rulerWidth(), "58px", "the resting document map should stay compact");
 
       await page.keyboard.press("Tab");
-      assert.equal(await page.locator(".tunelito-ruler-scrubber").evaluate((node) => node === document.activeElement), true, "Tab should enter the document map through its keyboard slider");
+      assert.equal(await page.locator(".tunelito-fold").first().evaluate((node) => node === document.activeElement), true, "Tab should reach a section fold before the document map");
+      const foldCount = await page.locator(".tunelito-fold").count();
+      for (let index = 1; index < foldCount; index += 1) await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      assert.equal(await page.locator(".tunelito-ruler-scrubber").evaluate((node) => node === document.activeElement), true, "Tab should reach the document map after the section folds");
       assert.equal(await rulerWidth(), "300px", "visible keyboard focus should expand the document map");
 
       const scrubber = page.locator(".tunelito-ruler-scrubber");
@@ -587,6 +593,134 @@ async function windowDispatches(page) {
     window.dispatchEvent(new CustomEvent("tunelito:mermaid-rendered"));
   });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+async function verifyReviewRoom() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-review-room-"));
+  const filePath = join(tempDir, "notes.md");
+  const source = reviewRoomSource();
+  writeFileSync(filePath, source);
+  const commentsPath = join(tempDir, "notes.comments.md");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: filePath,
+    comments: [{
+      id: "c_open",
+      author: "Browser check",
+      authorRole: "owner",
+      scope: "page",
+      quote: "The launch copy stays here.",
+      body: "Please keep the launch copy.",
+      anchorId: "tll-563",
+      sectionId: "tll-563",
+      prefix: "",
+      suffix: "",
+      path: "",
+      pagePath: "/",
+      textStart: null,
+      textEnd: null,
+      created: "2026-09-30T00:00:00.000Z",
+    }, {
+      id: "c_resolved",
+      author: "Browser check",
+      authorRole: "owner",
+      scope: "page",
+      quote: "This sentence was deleted.",
+      body: "The old launch line is gone.",
+      anchorId: "tll-563",
+      sectionId: "tll-563",
+      prefix: "",
+      suffix: "",
+      path: "",
+      pagePath: "/",
+      textStart: null,
+      textEnd: null,
+      created: "2026-09-30T00:01:00.000Z",
+    }],
+  }));
+  const agentStatePath = join(tempDir, "agent-state.json");
+  saveAgentState(agentStatePath, {
+    comments: {
+      c_resolved: { status: "resolved", summary: "Updated the launch line." },
+      c_open: { status: "pending", summary: "" },
+    },
+  });
+  const instance = await createTunelitoServer({
+    filePath,
+    commentsPath,
+    agentStatePath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+    sectionIndex: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelectorAll(".tunelito-ruler-marker").length > 0);
+    assert.equal(await page.locator(".tunelito-badge[data-tone='pending']").innerText(), "todo");
+    assert.equal(await page.locator(".tunelito-badge[data-tone='warning']").innerText(), "high");
+    assert.match(await page.locator(".tunelito-markdown").innerText(), /\{nope\}/);
+    assert.equal(await page.locator("#tll-563").count(), 1);
+    await page.locator("a", { hasText: "Tracker" }).hover();
+    await page.waitForFunction(() => {
+      const card = document.querySelector(".tunelito-link-card");
+      return card && !card.hidden && card.textContent.includes("high");
+    });
+    assert.equal(await page.locator(".tunelito-section-index a").first().getAttribute("href"), "#tll-563");
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForFunction(() => {
+      const current = document.querySelector('.tunelito-ruler-marker[data-state="current"]');
+      const markers = document.querySelectorAll(".tunelito-ruler-marker");
+      return current?.dataset.index === String(markers.length - 1);
+    });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForFunction(() => document.querySelector('.tunelito-ruler-marker[data-state="current"]')?.dataset.index === "0");
+    assert.equal(await page.locator('.tunelito-section-index a[aria-current="location"]').getAttribute("href"), "#tll-563");
+
+    await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".launcher").click());
+    await page.waitForFunction(() => !document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".resolved-toggle")?.hidden);
+    assert.equal(await page.locator("#tll-563").getAttribute("data-tunelito-open-comments"), "1");
+    assert.equal(await page.locator("#tll-563").getAttribute("data-tunelito-resolved-comments"), "1");
+    assert.equal(
+      await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.textContent.includes("Updated the launch line.")),
+      false,
+    );
+    await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.querySelector(".resolved-toggle").click());
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.textContent.includes("Updated the launch line."));
+    assert.equal(
+      await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.textContent.includes("Selection no longer found")),
+      false,
+    );
+
+    const launchCopy = page.locator(".tunelito-markdown p", { hasText: "The launch copy stays here." });
+    await page.locator("#tll-563 .tunelito-fold").click();
+    assert.equal(await launchCopy.isHidden(), true);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelector("#tll-563 .tunelito-fold"));
+    assert.equal(await page.locator(".tunelito-markdown p", { hasText: "The launch copy stays here." }).isHidden(), true);
+    assert.equal(readFileSync(filePath, "utf8"), source);
+  } finally {
+    await context.close();
+    await instance.close();
+  }
+}
+
+function reviewRoomSource() {
+  const head = [
+    "## Launch {#tll-563}",
+    "",
+    "The launch copy stays here.",
+    "",
+    "Ship {todo} {high} {nope}.",
+    "",
+    '[Tracker](https://example.com/issues/1 "Open · high")',
+    "",
+  ];
+  const middle = Array.from({ length: 12 }, (_, index) => `## Section ${index + 1}\n\n${"Review paragraph. ".repeat(36)}\n`);
+  const tail = Array.from({ length: 4 }, (_, index) => `## Tail ${index + 1}\n\nShort.\n`);
+  return [...head, ...middle, ...tail].join("\n");
 }
 
 async function withFixture(relativePath, callback, {

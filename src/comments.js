@@ -32,6 +32,8 @@ export function normalizeComment(input, now = new Date()) {
     prefix: cleanText(input.prefix || "", 1000),
     suffix: cleanText(input.suffix || "", 1000),
     path: cleanText(input.path || "", 1000),
+    anchorId: cleanText(input.anchorId || "", 200),
+    sectionId: cleanText(input.sectionId || "", 200),
     pagePath: cleanText(input.pagePath || input.url || "", 1000),
     textStart: Number.isFinite(input.textStart) ? input.textStart : null,
     textEnd: Number.isFinite(input.textEnd) ? input.textEnd : null,

@@ -109,9 +109,10 @@ The browser client owns reviewer interaction:
 - persist the current browser's reviewer identity so renames can update matching prior comments
 - reconnect/reload when the server says to, while preserving an open comment composer by queueing reload until submit or close
 - when `--editable` is enabled for a direct local Markdown response, provide a source editor with explicit saves, dirty-draft reload protection, and conflict recovery
-- keep comments whose source quote disappeared readable with an explicit stale-anchor label
+- keep comments whose source quote disappeared readable with an explicit stale-anchor label, after trying an explicit `{#id}` and the nearest heading
+- show the recorded agent summary on comment cards and hide resolved cards until the reviewer asks for them
 - manage the shared Markdown left sidebar without writing state into the source document; injected navigation and source-derived Properties remain visibly separate
-- build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, and provide h1-h6 and paragraph navigation with scroll-progress state
+- build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, provide h1-h6 and paragraph navigation with scroll-progress state, and clamp that state to the first block at the top and the last block at the bottom
 - coordinate the Markdown drawer, document map, Mermaid completion, and comments panel across responsive, dark-mode, keyboard, and reduced-motion states
 - initialize Mermaid once per rendered Markdown page with strict security and render each pending figure once, preserving readable source on success or failure
 

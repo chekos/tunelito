@@ -4,9 +4,11 @@
   if (!markdown || root.dataset.tunelitoMarkdownUi === "ready") return;
   root.dataset.tunelitoMarkdownUi = "ready";
 
+  let revealBlock = () => {};
   setupSourceEditor();
   setupPropertiesDrawer();
   setupDocumentMap();
+  setupReviewChrome();
 
   function setupSourceEditor() {
     if (root.dataset.tunelitoEditable !== "true") return;
@@ -510,10 +512,10 @@
       marker.style.setProperty("--ruler-length", tickLength(block));
       marker.dataset.index = String(index);
       marker.dataset.blockType = type;
-      marker.setAttribute("aria-label", heading ? `Go to ${block.textContent.trim()}` : `Go to ${type}`);
+      marker.setAttribute("aria-label", heading ? `Go to ${blockLabel(block)}` : `Go to ${type}`);
       if (heading) {
         marker.href = `#${encodeURIComponent(block.id)}`;
-        const label = element("span", "tunelito-ruler-label", block.textContent.trim());
+        const label = element("span", "tunelito-ruler-label", blockLabel(block));
         marker.append(label);
       } else {
         marker.type = "button";
@@ -531,7 +533,8 @@
       if (measureFrame) cancelAnimationFrame(measureFrame);
       measureFrame = requestAnimationFrame(() => {
         measureFrame = 0;
-        measurements = blocks.map((block) => block.getBoundingClientRect().top + scrollY);
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        measurements = blocks.map((block) => block.hidden ? Number.POSITIVE_INFINITY : block.getBoundingClientRect().top + scrollY);
         updateReadingState();
       });
     }
@@ -547,8 +550,19 @@
 
     function updateReadingState(forcedIndex = null) {
       if (!measurements.length) return;
-      const readingLine = scrollY + innerHeight * 0.34;
-      const current = forcedIndex ?? measurements.reduce((found, top, index) => top <= readingLine ? index : found, 0);
+      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+      const viewport = window.innerHeight || document.documentElement.clientHeight;
+      const scrollHeight = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0);
+      const maxScroll = Math.max(0, scrollHeight - viewport);
+      let current = forcedIndex;
+      if (current == null) {
+        if (scrollTop <= 1) current = firstVisibleIndex();
+        else if (scrollTop >= maxScroll - 1) current = lastVisibleIndex();
+        else {
+          const readingLine = scrollTop + viewport * 0.34;
+          current = measurements.reduce((found, top, index) => Number.isFinite(top) && top <= readingLine ? index : found, firstVisibleIndex());
+        }
+      }
       selectedIndex = Math.max(0, Math.min(blocks.length - 1, current));
       const currentHeadingIndex = blocks.reduce((found, block, index) => index <= selectedIndex && /^H[1-6]$/.test(block.tagName) ? index : found, -1);
 
@@ -562,11 +576,29 @@
       const block = blocks[selectedIndex];
       scrubber.setAttribute("aria-valuenow", String(selectedIndex + 1));
       scrubber.setAttribute("aria-valuetext", `${blockType(block)} ${selectedIndex + 1} of ${blocks.length}: ${blockLabel(block)}`);
+      const heading = blocks[currentHeadingIndex];
+      for (const link of document.querySelectorAll(".tunelito-section-index a")) {
+        if (heading && link.dataset.headingId === heading.id) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      }
+    }
+
+    function firstVisibleIndex() {
+      const index = blocks.findIndex((block) => !block.hidden);
+      return index < 0 ? 0 : index;
+    }
+
+    function lastVisibleIndex() {
+      for (let index = blocks.length - 1; index >= 0; index -= 1) {
+        if (!blocks[index].hidden) return index;
+      }
+      return 0;
     }
 
     function navigateTo(index, { updateHash = /^H[1-6]$/.test(blocks[index]?.tagName || "") } = {}) {
       selectedIndex = index;
       const block = blocks[index];
+      revealBlock(block);
       navigationLockUntil = performance.now() + (reduceMotion.matches ? 100 : 700);
       block.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "start" });
       if (updateHash && block.id) {
@@ -578,11 +610,210 @@
     }
   }
 
+  function setupReviewChrome() {
+    const headings = [...markdown.querySelectorAll(":scope > h2, :scope > h3")];
+    const stored = readFolds();
+    for (const heading of headings) {
+      const button = element("button", "tunelito-fold");
+      button.type = "button";
+      button.dataset.label = visibleBlockText(heading).replace(/\s+/g, " ").trim() || "section";
+      button.setAttribute("data-tunelito-comment-ignore", "");
+      const count = element("span", "tunelito-section-count");
+      count.hidden = true;
+      button.append(count);
+      heading.append(button);
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCollapsed(heading, button.getAttribute("aria-expanded") === "true");
+      });
+      setCollapsed(heading, Boolean(stored[heading.id]), { persist: false });
+    }
+
+    if (root.dataset.tunelitoSectionIndex === "true" && headings.length) {
+      const index = element("nav", "tunelito-section-index");
+      index.setAttribute("aria-label", "Sections");
+      index.setAttribute("data-tunelito-comment-ignore", "");
+      const list = element("ol", "");
+      for (const heading of headings) {
+        const item = element("li", "");
+        const link = element("a", "", visibleBlockText(heading).replace(/\s+/g, " ").trim());
+        link.href = `#${encodeURIComponent(heading.id)}`;
+        link.dataset.headingId = heading.id;
+        link.dataset.level = heading.tagName.slice(1);
+        const count = element("span", "tunelito-section-count-inline");
+        count.hidden = true;
+        link.append(count);
+        link.addEventListener("click", () => expandHeading(heading));
+        item.append(link);
+        list.append(item);
+      }
+      index.append(list);
+      document.querySelector(".tunelito-page-frame")?.prepend(index);
+    }
+
+    window.addEventListener("tunelito:section-counts", renderSectionCounts);
+    window.addEventListener("tunelito:reveal-block", (event) => {
+      if (event.detail?.node) expandAround(event.detail.node);
+    });
+    revealBlock = (block) => {
+      if (block) expandAround(block);
+    };
+    renderSectionCounts();
+    setupLinkPreviews();
+    window.dispatchEvent(new CustomEvent("tunelito:markdown-layout"));
+
+    function setCollapsed(heading, collapsed, { persist = true } = {}) {
+      const button = heading.querySelector(".tunelito-fold");
+      const label = button?.dataset.label || "section";
+      const hide = collapsed || ancestorCollapsed(heading);
+      for (const block of sectionBlocks(heading)) block.hidden = hide;
+      button?.setAttribute("aria-expanded", String(!collapsed));
+      button?.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${label}`);
+      if (!collapsed) {
+        for (const child of sectionBlocks(heading)) {
+          if (!/^H[2-3]$/.test(child.tagName)) continue;
+          if (child.querySelector(".tunelito-fold")?.getAttribute("aria-expanded") === "false") {
+            for (const block of sectionBlocks(child)) block.hidden = true;
+          }
+        }
+      }
+      if (persist) writeFold(heading.id, collapsed);
+      window.dispatchEvent(new CustomEvent("tunelito:markdown-layout"));
+    }
+
+    function expandHeading(heading) {
+      const level = Number(heading.tagName.slice(1));
+      let previous = heading.previousElementSibling;
+      while (previous) {
+        if (/^H[2-3]$/.test(previous.tagName) && Number(previous.tagName.slice(1)) < level) setCollapsed(previous, false);
+        previous = previous.previousElementSibling;
+      }
+      setCollapsed(heading, false);
+    }
+
+    function expandAround(node) {
+      for (const heading of headings) {
+        const blocks = sectionBlocks(heading);
+        const inside = blocks.some((block) => block === node || block.contains(node));
+        if (inside && blocks.some((block) => block.hidden && (block === node || block.contains(node)))) expandHeading(heading);
+      }
+    }
+
+    function ancestorCollapsed(heading) {
+      const level = Number(heading.tagName.slice(1));
+      let previous = heading.previousElementSibling;
+      while (previous) {
+        if (/^H[1-6]$/.test(previous.tagName) && Number(previous.tagName.slice(1)) < level) {
+          return previous.querySelector(".tunelito-fold")?.getAttribute("aria-expanded") === "false";
+        }
+        previous = previous.previousElementSibling;
+      }
+      return false;
+    }
+
+    function renderSectionCounts() {
+      const showResolved = document.documentElement.dataset.tunelitoShowResolved === "true";
+      for (const heading of headings) {
+        const open = Number(heading.dataset.tunelitoOpenComments || 0);
+        const resolved = Number(heading.dataset.tunelitoResolvedComments || 0);
+        const shown = open + (showResolved ? resolved : 0);
+        const count = heading.querySelector(".tunelito-section-count");
+        if (count) {
+          count.hidden = shown === 0;
+          count.textContent = String(shown);
+        }
+        const linkCount = document.querySelector(`.tunelito-section-index a[data-heading-id="${CSS.escape(heading.id)}"] .tunelito-section-count-inline`);
+        if (!linkCount) continue;
+        const label = showResolved && resolved ? `${open} open, ${resolved} resolved` : (open ? String(open) : "");
+        linkCount.hidden = !label;
+        linkCount.textContent = label;
+      }
+    }
+  }
+
+  function sectionBlocks(heading) {
+    const level = Number(heading.tagName.slice(1));
+    const blocks = [];
+    let next = heading.nextElementSibling;
+    while (next) {
+      if (/^H[1-6]$/.test(next.tagName) && Number(next.tagName.slice(1)) <= level) break;
+      blocks.push(next);
+      next = next.nextElementSibling;
+    }
+    return blocks;
+  }
+
+  function readFolds() {
+    try {
+      const value = JSON.parse(localStorage.getItem(foldKey()) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeFold(id, collapsed) {
+    if (!id) return;
+    const folds = readFolds();
+    if (collapsed) folds[id] = true;
+    else delete folds[id];
+    try {
+      localStorage.setItem(foldKey(), JSON.stringify(folds));
+    } catch {}
+  }
+
+  function foldKey() {
+    return `tunelito:folds:${location.pathname}`;
+  }
+
+  function setupLinkPreviews() {
+    const card = element("div", "tunelito-link-card");
+    card.hidden = true;
+    card.setAttribute("role", "tooltip");
+    card.setAttribute("data-tunelito-comment-ignore", "");
+    document.body.append(card);
+    markdown.addEventListener("pointerover", (event) => showLinkCard(event.target));
+    markdown.addEventListener("pointerout", (event) => {
+      if (event.target?.closest?.("a[title]")) card.hidden = true;
+    });
+    markdown.addEventListener("focusin", (event) => showLinkCard(event.target));
+    markdown.addEventListener("focusout", () => {
+      card.hidden = true;
+    });
+
+    function showLinkCard(target) {
+      const link = target?.closest?.("a[title]");
+      if (!link || !markdown.contains(link)) return;
+      const model = linkCardModel(link.getAttribute("title"));
+      card.replaceChildren(element("p", "", model.title));
+      if (model.status || model.priority) card.append(element("p", "meta", [model.status, model.priority].filter(Boolean).join(" · ")));
+      const rect = link.getBoundingClientRect();
+      card.hidden = false;
+      const width = card.offsetWidth;
+      card.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+      card.style.top = `${rect.bottom + 6}px`;
+    }
+  }
+
+  function linkCardModel(title) {
+    const text = String(title || "");
+    const parts = text.split(/\s*[·|]\s*/).map((part) => part.trim()).filter(Boolean);
+    const model = { title: text, status: "", priority: "" };
+    if (parts.length < 2) return model;
+    model.title = parts[0];
+    for (const part of parts.slice(1)) {
+      if (["low", "medium", "high", "critical"].includes(part.toLowerCase())) model.priority = part;
+      else if (!model.status) model.status = part;
+    }
+    return model;
+  }
+
   function ensureHeadingIds(blocks) {
     const used = new Set(Array.from(document.querySelectorAll("[id]"), (node) => node.id).filter(Boolean));
     for (const heading of blocks.filter((block) => /^H[1-6]$/.test(block.tagName))) {
       if (heading.id) continue;
-      const base = slugify(heading.textContent) || "section";
+      const base = slugify(visibleBlockText(heading)) || "section";
       let id = base;
       let suffix = 2;
       while (used.has(id)) id = `${base}-${suffix++}`;
@@ -620,8 +851,17 @@
   }
 
   function blockLabel(block) {
-    const text = block.textContent.trim().replace(/\s+/g, " ");
+    const text = visibleBlockText(block).replace(/\s+/g, " ").trim();
     return text ? text.slice(0, 120) : blockType(block);
+  }
+
+  function visibleBlockText(block) {
+    let text = "";
+    for (const node of block.childNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE && node.hasAttribute("data-tunelito-comment-ignore")) continue;
+      text += node.textContent || "";
+    }
+    return text;
   }
 
   function element(tagName, className, text = "") {
