@@ -693,6 +693,16 @@ async function verifyReviewRoom() {
       await page.locator("#tunelito-root").evaluate((host) => host.shadowRoot.textContent.includes("Selection no longer found")),
       false,
     );
+    const highlights = await page.evaluate(() => Array.from(CSS.highlights.get("tunelito-comments") || []).map((range) => range.toString()));
+    assert.ok(highlights.includes("The launch copy stays here."), `the live quote stays highlighted, saw ${JSON.stringify(highlights)}`);
+    assert.ok(highlights.includes("Launch"), "a missing quote stays on its heading when that heading still exists");
+    assert.equal(highlights.some((text) => text.includes("This sentence was deleted.")), false, "a repeated quote outside the anchor must not steal the comment");
+
+    await page.locator("#section-1 .tunelito-fold").click();
+    await page.locator("#section-2 .tunelito-fold").click();
+    await page.locator('.tunelito-section-index a[href="#section-2-child"]').click();
+    assert.equal(await page.locator("#section-1 + p").isHidden(), true, "opening one subsection must leave earlier folded sections folded");
+    assert.equal(await page.locator("#section-2-child").isHidden(), false);
 
     const launchCopy = page.locator(".tunelito-markdown p", { hasText: "The launch copy stays here." });
     await page.locator("#tll-563 .tunelito-fold").click();
@@ -718,8 +728,14 @@ function reviewRoomSource() {
     '[Tracker](https://example.com/issues/1 "Open · high")',
     "",
   ];
-  const middle = Array.from({ length: 12 }, (_, index) => `## Section ${index + 1}\n\n${"Review paragraph. ".repeat(36)}\n`);
-  const tail = Array.from({ length: 4 }, (_, index) => `## Tail ${index + 1}\n\nShort.\n`);
+  const middle = Array.from({ length: 12 }, (_, index) => {
+    const child = index === 1 ? "\n### Child {#section-2-child}\n\nNested.\n" : "";
+    return `## Section ${index + 1}\n\n${"Review paragraph. ".repeat(36)}\n${child}`;
+  });
+  const tail = Array.from({ length: 4 }, (_, index) => {
+    const body = index === 0 ? "This sentence was deleted." : "Short.";
+    return `## Tail ${index + 1}\n\n${body}\n`;
+  });
   return [...head, ...middle, ...tail].join("\n");
 }
 

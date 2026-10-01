@@ -996,9 +996,10 @@ const REVIEW_BADGES = {
 };
 
 function stampExplicitAnchors(html) {
-  return String(html || "").replace(/<(h[1-6]|li|p)(\s[^>]*)?>([\s\S]*?)\s\{#([A-Za-z][\w:-]*)\}<\/\1>/g, (_, tag, attrs = "", inner, id) => {
-    if (/\sid\s*=/i.test(attrs)) return `<${tag}${attrs}>${inner}</${tag}>`;
-    return `<${tag}${attrs} id="${escapeAttribute(id)}">${inner}</${tag}>`;
+  return String(html || "").replace(/<(h[1-6]|li|p)(\s[^>]*)?>((?:(?!<\1\b)[\s\S])*?)\{#([A-Za-z][\w:-]*)\}<\/\1>/g, (_, tag, attrs = "", inner, id) => {
+    const body = inner.replace(/\s+$/, "");
+    if (/\sid\s*=/i.test(attrs)) return `<${tag}${attrs}>${body}</${tag}>`;
+    return `<${tag}${attrs} id="${escapeAttribute(id)}">${body}</${tag}>`;
   });
 }
 

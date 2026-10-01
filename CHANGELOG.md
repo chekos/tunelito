@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.24.0 - 2026-09-30
 
-- Keeps Markdown comments on an explicit `{#id}` or the nearest heading when the quoted text changes, and labels them stale only when that anchor is gone too.
-- Renders known `{todo}` and `{high}` tokens as pills outside code, folds H2 and H3 sections per browser, and adds opt-in `--section-index` for a sticky section list on wide screens.
+- Keeps Markdown comments on an explicit `{#id}` or the nearest heading when the quoted text changes, and labels them stale only when that anchor is gone too. A repeated quote elsewhere on the page does not steal a comment whose anchor still exists. Nested `{#id}` markers stay on the list item that carries them.
+- Renders known `{todo}` and `{high}` tokens as pills outside code, folds H2 and H3 sections per browser, and adds opt-in `--section-index` for a sticky section list on wide screens. Opening one subsection leaves earlier folded sections folded.
 - Shows the recorded agent summary on comment cards and lets a reviewer hide resolved cards.
 - Shows a local hover card for Markdown link titles.
 - Selects the first document-map block at the top of a Markdown page and the last block at the bottom.

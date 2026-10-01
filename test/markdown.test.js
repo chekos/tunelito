@@ -453,4 +453,9 @@ test("renderMarkdownDocument stamps anchors, review pills, link titles, and the 
   assert.doesNotMatch(code, /tunelito-badge/);
   assert.match(html, /data-tunelito-section-index="true"/);
   assert.doesNotMatch(renderMarkdownDocument({ markdownSource: "# Plain" }), /data-tunelito-section-index/);
+  const nested = renderedMarkdownBody(renderMarkdownDocument({
+    markdownSource: "- Parent\n  - Child {#child}\n",
+  }));
+  assert.match(nested, /<li id="child">Child<\/li>/);
+  assert.match(nested, /<li>Parent<ul>\n<li id="child">Child<\/li>/);
 });

@@ -2017,9 +2017,11 @@
     if (start >= 0 && fullText.slice(start, start + quote.length) === quote) return rangeBetween(textNodes, start, start + quote.length);
     const anchored = quoteRangeWithin(comment.anchorId, quote) || quoteRangeWithin(comment.sectionId, quote);
     if (anchored) return anchored;
+    const anchoredElement = elementRange(comment.anchorId) || elementRange(comment.sectionId);
+    if (anchoredElement) return anchoredElement;
     start = fullText.indexOf(quote);
     if (start >= 0) return rangeBetween(textNodes, start, start + quote.length);
-    return elementRange(comment.anchorId) || elementRange(comment.sectionId);
+    return null;
   }
 
   function quoteRangeWithin(id, quote) {
@@ -2067,8 +2069,8 @@
   }
 
   function rangeBetween(entries, start, end) {
-    const startLoc = locate(entries, start);
-    const endLoc = locate(entries, end);
+    const startLoc = locate(entries, start, "start");
+    const endLoc = locate(entries, end, "end");
     if (!startLoc || !endLoc) return null;
     const range = document.createRange();
     range.setStart(startLoc.node, startLoc.offset);
@@ -2215,10 +2217,13 @@
     return null;
   }
 
-  function locate(nodes, globalOffset) {
-    for (const entry of nodes) {
-      const end = entry.start + entry.node.textContent.length;
-      if (globalOffset <= end) return { node: entry.node, offset: globalOffset - entry.start };
+  function locate(nodes, globalOffset, boundary = "end") {
+    for (let index = 0; index < nodes.length; index += 1) {
+      const entry = nodes[index];
+      const nodeEnd = entry.start + entry.node.textContent.length;
+      const isLast = index === nodes.length - 1;
+      const contains = boundary === "start" && !isLast ? globalOffset < nodeEnd : globalOffset <= nodeEnd;
+      if (contains) return { node: entry.node, offset: globalOffset - entry.start };
     }
     return null;
   }

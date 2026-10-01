@@ -686,7 +686,10 @@
       const level = Number(heading.tagName.slice(1));
       let previous = heading.previousElementSibling;
       while (previous) {
-        if (/^H[2-3]$/.test(previous.tagName) && Number(previous.tagName.slice(1)) < level) setCollapsed(previous, false);
+        if (/^H[1-6]$/.test(previous.tagName) && Number(previous.tagName.slice(1)) < level) {
+          setCollapsed(previous, false);
+          break;
+        }
         previous = previous.previousElementSibling;
       }
       setCollapsed(heading, false);
