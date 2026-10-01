@@ -420,3 +420,42 @@ test("renderMarkdownDocument only treats an exact Mermaid language tag as a diag
   assert.match(html, /<code class="language-mermaid-example">/);
   assert.doesNotMatch(html, /data-tunelito-mermaid/);
 });
+
+test("renderMarkdownDocument stamps anchors, review pills, link titles, and the section index", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: [
+      "## Launch {#tll-563}",
+      "",
+      "Ship {todo} {high} {nope}.",
+      "",
+      "[Tracker](https://example.com/issues/1 \"Open · high\")",
+      "",
+      "- Keep the list item {#item-1}",
+      "",
+      "`{todo}`",
+      "",
+      "```",
+      "{high}",
+      "```",
+    ].join("\n"),
+    sectionIndex: true,
+  });
+  const body = renderedMarkdownBody(html);
+  const code = body.split("<pre>")[1] || "";
+
+  assert.match(body, /<h2 id="tll-563">Launch<\/h2>/);
+  assert.match(body, /<li id="item-1">Keep the list item<\/li>/);
+  assert.match(body, /data-tone="pending">todo</);
+  assert.match(body, /data-tone="warning">high</);
+  assert.match(body, /\{nope\}/);
+  assert.match(body, /title="Open · high"/);
+  assert.match(body, /<code>\{todo\}<\/code>/);
+  assert.doesNotMatch(code, /tunelito-badge/);
+  assert.match(html, /data-tunelito-section-index="true"/);
+  assert.doesNotMatch(renderMarkdownDocument({ markdownSource: "# Plain" }), /data-tunelito-section-index/);
+  const nested = renderedMarkdownBody(renderMarkdownDocument({
+    markdownSource: "- Parent\n  - Child {#child}\n",
+  }));
+  assert.match(nested, /<li id="child">Child<\/li>/);
+  assert.match(nested, /<li>Parent<ul>\n<li id="child">Child<\/li>/);
+});

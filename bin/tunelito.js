@@ -82,6 +82,7 @@ Options:
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --editable            Let the direct local owner edit safely served Markdown
+  --section-index       Show a sticky Markdown section index on wide viewports
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral
@@ -213,6 +214,8 @@ export function parseArgs(argv) {
       opts.markdownCssProvided = true;
     } else if (arg === "--editable") {
       opts.editable = true;
+    } else if (arg === "--section-index") {
+      opts.sectionIndex = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
     } else if (arg.startsWith("--")) {
@@ -415,6 +418,7 @@ async function main() {
     markdownCssText: resolvedConfig.markdownCssText,
     markdownTheme: resolvedConfig.theme.value,
     editable: opts.editable,
+    sectionIndex: Boolean(opts.sectionIndex),
   });
   const agentWorker = opts.agent
     ? createAgentWorker({

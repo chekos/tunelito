@@ -67,7 +67,7 @@ If you are already inside Claude Code, Codex, or another agent session, use agen
 npx --yes tunelito ./site --agent-session --no-tunnel --open
 ```
 
-The same Tunelito process serves the review room, watches the comments inbox, claims the next actionable comment, and prints a prompt for the current agent. Reviewers see agent work status on each browser comment card, so feedback can move from queued to being worked on to integrated without opening the markdown inbox. After editing, record the result with the `tunelito inbox record --claim ...` command from the prompt.
+The same Tunelito process serves the review room, watches the comments inbox, claims the next actionable comment, and prints a prompt for the current agent. Reviewers see agent work status and the recorded summary on each browser comment card, and can hide resolved cards, so feedback can move from queued to being worked on to integrated without opening the markdown inbox. After editing, record the result with the `tunelito inbox record --claim ...` command from the prompt.
 
 To see the same live checklist in the terminal:
 
@@ -164,7 +164,8 @@ Markdown reviews keep the source file untouched while adding presentation-only s
 - In folder sessions, the collapsible left sidebar begins with a clearly labeled `Tunelito navigation` section. Root documents remain visible, folders use independent native disclosures that start closed, every nested Markdown/HTML document remains reachable, and the current document is marked in text and with `aria-current="page"`. Single-file sessions do not receive a one-item tree.
 - A leading YAML front-matter mapping appears as a separate source-derived `Properties` section in that sidebar. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure. Notes without front matter simply omit this section.
 - Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
-- A compact, vertically centered document-map dial at the desktop right edge derives one tick from every real top-level heading, paragraph, list, blockquote, code block, table, figure, Mermaid figure, or thematic break. Its track is capped at 500px and preserves 60px of vertical breathing room on shorter desktop viewports. Heading ticks step from h1 (longest) through h6; h5 and h6 remain navigable 14px and 12px heading marks rather than disappearing. The current block is teal, consumed marks recede toward the theme background, and heading labels expand while the dial is hovered or visibly keyboard-focused, then retreat when the pointer leaves. Every tick navigates; Arrow keys, Page keys, Home, End, and Escape support keyboard use without a separate pin control, paragraph hashes, or a visual progress number.
+- Markdown review pages keep comments on an explicit `{#id}` or the nearest heading when quoted text changes. `{todo}` and `{high}` render as pills outside code. H2 and H3 sections fold per browser. `--section-index` adds a sticky section list on wide screens and leaves the document map in charge on narrower ones. Hovering a titled link shows that title locally, with no network lookup.
+- A compact, vertically centered document-map dial at the desktop right edge derives one tick from every real top-level heading, paragraph, list, blockquote, code block, table, figure, Mermaid figure, or thematic break. Scrolling to the top selects the first block and scrolling to the bottom selects the last. Its track is capped at 500px and preserves 60px of vertical breathing room on shorter desktop viewports. Heading ticks step from h1 (longest) through h6; h5 and h6 remain navigable 14px and 12px heading marks rather than disappearing. The current block is teal, consumed marks recede toward the theme background, and heading labels expand while the dial is hovered or visibly keyboard-focused, then retreat when the pointer leaves. Every tick navigates; Arrow keys, Page keys, Home, End, and Escape support keyboard use without a separate pin control, paragraph hashes, or a visual progress number.
 
 With `--editable`, safely served Markdown pages add a focused source editor only to the direct loopback owner response. Save and Cmd/Ctrl-S use a strong base revision, a bounded UTF-8 request, fresh path validation, and atomic replacement that preserves permissions. Tunelito optimistically rechecks the revision immediately before replacement; when it observes another editor or agent changed the file first, it keeps the browser draft and requires an explicit discard/refresh. Generated folder pages, HTML, hidden/blocked files, comments, config, symlink escapes, and `.tunelito/` state are never editable. Comments remain in the sidebar when edited text disappears and are labeled `Selection no longer found in this version`.
 
@@ -220,7 +221,7 @@ The public [configuration guide](docs-site/configuration.mdx) documents the stab
 ## CLI
 
 ```text
-Tunelito 0.23.0
+Tunelito 0.24.0
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
@@ -253,6 +254,7 @@ Options:
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --editable            Let the direct local owner edit safely served Markdown
+  --section-index       Show a sticky Markdown section index on wide viewports
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral

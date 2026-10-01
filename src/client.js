@@ -36,6 +36,7 @@
     pendingLaserPointer: null,
     laserPointerTimer: null,
     comments: [],
+    showResolved: storedFlag("tunelito:show-resolved"),
     handoffPending: false,
     reviewCompleted: null,
     agentStatusUrl: "",
@@ -278,6 +279,23 @@
           font-size: 18px;
           line-height: 1;
         }
+        .resolved-toggle {
+          border: 1px solid #d7dde8;
+          border-radius: 999px;
+          background: #fff;
+          color: #334155;
+          cursor: pointer;
+          font: 650 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          padding: 7px 10px;
+          white-space: nowrap;
+        }
+        .resolved-toggle[hidden] { display: none; }
+        .resolution {
+          margin: 0 0 8px;
+          color: #334155;
+          font-size: 13px;
+        }
+        .resolution[hidden] { display: none; }
         .identity {
           padding: 12px 14px;
           border-bottom: 1px solid #eef2f7;
@@ -419,6 +437,7 @@
         .comment.work-done {
           border-color: #86efac;
           background: #f7fef9;
+          opacity: 0.72;
         }
         .comment.work-warning {
           border-color: #facc15;
@@ -809,6 +828,7 @@
             <strong></strong>
             <div class="status">Connecting...</div>
           </div>
+          <button class="resolved-toggle" type="button" hidden>Show resolved</button>
           <button class="icon-button" title="Close">×</button>
         </div>
         <div class="identity">
@@ -865,6 +885,14 @@
     markdownLink.href = withAccessKey(`${endpointBase}/comments.md`);
     markdownLink.hidden = configuredLiveMode;
 
+    const resolvedToggle = shadow.querySelector(".resolved-toggle");
+    resolvedToggle.addEventListener("click", () => {
+      state.showResolved = !state.showResolved;
+      try {
+        localStorage.setItem("tunelito:show-resolved", String(state.showResolved));
+      } catch {}
+      renderComments();
+    });
     launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
     shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
     identityEdit.addEventListener("click", () => openIdentityEditor());
@@ -906,6 +934,7 @@
       composer,
       count: shadow.querySelector(".count"),
       comments: shadow.querySelector(".comments"),
+      resolvedToggle,
       status: shadow.querySelector(".status"),
       mini: shadow.querySelector(".mini"),
       markdownLink,
@@ -1238,11 +1267,14 @@
         suffix = bodyText.slice(idx + quote.length, idx + quote.length + 80);
       }
     }
+    const anchors = anchorIdsFor(range);
     return {
       scope: "page",
       quote,
       prefix,
       suffix,
+      anchorId: anchors.anchorId,
+      sectionId: anchors.sectionId,
       textStart: Number.isFinite(offsets.start) ? offsets.start : null,
       textEnd: Number.isFinite(offsets.end) ? offsets.end : null,
       path: cssPath(closestElement(range.startContainer)),
@@ -1403,19 +1435,27 @@
 
   function renderComments() {
     const count = state.comments.length;
+    const resolvedCount = state.comments.filter(isResolvedComment).length;
+    ui.resolvedToggle.hidden = resolvedCount === 0;
+    ui.resolvedToggle.textContent = state.showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`;
+    ui.resolvedToggle.setAttribute("aria-pressed", String(state.showResolved));
     ui.count.textContent = count > 99 ? "99+" : String(count);
     ui.count.hidden = count === 0;
     const launcherLabel = count ? `Open Tunelito comments (${count})` : "Open Tunelito comments";
     ui.launcher.setAttribute("aria-label", launcherLabel);
     ui.launcher.title = launcherLabel;
-    if (!state.comments.length) {
-      ui.comments.innerHTML = `<div class="empty">Select text, or add a page or site note.</div>`;
+    const visible = state.comments.filter((comment) => state.showResolved || !isResolvedComment(comment));
+    if (!visible.length) {
+      ui.comments.innerHTML = state.comments.length
+        ? `<div class="empty">Resolved comments are hidden.</div>`
+        : `<div class="empty">Select text, or add a page or site note.</div>`;
       updateHighlights();
+      publishSectionCounts();
       return;
     }
 
     ui.comments.innerHTML = "";
-    for (const comment of state.comments.slice().reverse()) {
+    for (const comment of visible.slice().reverse()) {
       const item = document.createElement("article");
       item.className = "comment";
       item.innerHTML = `
@@ -1426,6 +1466,7 @@
         <div class="quote"></div>
         <div class="anchor-status" role="status"></div>
         <div class="body"></div>
+        <p class="resolution" hidden></p>
         <div class="approval"></div>
         <div class="work" aria-label="Agent work status">
           <ul class="work-list"></ul>
@@ -1455,6 +1496,7 @@
       ui.comments.appendChild(item);
     }
     updateHighlights();
+    publishSectionCounts();
   }
 
   function renderCommentWorkStatus(item, comment) {
@@ -1463,13 +1505,18 @@
     item.classList.add(`work-${status.tone || "pending"}`);
     const badge = item.querySelector(".work-badge");
     badge.hidden = false;
+    badge.dataset.status = status.status || "";
     badge.textContent = status.label || status.status || "Queued";
     badge.classList.add(status.tone || "pending");
+    const summary = String(status.summary || "").trim();
+    const resolution = item.querySelector(".resolution");
+    resolution.hidden = !summary;
+    resolution.textContent = summary;
 
     const tasks = [
       ...(Array.isArray(status.done) ? status.done.map((text) => ({ text, done: true })) : []),
       ...(Array.isArray(status.todo) ? status.todo.map((text) => ({ text, done: false })) : []),
-    ].filter((task) => task.text);
+    ].filter((task) => task.text && task.text !== summary);
     if (!tasks.length) return;
 
     const work = item.querySelector(".work");
@@ -1949,32 +1996,150 @@
       disclosure.open = true;
       disclosure = disclosure.parentElement?.closest?.("details");
     }
+    if (node) window.dispatchEvent(new CustomEvent("tunelito:reveal-block", { detail: { node } }));
   }
 
   function findRangeForComment(comment) {
-    if (!String(comment?.quote || "").trim()) return null;
+    const quote = String(comment?.quote || "");
+    if (!quote.trim()) return null;
     if (normalizeScope(comment.scope) === "site" && comment.pagePath && normalizePagePath(comment.pagePath) !== normalizePagePath(state.pagePath)) return null;
     const textNodes = getTextNodes(document.body);
     const fullText = textNodes.map((entry) => entry.node.textContent).join("");
-    const exact = comment.prefix || comment.suffix ? `${comment.prefix}${comment.quote}${comment.suffix}` : null;
+    const exact = comment.prefix || comment.suffix ? `${comment.prefix}${quote}${comment.suffix}` : null;
     let start = -1;
     if (exact) {
       const exactStart = fullText.indexOf(exact);
       if (exactStart >= 0) start = exactStart + comment.prefix.length;
     }
-    if (start < 0 && Number.isFinite(comment.textStart)) start = comment.textStart;
-    if (start < 0 || fullText.slice(start, start + comment.quote.length) !== comment.quote) {
-      start = fullText.indexOf(comment.quote);
+    if (start < 0 && Number.isFinite(comment.textStart) && fullText.slice(comment.textStart, comment.textStart + quote.length) === quote) {
+      start = comment.textStart;
     }
+    if (start >= 0 && fullText.slice(start, start + quote.length) === quote) return rangeBetween(textNodes, start, start + quote.length);
+    const anchored = quoteRangeWithin(comment.anchorId, quote) || quoteRangeWithin(comment.sectionId, quote);
+    if (anchored) return anchored;
+    const anchoredElement = elementRange(comment.anchorId) || elementRange(comment.sectionId);
+    if (anchoredElement) return anchoredElement;
+    start = fullText.indexOf(quote);
+    if (start >= 0) return rangeBetween(textNodes, start, start + quote.length);
+    return null;
+  }
+
+  function quoteRangeWithin(id, quote) {
+    const node = document.getElementById(String(id || ""));
+    if (!node) return null;
+    const entries = textEntries(sectionMembers(node));
+    const full = entries.map((entry) => entry.node.textContent).join("");
+    const start = full.indexOf(quote);
     if (start < 0) return null;
-    const end = start + comment.quote.length;
-    const startLoc = locate(textNodes, start);
-    const endLoc = locate(textNodes, end);
+    return rangeBetween(entries, start, start + quote.length);
+  }
+
+  function elementRange(id) {
+    const node = document.getElementById(String(id || ""));
+    if (!node) return null;
+    const entries = textEntries([node]);
+    if (!entries.length) return null;
+    const last = entries[entries.length - 1];
+    return rangeBetween(entries, 0, last.start + last.node.textContent.length);
+  }
+
+  function sectionMembers(node) {
+    if (!/^H[1-6]$/.test(node.tagName)) return [node];
+    const level = Number(node.tagName.slice(1));
+    const members = [node];
+    let next = node.nextElementSibling;
+    while (next) {
+      if (/^H[1-6]$/.test(next.tagName) && Number(next.tagName.slice(1)) <= level) break;
+      members.push(next);
+      next = next.nextElementSibling;
+    }
+    return members;
+  }
+
+  function textEntries(roots) {
+    const entries = [];
+    let offset = 0;
+    for (const root of roots) {
+      for (const entry of getTextNodes(root)) {
+        entries.push({ node: entry.node, start: offset });
+        offset += entry.node.textContent.length;
+      }
+    }
+    return entries;
+  }
+
+  function rangeBetween(entries, start, end) {
+    const startLoc = locate(entries, start, "start");
+    const endLoc = locate(entries, end, "end");
     if (!startLoc || !endLoc) return null;
     const range = document.createRange();
     range.setStart(startLoc.node, startLoc.offset);
     range.setEnd(endLoc.node, endLoc.offset);
     return range;
+  }
+
+  function anchorIdsFor(range) {
+    const start = closestElement(range.startContainer);
+    const explicit = start?.closest?.("[id]");
+    const explicitId = explicit && !explicit.closest("#tunelito-root, [data-tunelito-comment-ignore], h1, h2, h3, h4, h5, h6")
+      ? explicit.id
+      : "";
+    const heading = nearestHeading(start);
+    return {
+      anchorId: explicitId || heading?.id || "",
+      sectionId: heading?.id || "",
+    };
+  }
+
+  function nearestHeading(node) {
+    if (!node) return null;
+    const direct = node.closest?.("h1, h2, h3, h4, h5, h6");
+    if (direct) return direct;
+    const article = node.closest?.(".tunelito-markdown") || document.querySelector(".tunelito-markdown") || document.body;
+    let found = null;
+    for (const heading of article.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+      if (heading.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) found = heading;
+    }
+    return found;
+  }
+
+  function publishSectionCounts() {
+    const article = document.querySelector(".tunelito-markdown");
+    if (!article) return;
+    const headings = [...article.querySelectorAll(":scope > h2, :scope > h3")];
+    const counts = new Map(headings.map((heading) => [heading, { open: 0, resolved: 0 }]));
+    for (const comment of state.comments) {
+      if (normalizeScope(comment.scope) === "site" && comment.pagePath && normalizePagePath(comment.pagePath) !== normalizePagePath(state.pagePath)) continue;
+      const heading = countHeading(comment, headings);
+      const bucket = counts.get(heading);
+      if (!bucket) continue;
+      if (isResolvedComment(comment)) bucket.resolved += 1;
+      else bucket.open += 1;
+    }
+    for (const [heading, count] of counts) {
+      heading.dataset.tunelitoOpenComments = String(count.open);
+      heading.dataset.tunelitoResolvedComments = String(count.resolved);
+    }
+    document.documentElement.dataset.tunelitoShowResolved = state.showResolved ? "true" : "false";
+    window.dispatchEvent(new CustomEvent("tunelito:section-counts"));
+  }
+
+  function countHeading(comment, headings) {
+    const recorded = document.getElementById(String(comment.sectionId || ""));
+    if (recorded && headings.includes(recorded)) return recorded;
+    const range = findRangeForComment(comment);
+    const node = range ? closestElement(range.startContainer) : null;
+    if (!node) return null;
+    let found = null;
+    for (const heading of headings) {
+      if (heading === node || heading.contains(node)) return heading;
+      if (heading.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) found = heading;
+    }
+    return found;
+  }
+
+  function isResolvedComment(comment) {
+    return workStatusForComment(comment)?.tone === "done";
   }
 
   function flashRange(range) {
@@ -2052,10 +2217,13 @@
     return null;
   }
 
-  function locate(nodes, globalOffset) {
-    for (const entry of nodes) {
-      const end = entry.start + entry.node.textContent.length;
-      if (globalOffset <= end) return { node: entry.node, offset: globalOffset - entry.start };
+  function locate(nodes, globalOffset, boundary = "end") {
+    for (let index = 0; index < nodes.length; index += 1) {
+      const entry = nodes[index];
+      const nodeEnd = entry.start + entry.node.textContent.length;
+      const isLast = index === nodes.length - 1;
+      const contains = boundary === "start" && !isLast ? globalOffset < nodeEnd : globalOffset <= nodeEnd;
+      if (contains) return { node: entry.node, offset: globalOffset - entry.start };
     }
     return null;
   }
@@ -2218,5 +2386,13 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  function storedFlag(key) {
+    try {
+      return localStorage.getItem(key) === "true";
+    } catch {
+      return false;
+    }
   }
 })();

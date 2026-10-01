@@ -99,6 +99,12 @@ test("parseArgs supports explicit local Markdown editing", () => {
   assert.match(usage(), /--editable\s+Let the direct local owner edit safely served Markdown/);
 });
 
+test("parseArgs supports the Markdown section index", () => {
+  const opts = parseArgs(["notes.md", "--section-index"]);
+  assert.equal(opts.sectionIndex, true);
+  assert.match(usage(), /--section-index\s+Show a sticky Markdown section index on wide viewports/);
+});
+
 test("parseArgs supports local agent worker options", () => {
   const opts = parseArgs([
     "site",
