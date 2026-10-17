@@ -544,6 +544,11 @@ async function main() {
         })));
         console.log(`Public:  cloudflared not found; trying npx ${fallbackPackage}...`);
       },
+      onProgress(event) {
+        if (event?.type === "dns-wait") {
+          console.log(`Public:  waiting for DNS to propagate for ${event.hostname} (${event.code}; up to ~2 minutes)...`);
+        }
+      },
       onError(error) {
         tryUpdateRuntimeSession(agentSessionPath, () => updateSessionFile(agentSessionPath, (session) => ({
           ...session,
