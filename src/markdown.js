@@ -150,8 +150,7 @@ body {
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.16em;
 }
-.tunelito-markdown a[href^="http://"],
-.tunelito-markdown a[href^="https://"] {
+.tunelito-markdown a[data-tunelito-external] {
   color: var(--tl-link-external);
 }
 .tunelito-markdown a:hover,

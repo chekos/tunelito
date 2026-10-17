@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Adds resolver-backed hover cards for bare Markdown links (#135). `--link-preview '<regex>' '<json-url-template>'`, with `--link-preview-fields title=…,status=…,priority=…`, or a `linkPreviews` entry in `tunelito.config.json` fills the existing link card with a title, status, and priority, so `[TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563)` needs no authored title. The Tunelito server fetches the resolver through a keyed, same-origin `/__tunelito/link-preview` route, and the browser never contacts the resolver. The fetch fails closed: loopback hosts only, no redirects, JSON only, at most 64 KiB, a 3-second timeout, four concurrent requests, a 60-second cache, and plain-text fields. By default only the direct local owner gets previews. `--link-preview-allow-remote` (https only) and `--link-preview-visitors` are CLI-only opt-ins. An authored link title still wins. Without a rule, nothing changes.
+- Shows one popup for a Markdown link with a CommonMark title. While the local hover card is open on hover or keyboard focus, Tunelito moves the `title` into a data attribute so the native tooltip does not stack on the card, points `aria-describedby` at the card, and keeps a title-only link's accessible name. Leaving or blurring the link restores the `title`, so the native tooltip still works wherever the card is unavailable.
+- Colours Markdown links as external only when they point to another origin, using the same browser-side origin check that opens them in a new tab. Same-origin absolute `http(s)` links now look like other internal links.
+- Makes the `browser:check` link step deterministic (#138). It waits for each fragment and footnote hash to commit and for the file watcher to report its source write before opening the page, so a late live reload can no longer destroy the page mid-check.
 
 ## 0.25.0 - 2026-10-17
 
