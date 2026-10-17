@@ -77,6 +77,21 @@ Expected behavior:
 - Allow only `details` and `summary` from Markdown raw HTML. Normalize a syntactically valid `open` attribute to bare `open` on `details`, strip every other attribute, escape every other HTML element, and preserve literal tags inside inline and fenced code.
 - Render GFM footnote definitions through the same raw-HTML, URL, and media safety paths as ordinary Markdown. Percent-encode source labels in generated fragment ids, use fixed accessible back-link labels rather than interpolating untrusted source labels into attributes, and keep undefined/code-contained footnote syntax literal.
 
+## Resolver-Backed Link Previews
+
+Expected behavior when `--link-preview` or `linkPreviews` is configured:
+
+- Resolve only on the server, through `/__tunelito/link-preview` behind the review-key/cookie gate. The browser never fetches a resolver origin.
+- Serve the route and the `data-tunelito-link-previews` page flag only to the direct local owner (`isLocalOwnerRequest`). Tunnel and forwarded visitors get `403` unless `--link-preview-visitors` is passed, and that flag is refused with `--no-auth`.
+- Require the `x-tunelito-link-preview: 1` header, a matching `Origin` if one is present, and `Sec-Fetch-Site: same-origin` if that header is present, so cross-site pages cannot drive the owner's browser into upstream fetches.
+- Keep the resolver scheme and host literal in the template. URL-encode every capture, refuse empty, `.` and `..` captures, and confirm the built URL keeps the template origin.
+- Allow only loopback resolver hosts (`localhost`, `127.0.0.0/8`, `::1`) unless `--link-preview-allow-remote` is passed. A non-loopback resolver must be `https://`. Both widening flags are CLI-only and cannot come from a checked-in config.
+- Fail closed: no redirects, 2xx only, a JSON media type only, at most 64 KiB, fatal UTF-8 decoding, and a 3-second timeout. Send no cookies, review key, or credentials upstream.
+- Return only the mapped `title`/`status`/`priority` as bounded plain text, and render them with `textContent`. An authored link title always wins.
+- Bound the work: four concurrent upstream fetches (extra requests get `503`), a 256-entry cache, a 60-second TTL for successes, and a 15-second TTL for failures.
+
+Tests should cover unkeyed, missing-header, cross-site, mismatched-origin, forwarded-visitor, non-loopback-Host, opted-in-visitor, disabled, and HEAD requests. They should also cover redirect, non-JSON, oversized, chunked-oversized, slow, invalid, and HTML-payload resolver responses.
+
 ## Tunnel Behavior
 
 Expected behavior:

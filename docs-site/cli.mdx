@@ -38,6 +38,15 @@ Options:
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
+  --link-preview <regex> <url-template>
+                        Show a Markdown hover card for links matching regex, filled from
+                        resolver JSON fetched by the Tunelito server (repeatable)
+  --link-preview-fields <title=path,status=path,priority=path>
+                        JSON paths for the preceding --link-preview rule
+  --link-preview-allow-remote
+                        Allow https resolvers on non-loopback hosts (default: loopback only)
+  --link-preview-visitors
+                        Also resolve previews for keyed public visitors (default: owner only)
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral
@@ -124,6 +133,17 @@ tunelito config show ./notes.md --json
 ```
 
 See [Markdown themes and configuration](/configuration) for file locations, precedence, and the config schema.
+
+Show tracker details on hover for bare links such as `[TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563)`:
+
+```bash
+tunelito ./briefing.md \
+  --link-preview '^http://127\.0\.0\.1:3100/(?<team>[A-Z]+)/issues/(?<id>[A-Z]+-\d+)$' \
+                 'http://127.0.0.1:3100/api/{team}/issues/{id}' \
+  --link-preview-fields 'title=title,status=state.name,priority=priority.label'
+```
+
+The regex is matched against the link's `href` as written. `{0}` is the whole match, `{1}`–`{9}` are numbered groups, and `{name}` is a named group. Each value is URL-encoded before it goes into the template, and the scheme and host must be literal. The Tunelito server fetches the JSON, so the browser never contacts the resolver. Resolvers must be loopback hosts unless `--link-preview-allow-remote` is passed, and a remote resolver must use `https://`. Previews are served to the direct local owner only; `--link-preview-visitors` also serves keyed tunnel visitors. An authored link title always wins over resolved data. See [How it works](/how-it-works#resolver-backed-link-previews) for limits and the trust boundary.
 
 Fenced `mermaid` blocks render automatically from Tunelito's packaged same-origin runtime. Other fenced languages stay as source code, and invalid diagrams keep a readable source fallback. Each non-Mermaid code block shows a copy button on hover or keyboard focus; it copies the code exactly as written.
 

@@ -1781,6 +1781,7 @@ export function runConfigCommand(args, {
       `Project root: ${report.projectRoot}`,
       `Theme:        ${report.theme.value} (${report.theme.source})`,
       `Markdown CSS: ${report.markdownCss.resolved || "(none)"} (${report.markdownCss.source})`,
+      `Link previews: ${report.linkPreviews.rules.length} rule${report.linkPreviews.rules.length === 1 ? "" : "s"} (${report.linkPreviews.source})`,
       `Global file:  ${report.configFiles.global.path} (${report.configFiles.global.exists ? "found" : "missing"})`,
       `Project file: ${report.configFiles.project.path} (${report.configFiles.project.exists ? "found" : "missing"})`,
       `Themes:       ${report.availableThemes.map((theme) => theme.name).join(", ")}`,
@@ -1798,6 +1799,7 @@ function publicConfigReport(config) {
     projectRoot: config.projectRoot,
     theme: config.theme,
     markdownCss: config.markdownCss,
+    linkPreviews: config.linkPreviews,
     configFiles: {
       global: {
         path: config.configPaths.global,

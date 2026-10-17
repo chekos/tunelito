@@ -116,6 +116,25 @@ A CommonMark link title becomes the anchor's `title` attribute, so the browser s
 
 Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link.
 
+## Resolver-backed link previews
+
+Bare links such as `[TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563)` can fill the same card from a tracker's JSON API. Configure a rule with `--link-preview <regex> <url-template>` or the `linkPreviews` config key. Without a rule, nothing changes.
+
+1. The server renders the page with `data-tunelito-link-previews="on"`, but only for viewers allowed to resolve.
+2. When the pointer or keyboard focus reaches a link with no authored title, the browser calls Tunelito's same-origin `/__tunelito/link-preview?href=…` route. It sends an `x-tunelito-link-preview: 1` header.
+3. The server matches the authored `href` against each rule in order and builds the resolver URL from the template. Captures are URL-encoded, and the resolver's scheme and host are fixed in the template.
+4. The server fetches the URL itself and returns only plain-text `title`, `status`, and `priority` strings. The browser puts them in the card with `textContent`.
+
+The fetch fails closed. Tunelito returns no card on any of these:
+
+- a resolver host that is not loopback, unless `--link-preview-allow-remote` was passed. Remote resolvers must also use `https://`.
+- a redirect, a non-2xx status, a non-JSON `content-type`, a body over 64 KiB, invalid UTF-8 or JSON, or no response within 3 seconds
+- a field that is not a string, number, or boolean. Values are trimmed, control characters are stripped, and each is capped at 200 characters.
+
+Tunelito caches results for 60 seconds and failures for 15 seconds, keeps at most 256 entries, and runs no more than four resolver requests at once. Extra requests get `503` and no card. Tunelito sends no cookies, review key, or credentials to the resolver.
+
+The route sits behind the review key. It also refuses cross-site callers: a request needs the custom header, a matching `Origin` if one is sent, and `Sec-Fetch-Site: same-origin` if that header is sent. By default only the direct local owner can resolve. Public tunnel and forwarded requests get `403` and a page without the preview flag, so visitors cannot make your machine fetch from your local tracker. `--link-preview-visitors` lets keyed visitors resolve too. They can only reach the configured resolver origin, and the flag is refused with `--no-auth`. Served HTML pages are unchanged; resolver previews are a Markdown-only feature.
+
 ## Copying code blocks
 
 Every fenced code block in a rendered Markdown page gets a small copy button in its top-right corner. It appears when the pointer is over the block or when keyboard focus reaches it, and it stays visible on touch screens. The button copies the code exactly as written, without the button label or any added decoration, and screen readers hear "Copied code to clipboard". Tunelito uses the browser's async clipboard on `http://127.0.0.1` and HTTPS tunnel URLs, and falls back to a legacy copy if the browser denies it.
