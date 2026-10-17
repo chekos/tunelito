@@ -1,6 +1,13 @@
 // Resolver-backed link previews (#135). The Tunelito server fetches preview JSON on the
 // browser's behalf so origin, host, size, and timeout rules stay server-side.
 
+import { lookup as dnsLookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { BlockList, isIP } from "node:net";
+import { Readable } from "node:stream";
+import { Script, createContext } from "node:vm";
+
 export const LINK_PREVIEW_ROUTE = "/__tunelito/link-preview";
 export const LINK_PREVIEW_REQUEST_HEADER = "x-tunelito-link-preview";
 export const LINK_PREVIEW_FIELDS = ["title", "status", "priority"];
@@ -18,6 +25,8 @@ export const LINK_PREVIEW_LIMITS = Object.freeze({
   cacheEntries: 256,
   cacheTtlMs: 60_000,
   failureTtlMs: 15_000,
+  matchTimeoutMs: 25,
+  matchWarningIntervalMs: 60_000,
 });
 
 const RULE_KEYS = new Set(["match", "resolver", "fields"]);
@@ -138,30 +147,227 @@ export function enforceLinkPreviewHostPolicy(rules, { allowRemote = false } = {}
   return rules;
 }
 
+// Address policy (#142). net.BlockList normalizes IPv6 spellings and checks
+// IPv4-mapped IPv6 (::ffff:a.b.c.d) against the IPv4 subnets too.
+const LOOPBACK_ADDRESSES = new BlockList();
+LOOPBACK_ADDRESSES.addSubnet("127.0.0.0", 8, "ipv4");
+LOOPBACK_ADDRESSES.addAddress("::1", "ipv6");
+
+const NON_PUBLIC_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8], // unspecified / "this network"
+  ["10.0.0.0", 8], // private
+  ["100.64.0.0", 10], // CGNAT; also Alibaba metadata 100.100.100.200
+  ["127.0.0.0", 8], // loopback
+  ["169.254.0.0", 16], // link-local; cloud metadata 169.254.169.254
+  ["172.16.0.0", 12], // private
+  ["192.0.0.0", 24], // IETF protocol assignments
+  ["192.0.2.0", 24], // documentation
+  ["192.88.99.0", 24], // deprecated 6to4 relay anycast
+  ["192.168.0.0", 16], // private
+  ["198.18.0.0", 15], // benchmarking
+  ["198.51.100.0", 24], // documentation
+  ["203.0.113.0", 24], // documentation
+  ["224.0.0.0", 4], // multicast
+  ["240.0.0.0", 4], // reserved, broadcast
+]) NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+  ["::", 128], // unspecified
+  ["::1", 128], // loopback
+  ["::", 96], // deprecated IPv4-compatible
+  ["::ffff:0:0:0", 96], // SIIT IPv4-translated (RFC 2765)
+  ["64:ff9b::", 96], // NAT64 can reach an embedded private IPv4
+  ["64:ff9b:1::", 48], // local-use NAT64
+  ["100::", 64], // discard
+  ["2001::", 32], // Teredo embeds an IPv4 address
+  ["2001:db8::", 32], // documentation
+  ["2002::", 16], // 6to4 embeds an IPv4 address
+  ["fc00::", 7], // unique local; includes fd00:ec2::254 metadata
+  ["fe80::", 10], // link-local
+  ["fec0::", 10], // deprecated site-local
+  ["ff00::", 8], // multicast
+]) NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv6");
+
+// Kept separate and checked only for IPv6 input: BlockList also applies an
+// ::ffff:0:0/96 rule to plain IPv4 addresses, which would block everything.
+const IPV4_MAPPED_ADDRESSES = new BlockList();
+IPV4_MAPPED_ADDRESSES.addSubnet("::ffff:0:0", 96, "ipv6");
+
+function bareHost(value) {
+  return String(value || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+}
+
+/**
+ * The one address policy for resolver connections. `loopbackOnly` (every
+ * loopback-named rule, and every rule without --link-preview-allow-remote)
+ * accepts only 127.0.0.0/8 and ::1. Otherwise the address must be public.
+ */
+export function isAllowedResolverAddress(address, { loopbackOnly }) {
+  const value = bareHost(address);
+  const family = isIP(value);
+  if (!family) return false;
+  const type = family === 6 ? "ipv6" : "ipv4";
+  if (loopbackOnly) return LOOPBACK_ADDRESSES.check(value, type);
+  // IPv4-mapped IPv6 is refused outright in remote mode rather than decoded.
+  if (type === "ipv6" && IPV4_MAPPED_ADDRESSES.check(value, type)) return false;
+  return !NON_PUBLIC_ADDRESSES.check(value, type);
+}
+
 // Literal private/link-local/metadata/unspecified addresses are never valid "remote" resolvers.
-// Hostnames are not resolved here; see SECURITY_REVIEW.md for the documented DNS caveat.
+// Hostnames are checked after DNS resolution by resolvePinnedAddresses.
 export function isReservedAddressLiteral(value) {
-  const host = String(value || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const host = bareHost(value);
   if (host.startsWith("::ffff:")) return true; // IPv4-mapped literals: refuse rather than decode.
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127)
-      || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  }
-  if (host.includes(":")) {
-    return host === "::" || host === "::1" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host);
-  }
-  return false;
+  return isIP(host) ? !isAllowedResolverAddress(host, { loopbackOnly: false }) : false;
 }
 
 export function isLoopbackHostname(value) {
-  const host = String(value || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const host = bareHost(value);
   return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
+/**
+ * Resolve a resolver hostname once and return the validated addresses the
+ * socket may connect to. Every answer must pass the address policy, so a mixed
+ * public/private answer fails closed. IP literals skip DNS but get the same check.
+ */
+export async function resolvePinnedAddresses(hostname, { loopbackOnly, resolveHost = defaultResolveHost, signal } = {}) {
+  const host = bareHost(hostname);
+  const answers = isIP(host) ? [{ address: host, family: isIP(host) }] : await abortable(resolveHost(host), signal);
+  if (!Array.isArray(answers) || !answers.length) throw new LinkPreviewAddressError(`${host} did not resolve`);
+  for (const answer of answers) {
+    if (!isAllowedResolverAddress(answer?.address, { loopbackOnly })) {
+      throw new LinkPreviewAddressError(`${host} resolved to a disallowed address`);
+    }
+  }
+  // Keep every validated answer so dual-stack hosts (localhost -> ::1, 127.0.0.1)
+  // still connect through Happy Eyeballs; nothing outside this list is reachable.
+  return answers.map((answer) => {
+    const address = bareHost(answer.address);
+    return { address, family: isIP(address) };
+  });
+}
+
+// A socket `lookup` that answers every query from the validated list only.
+function pinnedListLookup(addresses) {
+  return (_hostname, options, callback) => {
+    const done = typeof options === "function" ? options : callback;
+    if (options && typeof options === "object" && options.all) done(null, addresses.map(({ address, family }) => ({ address, family })));
+    else done(null, addresses[0].address, addresses[0].family);
+  };
+}
+
+export class LinkPreviewAddressError extends Error {}
+
+function defaultResolveHost(hostname) {
+  return dnsLookup(hostname, { all: true, verbatim: true });
+}
+
+function abortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(promise).then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+/**
+ * A fetch-compatible function for resolver requests (#142). It resolves the
+ * host once, validates every answer, then connects to that pinned address with
+ * a `lookup` override, so Host, TLS SNI, and certificate validation still use
+ * the URL hostname and a DNS rebind between check and connect cannot redirect
+ * it. It never follows redirects and never pools sockets.
+ */
+export function createPinnedFetch({ resolveHost = defaultResolveHost, requestImpl } = {}) {
+  return async function pinnedFetch(url, { method = "GET", headers = {}, signal } = {}) {
+    const target = new URL(url);
+    const hostname = bareHost(target.hostname);
+    const pinned = await resolvePinnedAddresses(hostname, { loopbackOnly: isLoopbackHostname(hostname), resolveHost, signal });
+    const send = requestImpl || (target.protocol === "https:" ? httpsRequest : httpRequest);
+    return new Promise((resolve, reject) => {
+      const req = send(target, {
+        method,
+        headers,
+        signal,
+        agent: false,
+        autoSelectFamily: true,
+        lookup: pinnedListLookup(pinned),
+        servername: isIP(hostname) ? undefined : hostname,
+      }, (res) => {
+        try {
+          resolve(toFetchResponse(res));
+        } catch (error) {
+          res.destroy();
+          reject(error);
+        }
+      });
+      req.on("error", reject);
+      req.end();
+    });
+  };
+}
+
+function toFetchResponse(res) {
+  const headers = new Headers();
+  const raw = res.rawHeaders || [];
+  for (let index = 0; index + 1 < raw.length; index += 2) headers.append(raw[index], raw[index + 1]);
+  const nullBody = [204, 205, 304].includes(res.statusCode) || res.req?.method === "HEAD";
+  if (nullBody) res.resume();
+  return new Response(nullBody ? null : Readable.toWeb(res), { status: res.statusCode, headers });
+}
+
+export const MATCH_TIMED_OUT = Symbol("link-preview match timed out");
+
+/**
+ * Bounded regex matching (#143). Each rule's pattern is compiled once inside a
+ * vm context (no string code generation), and every match call runs there with
+ * its own hard timeout, so a catastrophic pattern throws
+ * ERR_SCRIPT_EXECUTION_TIMEOUT instead of blocking the event loop.
+ * `match(index, href)` returns a main-realm match array, null, or MATCH_TIMED_OUT.
+ */
+export function createBoundedMatcher(sources, { timeoutMs = LINK_PREVIEW_LIMITS.matchTimeoutMs } = {}) {
+  const context = createContext(Object.create(null), { codeGeneration: { strings: false, wasm: false } });
+  context.sources = Array.from(sources, String);
+  const patternCount = context.sources.length;
+  new Script(`"use strict";
+    const patterns = [];
+    for (let index = 0; index < sources.length; index += 1) patterns.push(new RegExp(sources[index]));
+    globalThis.matchOne = (index, href) => {
+      const match = patterns[index].exec(href);
+      return match ? { values: Array.from(match), groups: match.groups ? Object.assign({}, match.groups) : undefined } : null;
+    };`).runInContext(context);
+  delete context.sources;
+  const run = new Script("matchOne(index, href)");
+  function match(index, href) {
+    context.index = index;
+    context.href = String(href);
+    try {
+      const result = run.runInContext(context, { timeout: timeoutMs });
+      if (!result) return null;
+      const values = Array.from(result.values);
+      values.groups = result.groups ? { ...result.groups } : undefined;
+      return values;
+    } catch (error) {
+      if (error?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") return MATCH_TIMED_OUT;
+      throw error;
+    } finally {
+      context.href = "";
+    }
+  }
+  // Warm each pattern once so first-call compilation does not eat a real budget.
+  for (let index = 0; index < patternCount; index += 1) match(index, "");
+  return { match };
+}
+
+// Unbounded convenience for a single trusted href; the resolver itself uses
+// createBoundedMatcher and resolverUrlFromMatch.
 export function buildResolverUrl(rule, href) {
-  const match = rule.pattern.exec(href);
+  return resolverUrlFromMatch(rule, rule.pattern.exec(href));
+}
+
+export function resolverUrlFromMatch(rule, match) {
   if (!match) return "";
   const captures = { 0: match[0] };
   for (let index = 1; index < match.length; index += 1) captures[index] = match[index];
@@ -215,14 +421,22 @@ function cleanPreviewText(value) {
 export function createLinkPreviewResolver({
   rules = [],
   allowRemote = false,
-  fetchImpl = globalThis.fetch,
+  resolveHost,
+  // The default fetch pins validated DNS answers (#142). A caller-supplied
+  // fetchImpl takes over connection safety itself.
+  fetchImpl = createPinnedFetch({ resolveHost }),
   now = () => Date.now(),
   limits = {},
+  warn = (message) => console.warn(message),
 } = {}) {
   enforceLinkPreviewHostPolicy(rules, { allowRemote });
   const options = { ...LINK_PREVIEW_LIMITS, ...limits };
   const cache = new Map();
   const inflight = new Map();
+  const matcher = createBoundedMatcher(rules.map((rule) => rule.match), { timeoutMs: options.matchTimeoutMs });
+  const timedOut = new Map();
+  let lastWarningAt = -Infinity;
+  let suppressedWarnings = 0;
 
   // Visitors (only with --link-preview-visitors) get shorter hrefs and cannot take the
   // last upstream slot, so they cannot starve the owner's previews.
@@ -246,12 +460,37 @@ export function createLinkPreviewResolver({
     return pending;
   }
 
+  // First matching rule wins, as before. Fails closed (#143): a rule that exceeds
+  // matchTimeoutMs ends the search with no preview, and the same href is not
+  // retried until the failure TTL passes. Earlier rules that matched still win.
   function matchRule(href) {
-    for (const rule of rules) {
-      const url = buildResolverUrl(rule, href);
+    const until = timedOut.get(href);
+    if (until > now()) return null;
+    if (until) timedOut.delete(href);
+    for (const [index, rule] of rules.entries()) {
+      const match = matcher.match(index, href);
+      if (match === MATCH_TIMED_OUT) {
+        timedOut.set(href, now() + options.failureTtlMs);
+        while (timedOut.size > options.cacheEntries) timedOut.delete(timedOut.keys().next().value);
+        warnMatchTimeout(index);
+        return null;
+      }
+      const url = resolverUrlFromMatch(rule, match);
       if (url) return { rule, url };
     }
     return null;
+  }
+
+  // One line per interval; the href is visitor-controlled, so it is never logged.
+  function warnMatchTimeout(index) {
+    if (now() - lastWarningAt < options.matchWarningIntervalMs) {
+      suppressedWarnings += 1;
+      return;
+    }
+    const suppressed = suppressedWarnings ? ` (${suppressedWarnings} more since the last warning)` : "";
+    lastWarningAt = now();
+    suppressedWarnings = 0;
+    warn(`Link preview: linkPreviews[${index}].match took longer than ${options.matchTimeoutMs}ms and was stopped; no preview served${suppressed}. Anchor patterns and avoid nested quantifiers.`);
   }
 
   async function fetchPreview({ rule, url }) {
