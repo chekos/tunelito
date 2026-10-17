@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, loadAgentState } from "./agent-worker.js";
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, SOURCE_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
+import { LINK_PREVIEW_REQUEST_HEADER, LINK_PREVIEW_ROUTE, createLinkPreviewResolver } from "./link-preview.js";
 import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { SourceEditError, readBoundedUtf8Body, readMarkdownSourceSnapshot, writeMarkdownSourceSnapshot } from "./source-edit.js";
@@ -51,6 +52,8 @@ export async function createTunelitoServer(options) {
   const markdownCssText = String(options.markdownCssText || "");
   const markdownTheme = String(options.markdownTheme || DEFAULT_THEME_NAME);
   const editable = Boolean(options.editable);
+  const linkPreviews = options.linkPreviewResolver || createLinkPreviewResolver({ rules: options.linkPreviewRules || [] });
+  const linkPreviewVisitors = Boolean(options.linkPreviewVisitors);
   const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
   const startedAt = new Date().toISOString();
   let lastActivityAt = startedAt;
@@ -82,6 +85,8 @@ export async function createTunelitoServer(options) {
       markdownTheme,
       editable,
       sectionIndex: Boolean(options.sectionIndex),
+      linkPreviews,
+      linkPreviewVisitors,
       sessionId,
       startedAt,
       sessionSnapshot: () => ({
@@ -374,7 +379,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sectionIndex, sessionId, startedAt, sessionSnapshot, touchActivity }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sectionIndex, linkPreviews, linkPreviewVisitors, sessionId, startedAt, sessionSnapshot, touchActivity }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -390,6 +395,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
     return;
   }
   const owner = isLocalOwnerRequest(req);
+  const linkPreviewsOn = linkPreviews.enabled && (owner || linkPreviewVisitors);
   const responseHeaders = {
     ...auth.headers,
     [TUNELITO_RESPONSE_HEADER]: "1",
@@ -422,6 +428,11 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === LINK_PREVIEW_ROUTE) {
+    handleLinkPreviewRequest({ req, res, url, linkPreviews, allowed: linkPreviewsOn, responseHeaders });
     return;
   }
 
@@ -526,6 +537,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         markdownTheme,
         editable: editable && owner && isEditableMarkdownPath(asset.path),
         sectionIndex,
+        linkPreviews: linkPreviewsOn,
         navigation: {
           entries: buildDirectoryNavigation({
             rootDir,
@@ -553,7 +565,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       blockedPaths,
     }));
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable, sectionIndex })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable, sectionIndex, linkPreviews: linkPreviewsOn })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -838,7 +850,7 @@ function pathnameSegments(pathname) {
   return String(pathname || "/").split("/").filter(Boolean);
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false, sectionIndex = false }) {
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false, sectionIndex = false, linkPreviews = false }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
@@ -848,6 +860,7 @@ function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText
     navigation,
     editable,
     sectionIndex,
+    linkPreviews,
   });
 }
 
@@ -893,6 +906,39 @@ function handleReviewEventsRequest({ res, url, reviewEvents, responseHeaders }) 
     sendJson(res, 200, result.event, "GET", responseHeaders);
   }).catch((error) => {
     sendJson(res, 500, { type: "review.wait_error", message: error.message }, "GET", responseHeaders);
+  });
+}
+
+// The browser never fetches resolver origins itself. This route is behind the review-key
+// gate, serves only the direct local owner unless --link-preview-visitors is set, and
+// rejects cross-site callers before any upstream request is made.
+function handleLinkPreviewRequest({ req, res, url, linkPreviews, allowed, responseHeaders }) {
+  if (!linkPreviews.enabled) {
+    sendJson(res, 404, { error: "link previews are not configured" }, req.method, responseHeaders);
+    return;
+  }
+  if (req.method !== "GET") {
+    sendText(res, 405, "Method not allowed", "text/plain; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+  if (!allowed) {
+    sendJson(res, 403, { error: "link previews are limited to the local owner" }, req.method, responseHeaders);
+    return;
+  }
+  const fetchSite = singleHeaderValue(req.headers["sec-fetch-site"]);
+  if (singleHeaderValue(req.headers[LINK_PREVIEW_REQUEST_HEADER]) !== "1"
+    || !isTrustedOrigin(req)
+    || (fetchSite && fetchSite !== "same-origin")) {
+    sendJson(res, 403, { error: "link previews require a same-origin Tunelito request" }, req.method, responseHeaders);
+    return;
+  }
+  linkPreviews.resolve(url.searchParams.get("href") || "").then((result) => {
+    sendJson(res, result.status, result.body || {}, req.method, {
+      ...responseHeaders,
+      "content-security-policy": "default-src 'none'",
+    });
+  }).catch(() => {
+    sendJson(res, 502, {}, req.method, responseHeaders);
   });
 }
 
