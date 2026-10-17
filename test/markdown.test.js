@@ -457,6 +457,14 @@ test("renderMarkdownDocument keeps CommonMark link titles as native title attrib
   assert.doesNotMatch(body, /target=|rel=/, "the browser classifies external links because only it knows the served origin");
 });
 
+test("renderMarkdownDocument colours external links by the browser origin check, not the href prefix", () => {
+  const html = renderMarkdownDocument({ markdownSource: "[Same origin](http://127.0.0.1:4317/notes.md)" });
+
+  assert.match(html, /\.tunelito-markdown a\[data-tunelito-external\] \{\s*color: var\(--tl-link-external\);/);
+  assert.doesNotMatch(html, /a\[href\^="https?:\/\/"\]/, "an http(s) prefix also matches same-origin links");
+  assert.doesNotMatch(renderedMarkdownBody(html), /data-tunelito-external/, "only the browser knows the served origin");
+});
+
 test("renderMarkdownDocument leaves link targets to the browser and never trusts raw HTML anchors", () => {
   const body = renderedMarkdownBody(renderMarkdownDocument({
     markdownSource: '[External](https://example.com/report.pdf) <a href="https://example.com" target="_self">raw</a>',

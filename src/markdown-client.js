@@ -875,23 +875,67 @@
 
   function setupLinkPreviews() {
     const card = element("div", "tunelito-link-card");
+    card.id = "tunelito-link-card";
     card.hidden = true;
     card.setAttribute("role", "tooltip");
     card.setAttribute("data-tunelito-comment-ignore", "");
     document.body.append(card);
+    let activeLink = null;
     markdown.addEventListener("pointerover", (event) => showLinkCard(event.target));
     markdown.addEventListener("pointerout", (event) => {
-      if (event.target?.closest?.("a[title]")) card.hidden = true;
+      const link = titledLink(event.target);
+      if (link && !link.contains(event.relatedTarget) && !link.matches(":focus-visible")) hideLinkCard();
     });
     markdown.addEventListener("focusin", (event) => showLinkCard(event.target));
-    markdown.addEventListener("focusout", () => {
+    markdown.addEventListener("focusout", hideLinkCard);
+
+    function titledLink(target) {
+      return target?.closest?.("a[title], a[data-tunelito-title]");
+    }
+
+    // The card replaces the native tooltip while it is open: the title moves to a
+    // data attribute and the card becomes the link's description until it closes.
+    function suppressNativeTitle(link) {
+      if (activeLink === link || !link.hasAttribute("title")) return;
+      hideLinkCard();
+      activeLink = link;
+      const title = link.getAttribute("title");
+      link.setAttribute("data-tunelito-title", title);
+      link.removeAttribute("title");
+      const describedBy = link.getAttribute("aria-describedby");
+      if (describedBy !== null) link.setAttribute("data-tunelito-describedby", describedBy);
+      link.setAttribute("aria-describedby", [describedBy, card.id].filter(Boolean).join(" "));
+      if (!link.textContent.trim() && !link.hasAttribute("aria-label") && !link.hasAttribute("aria-labelledby") && !link.querySelector("img[alt]:not([alt=''])")) {
+        link.setAttribute("aria-label", title);
+        link.setAttribute("data-tunelito-title-label", "");
+      }
+    }
+
+    function hideLinkCard() {
       card.hidden = true;
-    });
+      const link = activeLink;
+      activeLink = null;
+      if (!link?.hasAttribute("data-tunelito-title")) return;
+      link.setAttribute("title", link.getAttribute("data-tunelito-title"));
+      link.removeAttribute("data-tunelito-title");
+      if (link.hasAttribute("data-tunelito-describedby")) {
+        link.setAttribute("aria-describedby", link.getAttribute("data-tunelito-describedby"));
+        link.removeAttribute("data-tunelito-describedby");
+      } else {
+        link.removeAttribute("aria-describedby");
+      }
+      if (link.hasAttribute("data-tunelito-title-label")) {
+        link.removeAttribute("aria-label");
+        link.removeAttribute("data-tunelito-title-label");
+      }
+    }
 
     function showLinkCard(target) {
-      const link = target?.closest?.("a[title]");
+      const link = titledLink(target);
       if (!link || !markdown.contains(link)) return;
-      const model = linkCardModel(link.getAttribute("title"));
+      const title = link.getAttribute("title") ?? link.getAttribute("data-tunelito-title");
+      suppressNativeTitle(link);
+      const model = linkCardModel(title);
       card.replaceChildren(element("p", "", model.title));
       if (model.status || model.priority) card.append(element("p", "meta", [model.status, model.priority].filter(Boolean).join(" · ")));
       const rect = link.getBoundingClientRect();
@@ -919,7 +963,6 @@
   // Native target/rel keep modifier and middle clicks with the browser.
   function setupExternalLinks() {
     for (const link of markdown.querySelectorAll("a[href]")) {
-      if (link.hasAttribute("target") || link.hasAttribute("download")) continue;
       let url;
       try {
         url = new URL(link.getAttribute("href"), location.href);
@@ -927,6 +970,8 @@
         continue;
       }
       if ((url.protocol !== "http:" && url.protocol !== "https:") || url.origin === location.origin) continue;
+      link.setAttribute("data-tunelito-external", "");
+      if (link.hasAttribute("target") || link.hasAttribute("download")) continue;
       const rel = new Set((link.getAttribute("rel") || "").split(/\s+/).filter(Boolean));
       rel.add("noopener");
       rel.add("noreferrer");

@@ -108,13 +108,15 @@ Only the browser knows which origin is serving the page, so the Markdown client 
 
 Tunelito does not attach click handlers to links, so Cmd/Ctrl-click and middle-click behave as they normally do in the browser. `mailto:` links and anchors that already set `target` or `download` are left alone. HTML pages are served as authored, and the new-tab rule applies only to rendered Markdown.
 
-A CommonMark link title becomes the anchor's `title` attribute, so the browser shows its native tooltip on hover. Status briefings can put the tracker summary into the title:
+A CommonMark link title becomes the anchor's `title` attribute. Status briefings can put the tracker summary into the title:
 
 ```markdown
 [TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563 "Fix login redirect · todo · medium")
 ```
 
-Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link.
+Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link. While the card is open on hover or keyboard focus, Tunelito moves the title into a data attribute so the browser does not show its native tooltip on top of the card, and points `aria-describedby` at the card. Leaving or blurring the link restores the `title`, so the native tooltip still works wherever the card is unavailable.
+
+The external link colour follows the same origin check as the new-tab rule: only links to another origin get it, so a same-origin absolute link looks like any other internal link.
 
 ## Copying code blocks
 

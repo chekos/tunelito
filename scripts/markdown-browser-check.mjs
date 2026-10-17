@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -955,7 +956,14 @@ async function verifyLinkTargetsAndTitles() {
     "[^1]: Footnote body.",
     "",
   ].join("\n");
+  // The source needs the served origin, so it is written after the watcher starts. macOS also
+  // reports writes made just before the watch began. Wait for the debounced document-changed
+  // event that covers all of them before opening the page, or it live-reloads mid-check.
+  const settled = once(instance.events, "document-changed");
   writeFileSync(indexPath, source);
+  await settled;
+  let documentChanges = 0;
+  instance.events.on("document-changed", () => { documentChanges += 1; });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
   await context.route(/^https:\/\/(example\.com|example\.org|tracker\.example)\//, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>External</title>" }));
   const page = await context.newPage();
@@ -989,18 +997,58 @@ async function verifyLinkTargetsAndTitles() {
     await middleTab.close();
     assert.equal(page.url(), reviewUrl, "modifier and middle clicks must stay with the browser");
 
-    await link("Fragment").click();
-    assert.equal(new URL(page.url()).hash, "#verification");
-    await page.locator("[data-footnote-ref]").click();
-    assert.equal(new URL(page.url()).hash, "#footnote-1");
-    await page.locator("[data-footnote-backref]").click();
-    assert.equal(new URL(page.url()).hash, "#footnote-ref-1");
+    // Fragment navigation commits asynchronously, so wait for each hash instead of reading page.url() at once.
+    const followHash = async (locator, hash) => {
+      await locator.click();
+      await page.waitForURL((url) => url.hash === hash);
+      await page.waitForFunction((expected) => location.hash === expected, hash);
+    };
+    await followHash(link("Fragment"), "#verification");
+    await followHash(page.locator("[data-footnote-ref]"), "#footnote-1");
+    await followHash(page.locator("[data-footnote-backref]"), "#footnote-ref-1");
+
+    const externalColor = (name) => link(name).evaluate((anchor) => getComputedStyle(anchor).color);
+    const expectedExternal = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--tl-link-external)";
+      document.querySelector(".tunelito-markdown").append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    for (const name of ["external report", "Protocol relative"]) {
+      assert.equal(await link(name).getAttribute("data-tunelito-external"), "", `${name} must be classified external`);
+      assert.equal(await externalColor(name), expectedExternal, `${name} must use the external link colour`);
+    }
+    for (const name of ["Same origin", "Relative", "Root relative", "Fragment", "Mail"]) {
+      assert.equal(await link(name).getAttribute("data-tunelito-external"), null, `${name} must not be classified external`);
+      assert.notEqual(await externalColor(name), expectedExternal, `${name} must not use the external link colour`);
+    }
 
     const tracker = link("TLL-1");
-    assert.equal(await tracker.getAttribute("title"), "Fix login redirect · todo · medium");
+    const trackerTitle = "Fix login redirect · todo · medium";
+    assert.equal(await tracker.getAttribute("title"), trackerTitle, "the native title must stay until the hover card opens");
     await tracker.hover();
     await page.waitForFunction(() => !document.querySelector(".tunelito-link-card")?.hidden);
-    assert.equal(await tracker.getAttribute("title"), "Fix login redirect · todo · medium", "hover UI must leave the native title tooltip in place");
+    assert.equal(await tracker.getAttribute("title"), null, "the open hover card must suppress the native title tooltip");
+    assert.equal(await tracker.getAttribute("data-tunelito-title"), trackerTitle);
+    assert.equal(await tracker.getAttribute("aria-describedby"), "tunelito-link-card", "the hover card must describe the link while it replaces the title");
+    assert.equal(await page.locator(".tunelito-link-card").getAttribute("role"), "tooltip");
+    assert.equal(await link("TLL-1").count(), 1, "the accessible name must not change while the card is open");
+    assert.equal(await page.locator("#tunelito-link-card").textContent(), "Fix login redirecttodo · medium", "the description must carry the title text");
+    await page.mouse.move(2, 2);
+    await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await tracker.getAttribute("title"), trackerTitle, "leaving the link must restore its native title");
+    assert.equal(await tracker.getAttribute("data-tunelito-title"), null);
+    assert.equal(await tracker.getAttribute("aria-describedby"), null);
+    await tracker.focus();
+    await page.waitForFunction(() => !document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await tracker.getAttribute("title"), null, "keyboard focus must also suppress the native title");
+    await tracker.evaluate((anchor) => anchor.blur());
+    await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await tracker.getAttribute("title"), trackerTitle, "blur must restore the native title");
+    await tracker.hover();
+    await page.waitForFunction(() => !document.querySelector(".tunelito-link-card")?.hidden);
     assert.equal(await tracker.evaluate((anchor) => {
       const rect = anchor.getBoundingClientRect();
       return anchor.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
@@ -1027,6 +1075,7 @@ async function verifyLinkTargetsAndTitles() {
     await page.waitForURL(/\/notes\/next\.md/);
     assert.equal(context.pages().length, 1, "same-origin links must not open new tabs");
     assert.equal(readFileSync(indexPath, "utf8"), source);
+    assert.equal(documentChanges, 0, "the link check must not trigger a live reload");
   } finally {
     await context.close();
     await instance.close();
