@@ -421,6 +421,39 @@ test("renderMarkdownDocument only treats an exact Mermaid language tag as a diag
   assert.doesNotMatch(html, /data-tunelito-mermaid/);
 });
 
+test("renderMarkdownDocument keeps CommonMark link titles as native title attributes", () => {
+  const body = renderedMarkdownBody(renderMarkdownDocument({
+    markdownSource: [
+      '[TLL-1](https://tracker.example/TLL-1 "Fix login redirect · todo · medium")',
+      "[TLL-2](https://tracker.example/TLL-2 'Single quoted · done')",
+      "[TLL-3](https://tracker.example/TLL-3 (Parenthesized · high))",
+      '[TLL-4](https://tracker.example/TLL-4 "Quote \\" <b>&</b> \'apostrophe\'")',
+      "[TLL-5][ref] [Plain](https://tracker.example/TLL-6) <https://tracker.example/TLL-7>",
+      "",
+      '[ref]: https://tracker.example/TLL-5 "Reference title · blocked"',
+    ].join("\n"),
+  }));
+
+  assert.match(body, /<a href="https:\/\/tracker\.example\/TLL-1" title="Fix login redirect · todo · medium">TLL-1<\/a>/);
+  assert.match(body, /title="Single quoted · done">TLL-2</);
+  assert.match(body, /title="Parenthesized · high">TLL-3</);
+  assert.match(body, /title="Quote &quot; &lt;b&gt;&amp;&lt;\/b&gt; &#39;apostrophe&#39;">TLL-4</);
+  assert.match(body, /<a href="https:\/\/tracker\.example\/TLL-5" title="Reference title · blocked">TLL-5<\/a>/);
+  assert.match(body, /<a href="https:\/\/tracker\.example\/TLL-6">Plain<\/a>/);
+  assert.match(body, /<a href="https:\/\/tracker\.example\/TLL-7">https:\/\/tracker\.example\/TLL-7<\/a>/);
+  assert.doesNotMatch(body, /target=|rel=/, "the browser classifies external links because only it knows the served origin");
+});
+
+test("renderMarkdownDocument leaves link targets to the browser and never trusts raw HTML anchors", () => {
+  const body = renderedMarkdownBody(renderMarkdownDocument({
+    markdownSource: '[External](https://example.com/report.pdf) <a href="https://example.com" target="_self">raw</a>',
+  }));
+
+  assert.match(body, /<a href="https:\/\/example\.com\/report\.pdf">External<\/a>/);
+  assert.match(body, /&lt;a href=&quot;https:\/\/example\.com&quot; target=&quot;_self&quot;&gt;raw/);
+  assert.doesNotMatch(body, /<a [^>]*target=/);
+});
+
 test("renderMarkdownDocument stamps anchors, review pills, link titles, and the section index", () => {
   const html = renderMarkdownDocument({
     markdownSource: [

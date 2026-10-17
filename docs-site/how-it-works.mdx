@@ -97,6 +97,25 @@ Tunelito renders each defined reference as a numbered link and collects referenc
 
 Footnote definitions use the same raw-HTML, URL, and media safety rules as the rest of rendered Markdown. Tunelito leaves the source file byte-for-byte unchanged.
 
+## Markdown links
+
+Only the browser knows which origin is serving the page, so the Markdown client classifies links there. An `http:` or `https:` link to another origin gets `target="_blank"` and `rel="noopener noreferrer"`. Opening a cited report leaves the review room in its tab, and the new tab cannot reach back to it. These links stay in the current tab:
+
+- absolute URLs on the served origin, such as a tunnel URL that points at another served note
+- relative links such as `workflow-final.md`
+- root-relative links such as `/notes/next.md`
+- fragments such as `#verification`, footnote references, and back-links
+
+Tunelito does not attach click handlers to links, so Cmd/Ctrl-click and middle-click behave as they normally do in the browser. `mailto:` links and anchors that already set `target` or `download` are left alone. HTML pages are served as authored, and the new-tab rule applies only to rendered Markdown.
+
+A CommonMark link title becomes the anchor's `title` attribute, so the browser shows its native tooltip on hover. Status briefings can put the tracker summary into the title:
+
+```markdown
+[TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563 "Fix login redirect · todo · medium")
+```
+
+Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link.
+
 ## Mermaid diagrams
 
 Use a normal Mermaid fence in a Markdown document:

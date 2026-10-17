@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Opens links to another origin from rendered Markdown in a new tab with `rel="noopener noreferrer"`, so the review room stays open. Same-origin absolute, relative, root-relative, fragment, footnote, and `mailto:` links stay in the current tab, and Cmd/Ctrl-click and middle-click keep their browser behavior. Served HTML pages are unchanged.
+- Documents that CommonMark link titles render as the native `title` tooltip, for example `[TLL-1](url "Title · status · priority")`, and adds regression coverage.
+
 ## 0.24.0 - 2026-09-30
 
 - Keeps Markdown comments on an explicit `{#id}` or the nearest heading when the quoted text changes, and labels them stale only when that anchor is gone too. A repeated quote elsewhere on the page does not steal a comment whose anchor still exists. Nested `{#id}` markers stay on the list item that carries them.
