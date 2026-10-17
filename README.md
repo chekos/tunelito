@@ -344,6 +344,7 @@ The server also:
 - renders common Obsidian wiki references as semantically honest inline references without vault-wide resolution or embed support
 - builds a keyboard-accessible, opacity-based desktop document map from the real rendered Markdown blocks, including explicit h1–h6 navigation
 - renders fenced `mermaid` blocks from a packaged same-origin runtime, with Mermaid strict security, bounded diagram complexity, and an accessible source fallback if JavaScript or diagram syntax fails
+- adds a hover/focus copy button to every other fenced code block in the browser; it copies the exact code text and never changes the text that comments anchor to
 - can expose an opt-in, local-owner-only Markdown source route with conditional atomic saves while keeping public tunnel responses read-only
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown

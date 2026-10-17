@@ -55,7 +55,7 @@ The scripted path for the anchored comment is:
 node .cursor/skills/verify-tunelito/scripts/verify-tunelito.mjs drive anchored-comment
 ```
 
-That command is valid only after launching `examples/simple-review.html`. Other features use the same Playwright handles. Their steps are in `features/`.
+That command is valid only after launching `examples/simple-review.html`. After launching `examples/markdown/kitchen-sink.md`, `drive code-copy` proves the code block copy button and writes evidence to `evidence/code-copy/`. Other features use the same Playwright handles. Their steps are in `features/`.
 
 `show` prints the live record, including the keyed `localUrl`. Use that URL. A request without `tunelito_key` is rejected.
 

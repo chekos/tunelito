@@ -54,6 +54,7 @@ For Markdown-specific changes, use this smaller risk-based set:
 | Link targets (new tab vs current tab) and link titles | `kitchen-sink.md`, `footnotes.md`, `markdown-vault/`, plus the generated link folder in `npm run browser:check` |
 | HTML-comment hiding and code boundaries | `html-comments.md`, `kitchen-sink.md` |
 | GFM footnote rendering, safety, and comment reattachment | `footnotes.md`, `kitchen-sink.md` |
+| Code block copy buttons and code-block comment anchoring | `kitchen-sink.md` (light and dark), plus `npm run browser:check` and `verify-tunelito drive code-copy` |
 | Native details/summary sanitizing or collapsed comment targeting | `details-summary.md`, `html-comments.md` |
 | Ruler hierarchy, ids, labels, and keyboard navigation | `paragraphs-only.md`, `heading-ladder.md`, `single-long-paragraph.md` |
 | Ruler integration with mixed content and Mermaid | `kitchen-sink.md` |

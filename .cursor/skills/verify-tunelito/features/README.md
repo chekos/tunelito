@@ -41,4 +41,5 @@ Each feature file starts with an H1 and one paragraph. It then uses these H2 sec
 - [Anchored comment](./anchored-comment.md) saves a comment on selected text and writes the quote plus body to the comments file.
 - [Page note](./page-note.md) saves an unanchored page note from the comments panel.
 - [Markdown room](./markdown-room.md) opens a Markdown fixture and moves with the document map.
+- [Code copy](./code-copy.md) copies a fenced code block exactly and saves a comment anchored on that block.
 - [Folder review](./folder-review.md) opens a folder landing and follows a document link.
