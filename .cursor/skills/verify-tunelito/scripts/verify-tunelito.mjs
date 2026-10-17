@@ -142,8 +142,9 @@ function show() {
 }
 
 async function drive(feature) {
+  if (feature === "code-copy") return driveCodeCopy();
   if (feature !== "anchored-comment") {
-    throw new Error("drive currently proves anchored-comment; other features stay in features/");
+    throw new Error("drive currently proves anchored-comment and code-copy; other features stay in features/");
   }
   const state = requireState();
   if (!state.sourceHash) throw new Error("anchored-comment requires a file fixture, not a folder");
@@ -194,6 +195,81 @@ async function drive(feature) {
     sourceUnchanged: true,
     commentsIncludeBody: true,
     commentsIncludeQuote: true,
+  };
+  writeFileSync(join(evidenceDir, "proof.json"), `${JSON.stringify(proof, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(proof, null, 2)}\n`);
+}
+
+async function driveCodeCopy() {
+  const state = requireState();
+  if (!state.sourceHash || !state.fixture.endsWith(".md")) throw new Error("code-copy requires a Markdown file fixture, such as examples/markdown/kitchen-sink.md");
+  assertCopyMatchesRepo(state);
+  const source = readFileSync(state.targetCopy, "utf8");
+  const fence = /^```(\w+)\n([\s\S]*?)\n```$/m.exec(source);
+  if (!fence || fence[1] === "mermaid") throw new Error("code-copy needs a non-Mermaid fenced code block before any Mermaid fence");
+  const [, language, expected] = fence;
+  const body = "Code block stays anchored.";
+
+  const evidenceDir = join(evidenceRoot, "code-copy");
+  mkdirSync(evidenceDir, { recursive: true });
+  const browser = await chromium.launch({ headless: true });
+  let copied = "";
+  let quote = "";
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: originOf(state.localUrl) });
+    const page = await context.newPage();
+    await page.goto(state.localUrl, { waitUntil: "domcontentloaded" });
+    await page.locator("#tunelito-root").waitFor({ state: "attached" });
+    await page.getByText(/^Connected\b/).first().waitFor({ state: "attached", timeout: 8000 });
+
+    const button = page.getByRole("button", { name: `Copy ${language} code` });
+    const pre = page.locator("pre", { has: button });
+    await pre.scrollIntoViewIfNeeded();
+    await pre.hover();
+    await button.click();
+    await page.getByRole("status").filter({ hasText: "Copied code to clipboard" }).waitFor({ state: "attached", timeout: 5000 });
+    await page.screenshot({ path: join(evidenceDir, "copied.png") });
+    copied = await page.evaluate(() => navigator.clipboard.readText());
+    if (copied !== expected) throw new Error(`clipboard text does not match the ${language} fence`);
+    if (await page.locator("[data-tunelito-mermaid] .tunelito-code-copy").count()) throw new Error("a Mermaid diagram received a copy button");
+
+    await pre.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add comment" });
+    await dialog.getByRole("textbox").fill(body);
+    await dialog.getByRole("button", { name: "Add comment" }).click();
+    await page.getByRole("button", { name: /Open Tunelito comments/ }).click();
+    await page.getByText(body, { exact: true }).waitFor({ state: "visible", timeout: 8000 });
+    await page.screenshot({ path: join(evidenceDir, "after.png") });
+    writeFileSync(join(evidenceDir, "code.aria.txt"), `${await pre.ariaSnapshot()}\n`);
+    quote = expected.split("\n")[0];
+  } finally {
+    await browser.close();
+  }
+
+  const comments = readFileSync(state.commentsPath, "utf8");
+  if (!comments.includes(body)) throw new Error("comments file is missing the code block comment body");
+  if (!comments.includes(quote)) throw new Error("comments file is missing the code block quote");
+  if (/Copy \w+ code/.test(comments)) throw new Error("the copy button label leaked into the comment quote");
+  assertCopyMatchesRepo(state);
+  writeFileSync(join(evidenceDir, "comments.md"), comments);
+  const proof = {
+    feature: "code-copy",
+    fixture: state.fixture,
+    origin: originOf(state.localUrl),
+    language,
+    clipboardMatchesFence: copied === expected,
+    commentsIncludeBody: true,
+    commentsIncludeQuote: true,
+    sourceUnchanged: true,
   };
   writeFileSync(join(evidenceDir, "proof.json"), `${JSON.stringify(proof, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify(proof, null, 2)}\n`);

@@ -10,6 +10,7 @@
   setupPropertiesDrawer();
   setupDocumentMap();
   setupReviewChrome();
+  setupCodeCopy();
 
   function setupSourceEditor() {
     if (root.dataset.tunelitoEditable !== "true") return;
@@ -422,6 +423,107 @@
       if (restoreFocus) (isOpen ? collapse : tab).focus({ preventScroll: true });
       requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("tunelito:markdown-layout")));
     }
+  }
+
+  function setupCodeCopy() {
+    const blocks = Array.from(markdown.querySelectorAll("pre"))
+      .filter((pre) => !pre.closest("[data-tunelito-mermaid], [data-tunelito-comment-ignore]"))
+      .map((pre) => ({ pre, code: pre.querySelector(":scope > code") }))
+      .filter(({ code }) => code);
+    if (!blocks.length) return;
+
+    const status = element("div", "tunelito-code-copy-status");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("data-tunelito-comment-ignore", "");
+    document.body.append(status);
+    let statusTimer = 0;
+
+    for (const { pre, code } of blocks) {
+      const language = /(?:^|\s)language-([\w+#.-]+)/.exec(code.className)?.[1] || "";
+      const button = element("button", "tunelito-code-copy");
+      button.type = "button";
+      button.setAttribute("data-tunelito-comment-ignore", "");
+      button.setAttribute("aria-label", language ? `Copy ${language} code` : "Copy code");
+      button.title = "Copy code";
+      // Icons only: the button holds no text nodes, so the block's text and comment offsets stay unchanged.
+      button.innerHTML = [
+        '<svg class="tunelito-code-copy-icon" data-icon="copy" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+        '<svg class="tunelito-code-copy-icon" data-icon="done" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      ].join("");
+      let resetTimer = 0;
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const copied = await copyText(codeBlockText(code), button);
+        button.dataset.state = copied ? "copied" : "failed";
+        announce(copied ? "Copied code to clipboard" : "Copy failed. Select the code to copy it manually.");
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => delete button.dataset.state, 1800);
+      });
+      pre.dataset.tunelitoCopyable = "true";
+      pre.append(button);
+    }
+    // The code element now owns horizontal scrolling, so wide blocks stay reachable by keyboard.
+    const syncScrollFocus = () => {
+      for (const { code } of blocks) {
+        if (code.scrollWidth > code.clientWidth) code.tabIndex = 0;
+        else code.removeAttribute("tabindex");
+      }
+    };
+    syncScrollFocus();
+    window.addEventListener("resize", syncScrollFocus, { passive: true });
+
+    function announce(message) {
+      clearTimeout(statusTimer);
+      status.textContent = "";
+      requestAnimationFrame(() => {
+        status.textContent = message;
+        statusTimer = setTimeout(() => {
+          status.textContent = "";
+        }, 2400);
+      });
+    }
+  }
+
+  function codeBlockText(code) {
+    // Marked ends every fenced block with one newline that is not part of the authored code.
+    return (code.textContent || "").replace(/\n$/, "");
+  }
+
+  async function copyText(text, returnFocus) {
+    try {
+      if (window.isSecureContext && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Fall through to the legacy path when the async clipboard is denied.
+    }
+    const scratch = document.createElement("textarea");
+    scratch.value = text;
+    scratch.setAttribute("readonly", "");
+    scratch.setAttribute("aria-hidden", "true");
+    scratch.setAttribute("data-tunelito-comment-ignore", "");
+    scratch.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;";
+    document.body.append(scratch);
+    const selection = window.getSelection();
+    const saved = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    let copied = false;
+    try {
+      scratch.select();
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    } finally {
+      scratch.remove();
+      if (saved && selection) {
+        selection.removeAllRanges();
+        selection.addRange(saved);
+      }
+      returnFocus?.focus({ preventScroll: true });
+    }
+    return copied;
   }
 
   function setupDocumentMap() {

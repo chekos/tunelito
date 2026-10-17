@@ -694,6 +694,90 @@ body.tunelito-comments-open .tunelito-document-map {
   background: transparent;
   color: inherit;
 }
+.tunelito-markdown pre[data-tunelito-copyable] {
+  position: relative;
+  overflow: visible;
+}
+.tunelito-markdown pre[data-tunelito-copyable] > code {
+  display: block;
+  overflow-x: auto;
+}
+.tunelito-code-copy {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid color-mix(in srgb, var(--tl-code-text) 30%, transparent);
+  border-radius: 6px;
+  padding: 0;
+  background: color-mix(in srgb, var(--tl-code-text) 10%, var(--tl-code-bg));
+  color: var(--tl-code-text);
+  cursor: pointer;
+  opacity: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tunelito-markdown pre:hover > .tunelito-code-copy,
+.tunelito-markdown pre:focus-within > .tunelito-code-copy,
+.tunelito-code-copy[data-state] {
+  opacity: 1;
+}
+.tunelito-code-copy:hover {
+  border-color: color-mix(in srgb, var(--tl-code-text) 60%, transparent);
+  background: color-mix(in srgb, var(--tl-code-text) 18%, var(--tl-code-bg));
+}
+.tunelito-markdown .tunelito-code-copy:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--tl-code-text);
+  outline-offset: 2px;
+}
+.tunelito-code-copy-icon[data-icon="done"],
+.tunelito-code-copy[data-state="copied"] .tunelito-code-copy-icon[data-icon="copy"] {
+  display: none;
+}
+.tunelito-code-copy[data-state="copied"] .tunelito-code-copy-icon[data-icon="done"] {
+  display: block;
+}
+.tunelito-code-copy[data-state]::after {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 0.4rem);
+  transform: translateY(-50%);
+  border-radius: 4px;
+  padding: 0.2rem 0.45rem;
+  background: var(--tl-code-text);
+  color: var(--tl-code-bg);
+  content: "Copied";
+  font: 650 0.72rem/1.2 var(--tl-font-body);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tunelito-code-copy[data-state="failed"]::after {
+  content: "Copy failed";
+}
+.tunelito-code-copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (hover: none) {
+  .tunelito-code-copy { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tunelito-code-copy { transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease; }
+}
+@media print {
+  .tunelito-code-copy { display: none; }
+}
 .tunelito-mermaid {
   margin: 0 0 var(--tl-paragraph-rhythm);
   border: 1px solid var(--tl-border);
