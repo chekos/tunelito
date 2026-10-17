@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request } from "node:http";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -10,6 +10,7 @@ import {
   createBoundedMatcher,
   createLinkPreviewResolver,
   createPinnedFetch,
+  enforceLinkPreviewHeaderPolicy,
   enforceLinkPreviewHostPolicy,
   extractLinkPreviewFields,
   isAllowedResolverAddress,
@@ -18,10 +19,14 @@ import {
   MATCH_TIMED_OUT,
   resolvePinnedAddresses,
 } from "../src/link-preview.js";
+import { parseLinkPreviewHeaderArg, resolveLinkPreviewHeaders } from "../src/link-preview-headers.js";
+import { resolveTunelitoConfig } from "../src/config.js";
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import { createTunelitoServer } from "../src/server.js";
-import { parseArgs } from "../bin/tunelito.js";
+import { linkPreviewStartupLines, parseArgs, runConfigCommand } from "../bin/tunelito.js";
+
+const SECRET = "tok_SuperSecret_9f8e7d";
 
 const TRACKER_RULE = {
   match: "^http://127\\.0\\.0\\.1:3100/(?<team>[A-Z]+)/issues/([A-Z]+-\\d+)$",
@@ -385,6 +390,74 @@ test("remote resolver fetches pin the validated address with SNI and certificate
   }));
 });
 
+test("resolver headers ride the pinned request path and never reach a rebound address", async () => {
+  const hits = [];
+  const fake = await startFakeResolver((req, res) => {
+    hits.push({ url: req.url, host: req.headers.host, authorization: req.headers.authorization, accept: req.headers.accept });
+    sendJson(res, { title: "Private issue" });
+  });
+  const port = new URL(fake.origin).port;
+  try {
+    const plan = [["127.0.0.1"], ["10.0.0.5"]];
+    const lookedUp = [];
+    const resolveHost = async (hostname) => {
+      lookedUp.push(hostname);
+      return plan.shift().map((address) => ({ address, family: 4 }));
+    };
+    const rules = normalizeLinkPreviewRules([{
+      match: "^tll:(\\d+)$",
+      resolver: `http://localhost:${port}/api/{1}`,
+      headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" },
+    }]);
+    // No fetchImpl: this is the default pinned node:http path.
+    const resolver = createLinkPreviewResolver({ rules, resolveHost, allowedEnv: ["TRACKER_TOKEN"], env: { TRACKER_TOKEN: SECRET }, warn: () => {} });
+    const ok = await resolver.resolve("tll:1");
+    assert.deepEqual(ok, { status: 200, body: { title: "Private issue" } });
+    assert.deepEqual(hits, [{ url: "/api/1", host: `localhost:${port}`, authorization: `Bearer ${SECRET}`, accept: "application/json" }]);
+    const rebound = await resolver.resolve("tll:2");
+    assert.equal(rebound.status, 502, "a rebind to a LAN address fails closed");
+    assert.ok(!JSON.stringify(rebound).includes(SECRET));
+    assert.equal(hits.length, 1, "the credential never leaves for the rebound address");
+    assert.deepEqual(lookedUp, ["localhost", "localhost"], "DNS is pinned per fetch");
+  } finally {
+    await fake.close();
+  }
+});
+
+test("pinned fetch passes resolver headers to the request it pins", async () => {
+  const calls = [];
+  const requestImpl = (url, options, onResponse) => {
+    calls.push({ url: String(url), options });
+    const req = new EventEmitter();
+    req.end = () => {
+      const res = Readable.from([Buffer.from(JSON.stringify({ title: "Remote issue" }))]);
+      res.statusCode = 200;
+      res.rawHeaders = ["content-type", "application/json"];
+      onResponse(res);
+    };
+    return req;
+  };
+  const resolveHost = async () => [{ address: "93.184.216.34", family: 4 }];
+  const rules = normalizeLinkPreviewRules([{
+    match: "^tracker:(\\d+)$",
+    resolver: "https://tracker.example.com/api/{1}",
+    headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}", "X-Api-Version": "2" },
+  }]);
+  const resolver = createLinkPreviewResolver({
+    rules,
+    allowRemote: true,
+    allowedEnv: ["TRACKER_TOKEN"],
+    env: { TRACKER_TOKEN: SECRET },
+    fetchImpl: createPinnedFetch({ resolveHost, requestImpl }),
+  });
+  assert.deepEqual(await resolver.resolve("tracker:7"), { status: 200, body: { title: "Remote issue" } });
+  assert.equal(calls.length, 1);
+  const [{ url, options }] = calls;
+  assert.equal(url, "https://tracker.example.com/api/7");
+  assert.equal(options.servername, "tracker.example.com");
+  assert.deepEqual(options.headers, { authorization: `Bearer ${SECRET}`, "x-api-version": "2", accept: "application/json" });
+});
+
 test("bounded matcher keeps captures and stops catastrophic patterns", () => {
   const matcher = createBoundedMatcher(["^ref:(?<team>[A-Z]+)-(\\d+)(x)?$", "^(a+)+$"], { timeoutMs: 25 });
   const ref = matcher.match(0, "ref:TLL-563");
@@ -414,6 +487,23 @@ test("an earlier matching rule still wins over a later catastrophic rule", async
   assert.equal((await resolver.resolve(`${"a".repeat(40)}c`)).status, 404, "a timeout in a later rule fails closed");
   assert.match(warnings[0], /^Link preview: linkPreviews\[1\]\.match took longer than 25ms/, "the warning names the rule");
   assert.equal(fetched.length, 1);
+});
+
+test("a visitor regex timeout does not block the owner's credentialed rule for that href", async () => {
+  const fetched = [];
+  const fetchImpl = async (url, { headers }) => {
+    fetched.push({ url, authorization: headers.authorization });
+    return new Response(JSON.stringify({ title: "owner card" }), { headers: { "content-type": "application/json" } });
+  };
+  const rules = normalizeLinkPreviewRules([
+    { match: "^(a+)c$", resolver: "http://127.0.0.1:9/private/{1}", headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" } },
+    { match: "^(a+)+$", resolver: "http://127.0.0.1:9/evil/{1}" },
+  ]);
+  const resolver = createLinkPreviewResolver({ rules, fetchImpl, allowedEnv: ["TRACKER_TOKEN"], env: { TRACKER_TOKEN: SECRET }, warn: () => {} });
+  const href = `${"a".repeat(40)}c`;
+  assert.equal((await resolver.resolve(href, { visitor: true })).status, 404, "the visitor skips the credentialed rule and times out on the next one");
+  assert.deepEqual(await resolver.resolve(href), { status: 200, body: { title: "owner card" } }, "the owner is not blocked by the visitor's timeout");
+  assert.deepEqual(fetched, [{ url: `http://127.0.0.1:9/private/${"a".repeat(40)}`, authorization: `Bearer ${SECRET}` }]);
 });
 
 test("a catastrophic match pattern fails closed without stalling the server", async () => {
@@ -458,6 +548,219 @@ test("match patterns are validated at config load", () => {
   assert.throws(() => normalizeLinkPreviewRules([{ match: "a".repeat(501), resolver: "http://localhost/" }]), /longer than 500 characters/);
   assert.throws(() => normalizeLinkPreviewRules([{ match: "(?<x>a", resolver: "http://localhost/" }]), /not a valid regular expression/);
 });
+
+test("resolver headers validate names and values and reject literal secrets without echoing them", () => {
+  const rule = (headers, resolver = "http://127.0.0.1:3100/a") => normalizeLinkPreviewRules([{ match: "a", resolver, headers }]);
+  const [ok] = rule({ Authorization: "Bearer ${env:TRACKER_TOKEN}", "X-Api-Version": "2", Cookie: "${env:TRACKER_COOKIE}" });
+  assert.deepEqual(ok.headers.map(({ name, env }) => [name, env]), [
+    ["Authorization", ["TRACKER_TOKEN"]], ["X-Api-Version", []], ["Cookie", ["TRACKER_COOKIE"]],
+  ]);
+  assert.deepEqual(rule(undefined)[0].headers, []);
+
+  const literal = [
+    { Authorization: `Bearer ${SECRET}` },
+    { Authorization: `Bearer ${SECRET}\${env:TRACKER_TOKEN}` },
+    { "X-Api-Key": SECRET },
+    { "Private-Token": SECRET },
+    { Cookie: `session=${SECRET}` },
+  ];
+  for (const headers of literal) {
+    assert.throws(() => rule(headers), (error) => /literal secrets are not allowed/.test(error.message) && !error.message.includes(SECRET));
+  }
+  for (const value of ["a\r\nX-Injected: 1", "a\nb", "a\u0000b"]) {
+    assert.throws(() => rule({ "X-Api-Version": value }), /line break, control character/);
+  }
+  assert.throws(() => rule({ "X-Bad\r\nName": "1" }), /invalid header name/);
+  for (const name of ["Host", "connection", "Transfer-Encoding", "Upgrade", "TE", "Content-Length", "Accept", "Proxy-Authorization", "X-Forwarded-For", "X-Tunelito-Link-Preview"]) {
+    assert.throws(() => rule({ [name]: "x" }), /cannot be set/, `${name} must be blocked`);
+  }
+  assert.throws(() => rule({ "X-A": "1", "x-a": "2" }), /more than once/);
+  assert.throws(() => rule({ Authorization: "Bearer ${TRACKER_TOKEN}" }), /malformed placeholder/);
+  assert.throws(() => rule({ "X-A": "${env:1BAD}" }), /malformed placeholder/);
+  assert.throws(() => rule({ "X-A": "" }), /non-empty string/);
+  assert.throws(() => rule(["Authorization"]), /must map header names/);
+  assert.throws(() => rule(Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`X-H${i}`, "1"]))), /at most 8 headers/);
+
+  assert.deepEqual(parseLinkPreviewHeaderArg("Authorization: Bearer ${env:T}"), ["Authorization", "Bearer ${env:T}"]);
+  assert.throws(() => parseLinkPreviewHeaderArg(SECRET), (error) => /'Name: value'/.test(error.message) && !error.message.includes(SECRET));
+});
+
+test("resolver headers need a CLI env allowlist and an https or loopback resolver", () => {
+  const [local] = normalizeLinkPreviewRules([{ match: "a", resolver: "http://127.0.0.1:3100/a", headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" } }]);
+  assert.throws(() => enforceLinkPreviewHeaderPolicy([local]), /resolver headers are off; pass --link-preview-env/);
+  assert.throws(() => enforceLinkPreviewHeaderPolicy([local], { allowedEnv: ["OTHER"] }), /pass --link-preview-env TRACKER_TOKEN/);
+  assert.equal(enforceLinkPreviewHeaderPolicy([local], { allowedEnv: ["TRACKER_TOKEN"] }).length, 1);
+  assert.throws(() => createLinkPreviewResolver({ rules: [local] }), /resolver headers are off/, "the library enforces the header policy too");
+
+  const [plainRemote] = normalizeLinkPreviewRules([{ match: "a", resolver: "http://tracker.example.com/a", headers: { Authorization: "${env:T}" } }]);
+  assert.throws(() => enforceLinkPreviewHeaderPolicy([plainRemote], { allowedEnv: ["T"] }), /https:\/\/ resolver or a loopback/);
+  const [remote] = normalizeLinkPreviewRules([{ match: "a", resolver: "https://tracker.example.com/a", headers: { Authorization: "${env:T}" } }]);
+  assert.equal(enforceLinkPreviewHeaderPolicy([remote], { allowedEnv: ["T"] }).length, 1);
+  assert.throws(() => createLinkPreviewResolver({ rules: [remote], allowedEnv: ["T"], env: { T: "x" } }), /not loopback/, "headers do not bypass the remote opt-in");
+  assert.equal(createLinkPreviewResolver({ rules: [remote], allowRemote: true, allowedEnv: ["T"], env: { T: "x" } }).enabled, true);
+
+  const warnings = [];
+  const headers = local.headers;
+  assert.deepEqual(resolveLinkPreviewHeaders(headers, { env: { TRACKER_TOKEN: SECRET } }), { authorization: `Bearer ${SECRET}` });
+  assert.equal(resolveLinkPreviewHeaders(headers, { env: {}, warn: (...args) => warnings.push(args) }), null);
+  assert.equal(resolveLinkPreviewHeaders(headers, { env: { TRACKER_TOKEN: "" }, warn: (...args) => warnings.push(args) }), null);
+  assert.equal(resolveLinkPreviewHeaders(headers, { env: { TRACKER_TOKEN: "a\r\nX-Injected: 1" }, warn: (...args) => warnings.push(args) }), null);
+  assert.deepEqual(warnings, [["TRACKER_TOKEN", "unset"], ["TRACKER_TOKEN", "unset"], ["TRACKER_TOKEN", "unsafe"]]);
+});
+
+test("parseArgs attaches --link-preview-header to the preceding rule and collects --link-preview-env", () => {
+  const opts = parseArgs([
+    "notes.md",
+    "--link-preview", "^a$", "http://127.0.0.1:1/a",
+    "--link-preview-header", "Authorization: Bearer ${env:TRACKER_TOKEN}",
+    "--link-preview-header", "X-Api-Version: 2",
+    "--link-preview-env", "TRACKER_TOKEN",
+    "--link-preview-env", "TRACKER_TOKEN",
+  ]);
+  assert.deepEqual(opts.linkPreviews, [{ match: "^a$", resolver: "http://127.0.0.1:1/a", headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}", "X-Api-Version": "2" } }]);
+  assert.deepEqual(opts.linkPreviewAllowedEnv, ["TRACKER_TOKEN"]);
+  assert.throws(() => parseArgs(["notes.md", "--link-preview-header", "X-A: 1"]), /must follow the --link-preview rule/);
+  assert.throws(() => parseArgs(["notes.md", "--link-preview", "a", "http://127.0.0.1/", "--link-preview-header", "X-A: 1", "--link-preview-header", "x-a: 2"]), /given twice/);
+  assert.throws(() => parseArgs(["notes.md", "--link-preview-env", "BAD-NAME"]), /environment variable name/);
+  assert.throws(() => parseArgs(["notes.md", "--link-preview", "a", "http://127.0.0.1/", "--link-preview-header", "nocolon"]), /'Name: value'/);
+});
+
+test("resolver sends env-sourced headers only to the owner's credentialed rule and never echoes them", async () => {
+  const seen = [];
+  const fake = await startFakeResolver((req, res) => {
+    seen.push({ url: req.url, authorization: req.headers.authorization, version: req.headers["x-api-version"] });
+    if (req.url.endsWith("/redirect")) return send(res, 302, "", "application/json", { location: "http://127.0.0.1:1/ok" });
+    if (req.url.endsWith("/fail")) return send(res, 500, `bad ${req.headers.authorization}`, "text/plain");
+    sendJson(res, { title: req.headers.authorization ? "Private issue" : "Public issue" });
+  });
+  const config = [
+    { match: "^tll:(\\w+)$", resolver: `${fake.origin}/api/{1}`, headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}", "X-Api-Version": "2" } },
+    { match: "^tll:(\\w+)$", resolver: `${fake.origin}/api/{1}` },
+  ];
+  const rules = normalizeLinkPreviewRules(config);
+  const warnings = [];
+  try {
+    const resolver = createLinkPreviewResolver({ rules, allowedEnv: ["TRACKER_TOKEN"], env: { TRACKER_TOKEN: SECRET }, warn: (message) => warnings.push(message) });
+    const owner = await resolver.resolve("tll:ok");
+    assert.deepEqual(owner, { status: 200, body: { title: "Private issue" } });
+    assert.equal(seen[0].authorization, `Bearer ${SECRET}`);
+    assert.equal(seen[0].version, "2");
+    assert.deepEqual(await resolver.resolve("tll:ok", { visitor: true }), { status: 200, body: { title: "Public issue" } }, "visitors skip credentialed rules and never read their cache");
+    assert.equal(seen[1].authorization, undefined);
+    for (const route of ["redirect", "fail"]) {
+      const result = await resolver.resolve(`tll:${route}`);
+      assert.equal(result.status, 502);
+      assert.ok(!JSON.stringify(result).includes(SECRET), `${route} must not echo the header`);
+    }
+    assert.equal(seen.filter((hit) => hit.url.endsWith("/redirect")).length, 1, "redirects are not followed");
+    assert.deepEqual(warnings, []);
+
+    const missing = createLinkPreviewResolver({ rules, allowedEnv: ["TRACKER_TOKEN"], env: {}, warn: (message) => warnings.push(message) });
+    const before = seen.length;
+    assert.equal((await missing.resolve("tll:other")).status, 502, "a missing env var fails closed");
+    assert.equal((await missing.resolve("tll:another")).status, 502);
+    assert.equal(seen.length, before, "no unauthenticated request is sent in its place");
+    assert.deepEqual(warnings, ["Link previews: environment variable TRACKER_TOKEN is not set or is empty; previews that need it are disabled."], "warned once, at creation");
+
+    warnings.length = 0;
+    const injected = createLinkPreviewResolver({ rules, allowedEnv: ["TRACKER_TOKEN"], env: { TRACKER_TOKEN: `${SECRET}\r\nX-Injected: 1` }, warn: (message) => warnings.push(message) });
+    assert.equal((await injected.resolve("tll:injected")).status, 502, "an unsafe env value fails closed");
+    assert.equal(seen.length, before, "no request is sent with an unsafe value");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /TRACKER_TOKEN contains a line break/);
+    assert.ok(!warnings[0].includes(SECRET));
+  } finally {
+    await fake.close();
+  }
+});
+
+test("config show, startup output, and errors show header templates but never resolved values", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-link-preview-headers-"));
+  const homePath = join(dir, "home");
+  writeFileSync(join(dir, "notes.md"), "# Notes\n");
+  const rule = { match: "^tll:(\\d+)$", resolver: "https://tracker.example.com/api/{1}", headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" } };
+  const globalDir = join(homePath, ".config", "tunelito");
+  mkdirSync(globalDir, { recursive: true });
+  writeFileSync(join(globalDir, "config.json"), JSON.stringify({ linkPreviews: [rule] }));
+  const env = { TRACKER_TOKEN: SECRET };
+
+  for (const format of [[], ["--json"]]) {
+    const stdout = collector();
+    const stderr = collector();
+    assert.equal(runConfigCommand(["show", join(dir, "notes.md"), ...format], { stdout, stderr, env, homePath }), 0);
+    assert.ok(!stdout.text().includes(SECRET) && !stderr.text().includes(SECRET));
+    assert.match(stdout.text(), /Bearer \$\{env:TRACKER_TOKEN\}|Authorization from \$\{env:TRACKER_TOKEN\}/);
+  }
+  const report = JSON.parse((() => {
+    const stdout = collector();
+    runConfigCommand(["show", join(dir, "notes.md"), "--json"], { stdout, stderr: collector(), env, homePath });
+    return stdout.text();
+  })());
+  assert.deepEqual(report.linkPreviews.rules[0].headers, { Authorization: "Bearer ${env:TRACKER_TOKEN}" });
+
+  const resolved = resolveTunelitoConfig({ targetPath: join(dir, "notes.md"), homePath, env });
+  const lines = linkPreviewStartupLines(resolved, {}).join("\n");
+  assert.match(lines, /Resolver headers \(owner only\): https:\/\/tracker\.example\.com <- Authorization from \$\{env:TRACKER_TOKEN\}/);
+  assert.ok(!lines.includes(SECRET));
+  assert.throws(() => enforceLinkPreviewHeaderPolicy(resolved.linkPreviewRules), (error) => /--link-preview-env/.test(error.message) && !error.message.includes(SECRET), "a config file alone cannot enable headers");
+
+  // A cloned project config cannot point an allowlisted variable at its own resolver.
+  writeFileSync(join(dir, "tunelito.config.json"), JSON.stringify({ linkPreviews: [{ match: "^x:(\\d+)$", resolver: "https://evil.example/{1}", headers: { "X-Debug": "${env:TRACKER_TOKEN}" } }] }));
+  let stderr = collector();
+  assert.equal(runConfigCommand(["show", join(dir, "notes.md")], { stdout: collector(), stderr, env, homePath }), 1);
+  assert.match(stderr.text(), /Invalid project Tunelito config .*headers are not allowed in a project config/);
+  assert.throws(() => resolveTunelitoConfig({ targetPath: join(dir, "notes.md"), homePath, env }), /headers are not allowed in a project config/);
+
+  writeFileSync(join(dir, "tunelito.config.json"), JSON.stringify({ linkPreviews: [{ ...rule, headers: { Authorization: `Bearer ${SECRET}` } }] }));
+  stderr = collector();
+  assert.equal(runConfigCommand(["show", join(dir, "notes.md")], { stdout: collector(), stderr, env, homePath }), 1);
+  assert.match(stderr.text(), /literal secrets are not allowed/);
+  assert.ok(!stderr.text().includes(SECRET), "the rejected literal is not echoed");
+});
+
+test("resolved header values are single-pass and must be Latin-1", () => {
+  const [rule] = normalizeLinkPreviewRules([{ match: "a", resolver: "http://127.0.0.1:3100/a", headers: { Authorization: "Bearer ${env:A}" } }]);
+  assert.deepEqual(resolveLinkPreviewHeaders(rule.headers, { env: { A: "${env:B}", B: SECRET } }), { authorization: "Bearer ${env:B}" }, "env values are not re-expanded");
+  const warnings = [];
+  assert.equal(resolveLinkPreviewHeaders(rule.headers, { env: { A: "tok☃" }, warn: (...args) => warnings.push(args) }), null);
+  assert.deepEqual(warnings, [["A", "unsafe"]]);
+  assert.throws(() => normalizeLinkPreviewRules([{ match: "a", resolver: "http://127.0.0.1/", headers: { "X-A": "☃" } }]), /non-Latin-1/);
+});
+
+test("link-preview route keeps credentialed rules owner-only even with --link-preview-visitors", async () => {
+  const seen = [];
+  const fake = await startFakeResolver((req, res) => {
+    seen.push(req.headers.authorization);
+    sendJson(res, { title: "Private issue" });
+  });
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-link-preview-auth-"));
+  const markdownPath = join(dir, "notes.md");
+  writeFileSync(markdownPath, "# Notes\n\n[TLL-1](tll:1)\n");
+  const rules = normalizeLinkPreviewRules([{ match: "^tll:(\\d+)$", resolver: `${fake.origin}/api/{1}`, headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" } }]);
+  const options = { filePath: markdownPath, host: "127.0.0.1", port: 0, accessKey: "secret", linkPreviewRules: rules, linkPreviewVisitors: true };
+  await assert.rejects(createTunelitoServer(options), /resolver headers are off/);
+  const instance = await createTunelitoServer({ ...options, linkPreviewAllowedEnv: ["TRACKER_TOKEN"], linkPreviewEnv: { TRACKER_TOKEN: SECRET } });
+  const preview = { cookie: "tunelito_key=secret", "x-tunelito-link-preview": "1" };
+  const route = `${LINK_PREVIEW_ROUTE}?href=${encodeURIComponent("tll:1")}`;
+  try {
+    const owner = await get(instance, route, preview);
+    assert.equal(owner.status, 200);
+    assert.ok(!owner.body.includes(SECRET) && !JSON.stringify(owner.headers).includes(SECRET));
+    assert.deepEqual(seen, [`Bearer ${SECRET}`]);
+    const visitor = await get(instance, route, { ...preview, "x-forwarded-for": "203.0.113.10" });
+    assert.equal(visitor.status, 404, "visitors never borrow the owner's credentials");
+    assert.equal(seen.length, 1);
+    assert.equal((await get(instance, route, { "x-tunelito-link-preview": "1" })).status, 401, "the review key is still required");
+  } finally {
+    await instance.close();
+    await fake.close();
+  }
+});
+
+function collector() {
+  let text = "";
+  return { write(chunk) { text += chunk; }, text: () => text };
+}
 
 async function startFakeResolver(handler) {
   const server = createServer(handler);

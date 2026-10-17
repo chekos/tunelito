@@ -55,6 +55,9 @@ export async function createTunelitoServer(options) {
   const linkPreviews = options.linkPreviewResolver || createLinkPreviewResolver({
     rules: options.linkPreviewRules || [],
     allowRemote: Boolean(options.linkPreviewAllowRemote),
+    allowedEnv: options.linkPreviewAllowedEnv || [],
+    ...(options.linkPreviewEnv ? { env: options.linkPreviewEnv } : {}),
+    ...(options.linkPreviewWarn ? { warn: options.linkPreviewWarn } : {}),
   });
   const linkPreviewVisitors = Boolean(options.linkPreviewVisitors);
   const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
