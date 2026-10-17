@@ -489,6 +489,23 @@ test("an earlier matching rule still wins over a later catastrophic rule", async
   assert.equal(fetched.length, 1);
 });
 
+test("a visitor regex timeout does not block the owner's credentialed rule for that href", async () => {
+  const fetched = [];
+  const fetchImpl = async (url, { headers }) => {
+    fetched.push({ url, authorization: headers.authorization });
+    return new Response(JSON.stringify({ title: "owner card" }), { headers: { "content-type": "application/json" } });
+  };
+  const rules = normalizeLinkPreviewRules([
+    { match: "^(a+)c$", resolver: "http://127.0.0.1:9/private/{1}", headers: { Authorization: "Bearer ${env:TRACKER_TOKEN}" } },
+    { match: "^(a+)+$", resolver: "http://127.0.0.1:9/evil/{1}" },
+  ]);
+  const resolver = createLinkPreviewResolver({ rules, fetchImpl, allowedEnv: ["TRACKER_TOKEN"], env: { TRACKER_TOKEN: SECRET }, warn: () => {} });
+  const href = `${"a".repeat(40)}c`;
+  assert.equal((await resolver.resolve(href, { visitor: true })).status, 404, "the visitor skips the credentialed rule and times out on the next one");
+  assert.deepEqual(await resolver.resolve(href), { status: 200, body: { title: "owner card" } }, "the owner is not blocked by the visitor's timeout");
+  assert.deepEqual(fetched, [{ url: `http://127.0.0.1:9/private/${"a".repeat(40)}`, authorization: `Bearer ${SECRET}` }]);
+});
+
 test("a catastrophic match pattern fails closed without stalling the server", async () => {
   const fake = await startFakeResolver((req, res) => sendJson(res, { title: "matched" }));
   const dir = mkdtempSync(join(tmpdir(), "tunelito-link-preview-redos-"));

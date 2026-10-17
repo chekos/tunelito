@@ -519,15 +519,17 @@ export function createLinkPreviewResolver({
   // credentials, even with --link-preview-visitors. Credentialed results get their own cache
   // keys so an uncredentialed rule that builds the same URL cannot read them.
   function matchRule(href, visitor) {
-    const until = timedOut.get(href);
+    // Owners and visitors evaluate different rule sets, so their timeouts are tracked apart.
+    const timeoutKey = `${visitor ? "visitor" : "owner"} ${href}`;
+    const until = timedOut.get(timeoutKey);
     if (until > now()) return null;
-    if (until) timedOut.delete(href);
+    if (until) timedOut.delete(timeoutKey);
     for (const [index, rule] of rules.entries()) {
       const credentialed = Boolean(rule.headers?.length);
       if (visitor && credentialed) continue;
       const match = matcher.match(index, href);
       if (match === MATCH_TIMED_OUT) {
-        timedOut.set(href, now() + options.failureTtlMs);
+        timedOut.set(timeoutKey, now() + options.failureTtlMs);
         while (timedOut.size > options.cacheEntries) timedOut.delete(timedOut.keys().next().value);
         warnMatchTimeout(index);
         return null;
