@@ -61,7 +61,7 @@ A local `markdownCss` path is resolved relative to the config file, then loaded 
 
 `--link-preview <regex> <url-template>` is the CLI form, with `--link-preview-fields title=…,status=…,priority=…` for the rule before it. As with other settings, CLI rules replace configured rules, and project rules replace global rules. Tunelito does not merge them.
 
-Two choices that widen the trust boundary are CLI-only, so a checked-in project config cannot turn them on: `--link-preview-allow-remote` for non-loopback `https` resolvers, and `--link-preview-visitors` for keyed tunnel visitors. `tunelito config show` lists the resolved rules and the layer they came from.
+Two choices that widen the trust boundary are CLI-only, so a checked-in project config cannot turn them on: `--link-preview-allow-remote` for non-loopback `https` resolvers, and `--link-preview-visitors` for keyed tunnel visitors. `tunelito config show` lists the resolved rules and the layer they came from. The startup output prints each resolver origin. Don't put tokens in a resolver template, because `config show` prints templates in full and Tunelito sends no credentials upstream.
 
 ## Global configuration
 

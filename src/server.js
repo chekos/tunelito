@@ -52,7 +52,10 @@ export async function createTunelitoServer(options) {
   const markdownCssText = String(options.markdownCssText || "");
   const markdownTheme = String(options.markdownTheme || DEFAULT_THEME_NAME);
   const editable = Boolean(options.editable);
-  const linkPreviews = options.linkPreviewResolver || createLinkPreviewResolver({ rules: options.linkPreviewRules || [] });
+  const linkPreviews = options.linkPreviewResolver || createLinkPreviewResolver({
+    rules: options.linkPreviewRules || [],
+    allowRemote: Boolean(options.linkPreviewAllowRemote),
+  });
   const linkPreviewVisitors = Boolean(options.linkPreviewVisitors);
   const sessionId = String(options.sessionId || randomBytes(12).toString("base64url"));
   const startedAt = new Date().toISOString();
@@ -932,7 +935,7 @@ function handleLinkPreviewRequest({ req, res, url, linkPreviews, allowed, respon
     sendJson(res, 403, { error: "link previews require a same-origin Tunelito request" }, req.method, responseHeaders);
     return;
   }
-  linkPreviews.resolve(url.searchParams.get("href") || "").then((result) => {
+  linkPreviews.resolve(url.searchParams.get("href") || "", { visitor: !isLocalOwnerRequest(req) }).then((result) => {
     sendJson(res, result.status, result.body || {}, req.method, {
       ...responseHeaders,
       "content-security-policy": "default-src 'none'",

@@ -61,6 +61,13 @@ test("host policy is loopback-only unless remote resolvers are explicitly allowe
   assert.throws(() => enforceLinkPreviewHostPolicy(plainRemote, { allowRemote: true }), /must use https/);
   const zeroHost = normalizeLinkPreviewRules([{ match: "a", resolver: "http://0.0.0.0/a" }]);
   assert.throws(() => enforceLinkPreviewHostPolicy(zeroHost), /not loopback/);
+
+  for (const host of ["169.254.169.254", "10.1.2.3", "172.16.0.1", "192.168.1.1", "100.64.0.1", "0.0.0.0", "[fd00::1]", "[fe80::1]", "[::ffff:127.0.0.1]", "[::]"]) {
+    const reserved = normalizeLinkPreviewRules([{ match: "a", resolver: `https://${host}/a` }]);
+    assert.throws(() => enforceLinkPreviewHostPolicy(reserved, { allowRemote: true }), /not loopback|private, link-local/, `${host} must never be a remote resolver`);
+  }
+  assert.throws(() => createLinkPreviewResolver({ rules: remote }), /not loopback/, "the library enforces the host policy too");
+  assert.equal(createLinkPreviewResolver({ rules: remote, allowRemote: true }).enabled, true);
 });
 
 test("buildResolverUrl encodes captures and never changes the resolver origin", () => {
@@ -143,7 +150,9 @@ test("resolver fetches JSON once, caches it, and fails closed on unsafe response
       fields: { title: "title", status: "state.name", priority: "priority.label" },
     }]));
     let clock = 0;
-    const resolver = createLinkPreviewResolver({ rules, now: () => clock, limits: { timeoutMs: 150 } });
+    const resolver = createLinkPreviewResolver({ rules, now: () => clock });
+    const impatient = createLinkPreviewResolver({ rules, limits: { timeoutMs: 100 } });
+    assert.equal((await impatient.resolve("tll:slow")).status, 502, "slow resolvers time out");
 
     assert.deepEqual(await resolver.resolve("tll:ok"), { status: 200, body: { title: "Fix login", status: "todo", priority: "high" } });
     assert.deepEqual(await resolver.resolve("tll:ok"), { status: 200, body: { title: "Fix login", status: "todo", priority: "high" } });
@@ -153,7 +162,7 @@ test("resolver fetches JSON once, caches it, and fails closed on unsafe response
     assert.equal(hits.filter((hit) => hit === "/api/ok").length, 2, "expired results are refetched");
 
     assert.equal((await resolver.resolve("tll:vendor")).status, 200, "+json media types are JSON");
-    for (const route of ["html", "big", "chunked", "redirect", "missing", "invalid", "slow", "boom"]) {
+    for (const route of ["html", "big", "chunked", "redirect", "missing", "invalid", "boom"]) {
       assert.equal((await resolver.resolve(`tll:${route}`)).status, 502, `${route} must fail closed`);
     }
     assert.equal((await resolver.resolve("tll:empty")).status, 404, "no mapped fields means no card");
@@ -185,6 +194,17 @@ test("resolver bounds concurrent upstream fetches and shares in-flight requests"
   assert.equal((await first).body.title, "http://127.0.0.1:9/1");
   assert.equal(await shared, await first);
   assert.equal((await second).status, 200);
+  const visitorResolver = createLinkPreviewResolver({ rules, fetchImpl: fakeFetch, limits: { maxConcurrent: 2 } });
+  const ownerPending = visitorResolver.resolve("n:10", { visitor: true });
+  assert.deepEqual(await visitorResolver.resolve("n:11", { visitor: true }), { status: 503 }, "visitors cannot take the owner's reserved slot");
+  const ownerReserved = visitorResolver.resolve("n:12");
+  assert.deepEqual(await visitorResolver.resolve(`n:${"1".repeat(600)}`, { visitor: true }), { status: 404 }, "visitor hrefs are capped at 512 characters");
+  await new Promise((resolve) => setImmediate(resolve));
+  releases.slice(-2).forEach((release) => release());
+  assert.equal((await ownerPending).status, 200);
+  assert.equal((await ownerReserved).status, 200);
+  hits -= 2;
+
   const retry = resolver.resolve("n:3");
   await new Promise((resolve) => setImmediate(resolve));
   releases.at(-1)();

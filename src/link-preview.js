@@ -10,6 +10,7 @@ export const LINK_PREVIEW_LIMITS = Object.freeze({
   maxPatternLength: 500,
   maxTemplateLength: 2048,
   maxHrefLength: 2048,
+  maxVisitorHrefLength: 512,
   maxFieldLength: 200,
   maxResponseBytes: 64 * 1024,
   timeoutMs: 3000,
@@ -130,8 +131,28 @@ export function enforceLinkPreviewHostPolicy(rules, { allowRemote = false } = {}
     if (rule.protocol !== "https:") {
       throw new LinkPreviewConfigError(`linkPreviews[${index}].resolver must use https:// for a non-loopback host`);
     }
+    if (isReservedAddressLiteral(rule.hostname)) {
+      throw new LinkPreviewConfigError(`linkPreviews[${index}].resolver host ${rule.hostname} is a private, link-local, or unspecified address; remote resolvers must be public hosts`);
+    }
   }
   return rules;
+}
+
+// Literal private/link-local/metadata/unspecified addresses are never valid "remote" resolvers.
+// Hostnames are not resolved here; see SECURITY_REVIEW.md for the documented DNS caveat.
+export function isReservedAddressLiteral(value) {
+  const host = String(value || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (host.startsWith("::ffff:")) return true; // IPv4-mapped literals: refuse rather than decode.
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (host.includes(":")) {
+    return host === "::" || host === "::1" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host);
+  }
+  return false;
 }
 
 export function isLoopbackHostname(value) {
@@ -193,24 +214,30 @@ function cleanPreviewText(value) {
 
 export function createLinkPreviewResolver({
   rules = [],
+  allowRemote = false,
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
   limits = {},
 } = {}) {
+  enforceLinkPreviewHostPolicy(rules, { allowRemote });
   const options = { ...LINK_PREVIEW_LIMITS, ...limits };
   const cache = new Map();
   const inflight = new Map();
 
-  async function resolve(href) {
+  // Visitors (only with --link-preview-visitors) get shorter hrefs and cannot take the
+  // last upstream slot, so they cannot starve the owner's previews.
+  async function resolve(href, { visitor = false } = {}) {
     const value = String(href || "").trim();
-    if (!value || value.length > options.maxHrefLength) return { status: 404 };
+    const maxLength = visitor ? options.maxVisitorHrefLength : options.maxHrefLength;
+    if (!value || value.length > maxLength) return { status: 404 };
     const match = matchRule(value);
     if (!match) return { status: 404 };
     const cached = cache.get(match.url);
     if (cached && cached.expires > now()) return cached.result;
     if (cached) cache.delete(match.url);
     if (inflight.has(match.url)) return inflight.get(match.url);
-    if (inflight.size >= options.maxConcurrent) return { status: 503 };
+    const capacity = visitor ? Math.max(0, options.maxConcurrent - 1) : options.maxConcurrent;
+    if (inflight.size >= capacity) return { status: 503 };
     const pending = fetchPreview(match).then((result) => {
       remember(match.url, result);
       return result;
@@ -266,10 +293,7 @@ export function createLinkPreviewResolver({
 }
 
 async function readBounded(response, maxBytes) {
-  if (!response.body?.getReader) {
-    const text = await response.text();
-    return Buffer.byteLength(text) > maxBytes ? null : text;
-  }
+  if (!response.body?.getReader) return null;
   const reader = response.body.getReader();
   const chunks = [];
   let total = 0;

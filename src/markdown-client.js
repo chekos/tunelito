@@ -898,6 +898,7 @@
     function showLinkCard(target) {
       const link = target?.closest?.(linkSelector);
       if (!link || !markdown.contains(link)) return;
+      pendingLink = null;
       if (!link.hasAttribute("title")) {
         pendingLink = link;
         resolveLinkPreview(link).then((model) => {
@@ -930,7 +931,8 @@
         credentials: "same-origin",
         headers: { "x-tunelito-link-preview": "1" },
       }).then(async (response) => {
-        if (response.status === 503) linkPreviewCache.delete(href);
+        // Keep "no match" answers for the page; retry transient failures on a later hover.
+        if (!response.ok && response.status !== 404) linkPreviewCache.delete(href);
         if (!response.ok) return null;
         const data = await response.json();
         const text = (value) => (typeof value === "string" ? value : "");

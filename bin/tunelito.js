@@ -456,6 +456,7 @@ async function main() {
     sectionIndex: Boolean(opts.sectionIndex),
     linkPreviewRules: resolvedConfig.linkPreviewRules,
     linkPreviewVisitors: Boolean(opts.linkPreviewVisitors),
+    linkPreviewAllowRemote: Boolean(opts.linkPreviewAllowRemote),
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -520,6 +521,7 @@ async function main() {
   if (opts.editable) console.log("Editing: direct local owner only; public links remain read-only");
   if (linkPreviewCount) {
     console.log(`Previews: ${linkPreviewCount} link-preview rule${linkPreviewCount === 1 ? "" : "s"} (${resolvedConfig.linkPreviews.source}); ${opts.linkPreviewVisitors ? "owner and keyed visitors" : "direct local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`);
+    console.log(`Resolvers: ${[...new Set(resolvedConfig.linkPreviewRules.map((rule) => rule.origin))].join(", ")}`);
   }
   console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);

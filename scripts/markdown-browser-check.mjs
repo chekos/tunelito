@@ -1047,8 +1047,12 @@ async function verifyLinkPreviewResolver() {
       ? { title: '<img src=x onerror="window.__tunelitoXss=1">Escaped', state: { name: "blocked" } }
       : { title: `Resolved ${id}`, state: { name: "todo" }, priority: { label: "high" } };
     const body = JSON.stringify(payload);
-    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
-    res.end(body);
+    const reply = () => {
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+      res.end(body);
+    };
+    if (id === "TLL-777") setTimeout(reply, 400);
+    else reply();
   });
   await new Promise((resolveListen) => resolver.listen(0, "127.0.0.1", resolveListen));
   const resolverOrigin = `http://127.0.0.1:${resolver.address().port}`;
@@ -1061,6 +1065,8 @@ async function verifyLinkPreviewResolver() {
     `Bare [TLL-563](${issue("TLL-563")}) and [TLL-666](${issue("TLL-666")}).`,
     "",
     `Authored [TLL-700](${issue("TLL-700")} "Authored title · done · low") and [plain](https://example.com/x).`,
+    "",
+    `Slow [TLL-777](${issue("TLL-777")}).`,
     "",
   ].join("\n"));
   const rules = normalizeLinkPreviewRules([{
@@ -1109,10 +1115,21 @@ async function verifyLinkPreviewResolver() {
     await link("TLL-563").hover();
     await page.waitForFunction(() => /Resolved TLL-563/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
 
-    assert.deepEqual([...new Set(resolverHits)].sort(), ["/api/TLL/TLL-563", "/api/TLL/TLL-666"], "only bare matching links reach the resolver, once each");
-    assert.equal(resolverHits.length, 2, "repeat hovers are served from cache");
+    // A slow response for a link the reader already left must not replace the current card.
+    await page.mouse.move(5, 5);
+    await link("TLL-777").focus();
+    await link("TLL-700").focus();
+    await page.waitForFunction(() => /Authored title/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    await page.waitForTimeout(700);
+    assert.equal(await cardText(), "Authored title done · low", "a late resolver response must not overwrite the focused link's card");
+    await link("TLL-700").blur();
+    await page.waitForTimeout(100);
+    assert.equal(await cardText(), "", "a late response after blur must not reopen the card");
+
+    assert.deepEqual([...new Set(resolverHits)].sort(), ["/api/TLL/TLL-563", "/api/TLL/TLL-666", "/api/TLL/TLL-777"], "only bare matching links reach the resolver, once each");
+    assert.equal(resolverHits.length, 3, "repeat hovers are served from cache");
     assert.equal(browserRequests.some((url) => url.startsWith(resolverOrigin)), false, "the browser must never fetch the resolver origin");
-    assert.equal(browserRequests.filter((url) => url.includes("/__tunelito/link-preview")).length, 3, "the browser asks Tunelito once per distinct bare link");
+    assert.equal(browserRequests.filter((url) => url.includes("/__tunelito/link-preview")).length, 4, "the browser asks Tunelito once per distinct bare link");
 
     const visitor = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.10" } });
     const visitorPage = await visitor.newPage();
