@@ -7,12 +7,18 @@ import { join } from "node:path";
 import {
   LINK_PREVIEW_ROUTE,
   buildResolverUrl,
+  createBoundedMatcher,
   createLinkPreviewResolver,
+  createPinnedFetch,
   enforceLinkPreviewHostPolicy,
   extractLinkPreviewFields,
+  isAllowedResolverAddress,
   normalizeLinkPreviewRules,
   parseLinkPreviewFieldsArg,
+  resolvePinnedAddress,
 } from "../src/link-preview.js";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
 import { createTunelitoServer } from "../src/server.js";
 import { parseArgs } from "../bin/tunelito.js";
 
@@ -254,6 +260,175 @@ test("link-preview route is keyed, same-origin only, and owner-only by default",
     await none.close();
     await fake.close();
   }
+});
+
+test("address policy: loopback-only for loopback rules, public-only for remote rules", () => {
+  for (const address of ["127.0.0.1", "127.8.9.10", "::1", "[::1]", "::ffff:127.0.0.1"]) {
+    assert.equal(isAllowedResolverAddress(address, { loopbackOnly: true }), true, address);
+  }
+  for (const address of ["10.0.0.5", "8.8.8.8", "0.0.0.0", "::", "fe80::1", "localhost", ""]) {
+    assert.equal(isAllowedResolverAddress(address, { loopbackOnly: true }), false, address);
+  }
+  for (const address of ["93.184.216.34", "1.1.1.1", "2606:4700::1111"]) {
+    assert.equal(isAllowedResolverAddress(address, { loopbackOnly: false }), true, address);
+  }
+  for (const address of [
+    "127.0.0.1", "::1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "100.64.0.1", "100.100.100.200", "169.254.169.254",
+    "0.0.0.0", "224.0.0.1", "255.255.255.255", "::", "fc00::1", "fd00:ec2::254", "fe80::1", "ff02::1",
+    "::ffff:10.0.0.1", "::ffff:a00:1", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "::ffff:8.8.8.8",
+    "64:ff9b::a00:1", "2002:a00:1::1", "not-an-ip",
+  ]) {
+    assert.equal(isAllowedResolverAddress(address, { loopbackOnly: false }), false, `${address} must be refused in remote mode`);
+  }
+});
+
+test("resolvePinnedAddress validates every DNS answer and returns one pinned address", async () => {
+  const answers = (...addresses) => async () => addresses.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
+  assert.deepEqual(await resolvePinnedAddress("localhost", { loopbackOnly: true, resolveHost: answers("127.0.0.1", "::1") }), { address: "127.0.0.1", family: 4 });
+  await assert.rejects(resolvePinnedAddress("localhost", { loopbackOnly: true, resolveHost: answers("192.168.1.20") }), /disallowed address/, "a localhost overridden to a LAN address is refused");
+  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers("93.184.216.34", "10.0.0.1") }), /disallowed address/, "a mixed public and private answer fails closed");
+  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers("::ffff:169.254.169.254") }), /disallowed address/, "IPv4-mapped metadata is refused");
+  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers() }), /did not resolve/);
+  let lookups = 0;
+  assert.deepEqual(await resolvePinnedAddress("127.0.0.1", { loopbackOnly: true, resolveHost: () => { lookups += 1; return []; } }), { address: "127.0.0.1", family: 4 });
+  assert.equal(lookups, 0, "IP literals skip DNS but still pass the policy");
+  const stalled = new AbortController();
+  const pending = resolvePinnedAddress("slow.example.com", { loopbackOnly: false, resolveHost: () => new Promise(() => {}), signal: stalled.signal });
+  stalled.abort(new Error("timed out"));
+  await assert.rejects(pending, /timed out/, "a stalled DNS lookup honors the fetch timeout");
+});
+
+test("loopback resolver fetches connect to the pinned answer and refuse a rebind", async () => {
+  const hits = [];
+  const fake = await startFakeResolver((req, res) => {
+    hits.push({ url: req.url, host: req.headers.host });
+    sendJson(res, { title: `issue ${req.url.split("/").pop()}` });
+  });
+  const port = new URL(fake.origin).port;
+  try {
+    const plan = ["127.0.0.1", "10.0.0.5", "127.0.0.1"];
+    const lookedUp = [];
+    const resolveHost = async (hostname) => {
+      lookedUp.push(hostname);
+      const address = plan.shift();
+      return [{ address, family: 4 }];
+    };
+    const rules = normalizeLinkPreviewRules([{ match: "^tll:(\\d+)$", resolver: `http://localhost:${port}/api/{1}` }]);
+    const resolver = createLinkPreviewResolver({ rules, resolveHost });
+    assert.deepEqual(await resolver.resolve("tll:1"), { status: 200, body: { title: "issue 1" } });
+    assert.equal((await resolver.resolve("tll:2")).status, 502, "localhost rebinding to a LAN address fails closed");
+    assert.equal((await resolver.resolve("tll:3")).status, 200);
+    assert.deepEqual(lookedUp, ["localhost", "localhost", "localhost"], "the host is resolved exactly once per fetch");
+    assert.deepEqual(hits, [
+      { url: "/api/1", host: `localhost:${port}` },
+      { url: "/api/3", host: `localhost:${port}` },
+    ], "the rebound fetch never connects, and Host keeps the configured hostname");
+  } finally {
+    await fake.close();
+  }
+});
+
+test("remote resolver fetches pin the validated address with SNI and certificate checks intact", async () => {
+  const calls = [];
+  const requestImpl = (url, options, onResponse) => {
+    calls.push({ url: String(url), options });
+    const req = new EventEmitter();
+    req.end = () => {
+      const res = Readable.from([Buffer.from(JSON.stringify({ title: "Remote issue" }))]);
+      res.statusCode = 200;
+      res.rawHeaders = ["Content-Type", "application/json"];
+      queueMicrotask(() => onResponse(res));
+    };
+    return req;
+  };
+  const answersFor = new Map([
+    ["mixed.example.com", ["93.184.216.34", "10.0.0.1"]],
+    ["mapped.example.com", ["::ffff:10.0.0.1"]],
+    ["loopback.example.com", ["127.0.0.1"]],
+    ["tracker.example.com", ["93.184.216.34", "2606:2800:220:1::1"]],
+  ]);
+  const resolveHost = async (hostname) => answersFor.get(hostname).map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
+  const rules = enforceLinkPreviewHostPolicy(normalizeLinkPreviewRules(
+    [...answersFor.keys()].map((host) => ({ match: `^${host.split(".")[0]}:(\\d+)$`, resolver: `https://${host}/api/{1}` })),
+  ), { allowRemote: true });
+  const resolver = createLinkPreviewResolver({ rules, allowRemote: true, fetchImpl: createPinnedFetch({ resolveHost, requestImpl }) });
+
+  assert.equal((await resolver.resolve("mixed:1")).status, 502, "one private answer poisons the whole lookup");
+  assert.equal((await resolver.resolve("mapped:1")).status, 502, "IPv4-mapped private answers are refused");
+  assert.equal((await resolver.resolve("loopback:1")).status, 502, "a public hostname cannot resolve to loopback");
+  assert.equal(calls.length, 0, "no connection is attempted for a refused answer");
+
+  assert.deepEqual(await resolver.resolve("tracker:7"), { status: 200, body: { title: "Remote issue" } });
+  assert.equal(calls.length, 1);
+  const [{ url, options }] = calls;
+  assert.equal(url, "https://tracker.example.com/api/7");
+  assert.equal(options.servername, "tracker.example.com", "TLS SNI keeps the configured hostname");
+  assert.equal(options.agent, false, "sockets are never pooled across pinned addresses");
+  assert.equal("rejectUnauthorized" in options, false, "certificate validation stays on");
+  assert.equal(options.headers.accept, "application/json");
+  await new Promise((resolve) => options.lookup("tracker.example.com", { all: true }, (error, list) => {
+    assert.deepEqual(list, [{ address: "93.184.216.34", family: 4 }]);
+    resolve();
+  }));
+  await new Promise((resolve) => options.lookup("rebound.example.com", {}, (error, address, family) => {
+    assert.deepEqual([address, family], ["93.184.216.34", 4], "the socket lookup ignores DNS and returns the pinned address");
+    resolve();
+  }));
+});
+
+test("bounded matcher keeps captures and stops catastrophic patterns", () => {
+  const matchAll = createBoundedMatcher(["^ref:(?<team>[A-Z]+)-(\\d+)$", "^(a+)+$"], { timeoutMs: 10 });
+  const [ref, none] = matchAll("ref:TLL-563");
+  assert.deepEqual([...ref], ["ref:TLL-563", "TLL", "563"]);
+  assert.deepEqual(ref.groups, { team: "TLL" });
+  assert.equal(none, null);
+  const started = Date.now();
+  assert.equal(matchAll(`${"a".repeat(40)}b`), null, "a timeout returns null instead of blocking");
+  assert.ok(Date.now() - started < 1000, "the timeout fires promptly");
+  assert.deepEqual([...matchAll("aaa")[1]], ["aaa", "aaa"], "the matcher keeps working after a timeout");
+});
+
+test("a catastrophic match pattern fails closed without stalling the server", async () => {
+  const fake = await startFakeResolver((req, res) => sendJson(res, { title: "matched" }));
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-link-preview-redos-"));
+  const markdownPath = join(dir, "notes.md");
+  writeFileSync(markdownPath, "# Notes\n");
+  const warnings = [];
+  let clock = 0;
+  const rules = normalizeLinkPreviewRules([{ match: "^(a+)+$", resolver: `${fake.origin}/api/{1}` }]);
+  const linkPreviewResolver = createLinkPreviewResolver({ rules, warn: (line) => warnings.push(line), now: () => clock });
+  const server = await createTunelitoServer({ filePath: markdownPath, host: "127.0.0.1", port: 0, accessKey: "secret", linkPreviewResolver });
+  const preview = { cookie: "tunelito_key=secret", "x-tunelito-link-preview": "1" };
+  const evil = (n) => `${LINK_PREVIEW_ROUTE}?href=${encodeURIComponent(`${"a".repeat(n)}b`)}`;
+  try {
+    const started = Date.now();
+    const [stalled, page] = await Promise.all([get(server, evil(2000), preview), get(server, "/", { cookie: "tunelito_key=secret" })]);
+    assert.equal(stalled.status, 404, "a timed-out match means no preview");
+    assert.equal(page.status, 200, "other requests are still served");
+    assert.ok(Date.now() - started < 2000, "the catastrophic href returns quickly");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /^Link preview: a match pattern took longer than 10ms/);
+    assert.doesNotMatch(warnings[0], /aaaa/, "the visitor-controlled href is never logged");
+
+    assert.equal((await get(server, evil(2000), preview)).status, 404, "the same href is not re-run during the failure TTL");
+    assert.equal((await get(server, evil(1999), preview)).status, 404);
+    assert.equal(warnings.length, 1, "warnings are rate-limited");
+    clock += 61_000;
+    assert.equal((await get(server, evil(1998), preview)).status, 404);
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[1], /\(1 more since the last warning\)/);
+    const benign = await get(server, `${LINK_PREVIEW_ROUTE}?href=aaaa`, preview);
+    assert.equal(benign.status, 200, "benign hrefs still match and resolve");
+    assert.deepEqual(JSON.parse(benign.body), { title: "matched" });
+  } finally {
+    await server.close();
+    await fake.close();
+  }
+});
+
+test("match patterns are validated at config load", () => {
+  assert.throws(() => normalizeLinkPreviewRules([{ match: "a".repeat(501), resolver: "http://localhost/" }]), /longer than 500 characters/);
+  assert.throws(() => normalizeLinkPreviewRules([{ match: "(?<x>a", resolver: "http://localhost/" }]), /not a valid regular expression/);
 });
 
 async function startFakeResolver(handler) {
