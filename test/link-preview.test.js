@@ -15,7 +15,8 @@ import {
   isAllowedResolverAddress,
   normalizeLinkPreviewRules,
   parseLinkPreviewFieldsArg,
-  resolvePinnedAddress,
+  MATCH_TIMED_OUT,
+  resolvePinnedAddresses,
 } from "../src/link-preview.js";
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
@@ -276,24 +277,27 @@ test("address policy: loopback-only for loopback rules, public-only for remote r
     "127.0.0.1", "::1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "100.64.0.1", "100.100.100.200", "169.254.169.254",
     "0.0.0.0", "224.0.0.1", "255.255.255.255", "::", "fc00::1", "fd00:ec2::254", "fe80::1", "ff02::1",
     "::ffff:10.0.0.1", "::ffff:a00:1", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "::ffff:8.8.8.8",
-    "64:ff9b::a00:1", "2002:a00:1::1", "not-an-ip",
+    "::ffff:0:7f00:1", "64:ff9b::a00:1", "2002:a00:1::1", "192.88.99.1", "not-an-ip",
   ]) {
     assert.equal(isAllowedResolverAddress(address, { loopbackOnly: false }), false, `${address} must be refused in remote mode`);
   }
 });
 
-test("resolvePinnedAddress validates every DNS answer and returns one pinned address", async () => {
+test("resolvePinnedAddresses validates every DNS answer and returns only checked addresses", async () => {
   const answers = (...addresses) => async () => addresses.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
-  assert.deepEqual(await resolvePinnedAddress("localhost", { loopbackOnly: true, resolveHost: answers("127.0.0.1", "::1") }), { address: "127.0.0.1", family: 4 });
-  await assert.rejects(resolvePinnedAddress("localhost", { loopbackOnly: true, resolveHost: answers("192.168.1.20") }), /disallowed address/, "a localhost overridden to a LAN address is refused");
-  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers("93.184.216.34", "10.0.0.1") }), /disallowed address/, "a mixed public and private answer fails closed");
-  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers("::ffff:169.254.169.254") }), /disallowed address/, "IPv4-mapped metadata is refused");
-  await assert.rejects(resolvePinnedAddress("tracker.example.com", { loopbackOnly: false, resolveHost: answers() }), /did not resolve/);
+  assert.deepEqual(await resolvePinnedAddresses("localhost", { loopbackOnly: true, resolveHost: answers("::1", "127.0.0.1") }), [
+    { address: "::1", family: 6 },
+    { address: "127.0.0.1", family: 4 },
+  ]);
+  await assert.rejects(resolvePinnedAddresses("localhost", { loopbackOnly: true, resolveHost: answers("192.168.1.20") }), /disallowed address/, "a localhost overridden to a LAN address is refused");
+  await assert.rejects(resolvePinnedAddresses("tracker.example.com", { loopbackOnly: false, resolveHost: answers("93.184.216.34", "10.0.0.1") }), /disallowed address/, "a mixed public and private answer fails closed");
+  await assert.rejects(resolvePinnedAddresses("tracker.example.com", { loopbackOnly: false, resolveHost: answers("::ffff:169.254.169.254") }), /disallowed address/, "IPv4-mapped metadata is refused");
+  await assert.rejects(resolvePinnedAddresses("tracker.example.com", { loopbackOnly: false, resolveHost: answers() }), /did not resolve/);
   let lookups = 0;
-  assert.deepEqual(await resolvePinnedAddress("127.0.0.1", { loopbackOnly: true, resolveHost: () => { lookups += 1; return []; } }), { address: "127.0.0.1", family: 4 });
+  assert.deepEqual(await resolvePinnedAddresses("127.0.0.1", { loopbackOnly: true, resolveHost: () => { lookups += 1; return []; } }), [{ address: "127.0.0.1", family: 4 }]);
   assert.equal(lookups, 0, "IP literals skip DNS but still pass the policy");
   const stalled = new AbortController();
-  const pending = resolvePinnedAddress("slow.example.com", { loopbackOnly: false, resolveHost: () => new Promise(() => {}), signal: stalled.signal });
+  const pending = resolvePinnedAddresses("slow.example.com", { loopbackOnly: false, resolveHost: () => new Promise(() => {}), signal: stalled.signal });
   stalled.abort(new Error("timed out"));
   await assert.rejects(pending, /timed out/, "a stalled DNS lookup honors the fetch timeout");
 });
@@ -306,23 +310,27 @@ test("loopback resolver fetches connect to the pinned answer and refuse a rebind
   });
   const port = new URL(fake.origin).port;
   try {
-    const plan = ["127.0.0.1", "10.0.0.5", "127.0.0.1"];
+    const plan = [["127.0.0.1"], ["10.0.0.5"], ["::1", "127.0.0.1"]];
     const lookedUp = [];
     const resolveHost = async (hostname) => {
       lookedUp.push(hostname);
-      const address = plan.shift();
-      return [{ address, family: 4 }];
+      return plan.shift().map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
     };
     const rules = normalizeLinkPreviewRules([{ match: "^tll:(\\d+)$", resolver: `http://localhost:${port}/api/{1}` }]);
     const resolver = createLinkPreviewResolver({ rules, resolveHost });
     assert.deepEqual(await resolver.resolve("tll:1"), { status: 200, body: { title: "issue 1" } });
     assert.equal((await resolver.resolve("tll:2")).status, 502, "localhost rebinding to a LAN address fails closed");
-    assert.equal((await resolver.resolve("tll:3")).status, 200);
+    assert.equal((await resolver.resolve("tll:3")).status, 200, "a dual-stack answer still reaches an IPv4-only tracker");
     assert.deepEqual(lookedUp, ["localhost", "localhost", "localhost"], "the host is resolved exactly once per fetch");
     assert.deepEqual(hits, [
       { url: "/api/1", host: `localhost:${port}` },
       { url: "/api/3", host: `localhost:${port}` },
     ], "the rebound fetch never connects, and Host keeps the configured hostname");
+
+    // The system resolver (no network: localhost comes from the hosts file) often
+    // answers ::1 first; the IPv4-only fake tracker must still be reached.
+    const system = createLinkPreviewResolver({ rules });
+    assert.deepEqual(await system.resolve("tll:4"), { status: 200, body: { title: "issue 4" } });
   } finally {
     await fake.close();
   }
@@ -366,8 +374,9 @@ test("remote resolver fetches pin the validated address with SNI and certificate
   assert.equal(options.agent, false, "sockets are never pooled across pinned addresses");
   assert.equal("rejectUnauthorized" in options, false, "certificate validation stays on");
   assert.equal(options.headers.accept, "application/json");
-  await new Promise((resolve) => options.lookup("tracker.example.com", { all: true }, (error, list) => {
-    assert.deepEqual(list, [{ address: "93.184.216.34", family: 4 }]);
+  assert.equal(options.autoSelectFamily, true, "Happy Eyeballs runs over the checked list only");
+  await new Promise((resolve) => options.lookup("rebound.example.com", { all: true }, (error, list) => {
+    assert.deepEqual(list, [{ address: "93.184.216.34", family: 4 }, { address: "2606:2800:220:1::1", family: 6 }]);
     resolve();
   }));
   await new Promise((resolve) => options.lookup("rebound.example.com", {}, (error, address, family) => {
@@ -377,15 +386,34 @@ test("remote resolver fetches pin the validated address with SNI and certificate
 });
 
 test("bounded matcher keeps captures and stops catastrophic patterns", () => {
-  const matchAll = createBoundedMatcher(["^ref:(?<team>[A-Z]+)-(\\d+)$", "^(a+)+$"], { timeoutMs: 10 });
-  const [ref, none] = matchAll("ref:TLL-563");
-  assert.deepEqual([...ref], ["ref:TLL-563", "TLL", "563"]);
+  const matcher = createBoundedMatcher(["^ref:(?<team>[A-Z]+)-(\\d+)(x)?$", "^(a+)+$"], { timeoutMs: 25 });
+  const ref = matcher.match(0, "ref:TLL-563");
+  assert.deepEqual([...ref], ["ref:TLL-563", "TLL", "563", undefined], "unmatched optional groups stay undefined");
   assert.deepEqual(ref.groups, { team: "TLL" });
-  assert.equal(none, null);
+  assert.equal(matcher.match(1, "ref:TLL-563"), null);
   const started = Date.now();
-  assert.equal(matchAll(`${"a".repeat(40)}b`), null, "a timeout returns null instead of blocking");
+  assert.equal(matcher.match(1, `${"a".repeat(40)}b`), MATCH_TIMED_OUT, "a timeout is reported instead of blocking");
   assert.ok(Date.now() - started < 1000, "the timeout fires promptly");
-  assert.deepEqual([...matchAll("aaa")[1]], ["aaa", "aaa"], "the matcher keeps working after a timeout");
+  assert.deepEqual([...matcher.match(1, "aaa")], ["aaa", "aaa"], "the matcher keeps working after a timeout");
+});
+
+test("an earlier matching rule still wins over a later catastrophic rule", async () => {
+  const fetched = [];
+  const fetchImpl = async (url) => {
+    fetched.push(url);
+    return new Response(JSON.stringify({ title: "first rule" }), { headers: { "content-type": "application/json" } });
+  };
+  const warnings = [];
+  const rules = normalizeLinkPreviewRules([
+    { match: "^(a+)b$", resolver: "http://127.0.0.1:9/first/{1}" },
+    { match: "^(a+)+$", resolver: "http://127.0.0.1:9/evil/{1}" },
+  ]);
+  const resolver = createLinkPreviewResolver({ rules, fetchImpl, warn: (line) => warnings.push(line) });
+  assert.deepEqual(await resolver.resolve(`${"a".repeat(40)}b`), { status: 200, body: { title: "first rule" } });
+  assert.equal(warnings.length, 0, "the catastrophic rule never ran");
+  assert.equal((await resolver.resolve(`${"a".repeat(40)}c`)).status, 404, "a timeout in a later rule fails closed");
+  assert.match(warnings[0], /^Link preview: linkPreviews\[1\]\.match took longer than 25ms/, "the warning names the rule");
+  assert.equal(fetched.length, 1);
 });
 
 test("a catastrophic match pattern fails closed without stalling the server", async () => {
@@ -407,7 +435,7 @@ test("a catastrophic match pattern fails closed without stalling the server", as
     assert.equal(page.status, 200, "other requests are still served");
     assert.ok(Date.now() - started < 2000, "the catastrophic href returns quickly");
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /^Link preview: a match pattern took longer than 10ms/);
+    assert.match(warnings[0], /^Link preview: linkPreviews\[0\]\.match took longer than 25ms/);
     assert.doesNotMatch(warnings[0], /aaaa/, "the visitor-controlled href is never logged");
 
     assert.equal((await get(server, evil(2000), preview)).status, 404, "the same href is not re-run during the failure TTL");

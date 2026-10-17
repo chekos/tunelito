@@ -7,7 +7,6 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP } from "node:net";
 import { Readable } from "node:stream";
 import { Script, createContext } from "node:vm";
-import { pinnedLookup } from "./tunnel.js";
 
 export const LINK_PREVIEW_ROUTE = "/__tunelito/link-preview";
 export const LINK_PREVIEW_REQUEST_HEADER = "x-tunelito-link-preview";
@@ -26,7 +25,7 @@ export const LINK_PREVIEW_LIMITS = Object.freeze({
   cacheEntries: 256,
   cacheTtlMs: 60_000,
   failureTtlMs: 15_000,
-  matchTimeoutMs: 10,
+  matchTimeoutMs: 25,
   matchWarningIntervalMs: 60_000,
 });
 
@@ -164,6 +163,7 @@ for (const [network, prefix] of [
   ["172.16.0.0", 12], // private
   ["192.0.0.0", 24], // IETF protocol assignments
   ["192.0.2.0", 24], // documentation
+  ["192.88.99.0", 24], // deprecated 6to4 relay anycast
   ["192.168.0.0", 16], // private
   ["198.18.0.0", 15], // benchmarking
   ["198.51.100.0", 24], // documentation
@@ -175,6 +175,7 @@ for (const [network, prefix] of [
   ["::", 128], // unspecified
   ["::1", 128], // loopback
   ["::", 96], // deprecated IPv4-compatible
+  ["::ffff:0:0:0", 96], // SIIT IPv4-translated (RFC 2765)
   ["64:ff9b::", 96], // NAT64 can reach an embedded private IPv4
   ["64:ff9b:1::", 48], // local-use NAT64
   ["100::", 64], // discard
@@ -213,7 +214,7 @@ export function isAllowedResolverAddress(address, { loopbackOnly }) {
 }
 
 // Literal private/link-local/metadata/unspecified addresses are never valid "remote" resolvers.
-// Hostnames are checked after DNS resolution by resolvePinnedAddress.
+// Hostnames are checked after DNS resolution by resolvePinnedAddresses.
 export function isReservedAddressLiteral(value) {
   const host = bareHost(value);
   if (host.startsWith("::ffff:")) return true; // IPv4-mapped literals: refuse rather than decode.
@@ -226,11 +227,11 @@ export function isLoopbackHostname(value) {
 }
 
 /**
- * Resolve a resolver hostname once and return the single address to connect to.
- * Every answer must pass the address policy, so a mixed public/private answer
- * fails closed. IP literals skip DNS but get the same check.
+ * Resolve a resolver hostname once and return the validated addresses the
+ * socket may connect to. Every answer must pass the address policy, so a mixed
+ * public/private answer fails closed. IP literals skip DNS but get the same check.
  */
-export async function resolvePinnedAddress(hostname, { loopbackOnly, resolveHost = defaultResolveHost, signal } = {}) {
+export async function resolvePinnedAddresses(hostname, { loopbackOnly, resolveHost = defaultResolveHost, signal } = {}) {
   const host = bareHost(hostname);
   const answers = isIP(host) ? [{ address: host, family: isIP(host) }] : await abortable(resolveHost(host), signal);
   if (!Array.isArray(answers) || !answers.length) throw new LinkPreviewAddressError(`${host} did not resolve`);
@@ -239,7 +240,21 @@ export async function resolvePinnedAddress(hostname, { loopbackOnly, resolveHost
       throw new LinkPreviewAddressError(`${host} resolved to a disallowed address`);
     }
   }
-  return { address: bareHost(answers[0].address), family: isIP(bareHost(answers[0].address)) };
+  // Keep every validated answer so dual-stack hosts (localhost -> ::1, 127.0.0.1)
+  // still connect through Happy Eyeballs; nothing outside this list is reachable.
+  return answers.map((answer) => {
+    const address = bareHost(answer.address);
+    return { address, family: isIP(address) };
+  });
+}
+
+// A socket `lookup` that answers every query from the validated list only.
+function pinnedListLookup(addresses) {
+  return (_hostname, options, callback) => {
+    const done = typeof options === "function" ? options : callback;
+    if (options && typeof options === "object" && options.all) done(null, addresses.map(({ address, family }) => ({ address, family })));
+    else done(null, addresses[0].address, addresses[0].family);
+  };
 }
 
 export class LinkPreviewAddressError extends Error {}
@@ -269,7 +284,7 @@ export function createPinnedFetch({ resolveHost = defaultResolveHost, requestImp
   return async function pinnedFetch(url, { method = "GET", headers = {}, signal } = {}) {
     const target = new URL(url);
     const hostname = bareHost(target.hostname);
-    const pinned = await resolvePinnedAddress(hostname, { loopbackOnly: isLoopbackHostname(hostname), resolveHost, signal });
+    const pinned = await resolvePinnedAddresses(hostname, { loopbackOnly: isLoopbackHostname(hostname), resolveHost, signal });
     const send = requestImpl || (target.protocol === "https:" ? httpsRequest : httpRequest);
     return new Promise((resolve, reject) => {
       const req = send(target, {
@@ -277,7 +292,8 @@ export function createPinnedFetch({ resolveHost = defaultResolveHost, requestImp
         headers,
         signal,
         agent: false,
-        lookup: pinnedLookup(pinned.address),
+        autoSelectFamily: true,
+        lookup: pinnedListLookup(pinned),
         servername: isIP(hostname) ? undefined : hostname,
       }, (res) => {
         try {
@@ -302,45 +318,47 @@ function toFetchResponse(res) {
   return new Response(nullBody ? null : Readable.toWeb(res), { status: res.statusCode, headers });
 }
 
+export const MATCH_TIMED_OUT = Symbol("link-preview match timed out");
+
 /**
- * Run every rule's regex against one href inside a vm context with a hard
- * timeout (#143). The patterns are compiled inside the context once; a
- * catastrophic pattern throws ERR_SCRIPT_EXECUTION_TIMEOUT instead of blocking
- * the event loop. Returns one match (or null) per rule, or null on timeout.
+ * Bounded regex matching (#143). Each rule's pattern is compiled once inside a
+ * vm context (no string code generation), and every match call runs there with
+ * its own hard timeout, so a catastrophic pattern throws
+ * ERR_SCRIPT_EXECUTION_TIMEOUT instead of blocking the event loop.
+ * `match(index, href)` returns a main-realm match array, null, or MATCH_TIMED_OUT.
  */
 export function createBoundedMatcher(sources, { timeoutMs = LINK_PREVIEW_LIMITS.matchTimeoutMs } = {}) {
   const context = createContext(Object.create(null), { codeGeneration: { strings: false, wasm: false } });
   context.sources = Array.from(sources, String);
+  const patternCount = context.sources.length;
   new Script(`"use strict";
     const patterns = [];
     for (let index = 0; index < sources.length; index += 1) patterns.push(new RegExp(sources[index]));
-    globalThis.matchAll = (href) => {
-      const results = [];
-      for (let index = 0; index < patterns.length; index += 1) {
-        const match = patterns[index].exec(href);
-        results.push(match ? { values: Array.from(match), groups: match.groups ? Object.assign({}, match.groups) : undefined } : null);
-      }
-      return results;
+    globalThis.matchOne = (index, href) => {
+      const match = patterns[index].exec(href);
+      return match ? { values: Array.from(match), groups: match.groups ? Object.assign({}, match.groups) : undefined } : null;
     };`).runInContext(context);
   delete context.sources;
-  const run = new Script("matchAll(href)");
-  return function matchAll(href) {
+  const run = new Script("matchOne(index, href)");
+  function match(index, href) {
+    context.index = index;
     context.href = String(href);
     try {
-      const results = run.runInContext(context, { timeout: timeoutMs });
-      return Array.from(results, (result) => {
-        if (!result) return null;
-        const match = Array.from(result.values);
-        match.groups = result.groups ? { ...result.groups } : undefined;
-        return match;
-      });
+      const result = run.runInContext(context, { timeout: timeoutMs });
+      if (!result) return null;
+      const values = Array.from(result.values);
+      values.groups = result.groups ? { ...result.groups } : undefined;
+      return values;
     } catch (error) {
-      if (error?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") return null;
+      if (error?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") return MATCH_TIMED_OUT;
       throw error;
     } finally {
       context.href = "";
     }
-  };
+  }
+  // Warm each pattern once so first-call compilation does not eat a real budget.
+  for (let index = 0; index < patternCount; index += 1) match(index, "");
+  return { match };
 }
 
 // Unbounded convenience for a single trusted href; the resolver itself uses
@@ -415,7 +433,7 @@ export function createLinkPreviewResolver({
   const options = { ...LINK_PREVIEW_LIMITS, ...limits };
   const cache = new Map();
   const inflight = new Map();
-  const matchAll = createBoundedMatcher(rules.map((rule) => rule.match), { timeoutMs: options.matchTimeoutMs });
+  const matcher = createBoundedMatcher(rules.map((rule) => rule.match), { timeoutMs: options.matchTimeoutMs });
   const timedOut = new Map();
   let lastWarningAt = -Infinity;
   let suppressedWarnings = 0;
@@ -442,28 +460,29 @@ export function createLinkPreviewResolver({
     return pending;
   }
 
-  // Fails closed (#143): a match that exceeds matchTimeoutMs yields no preview,
-  // and the same href is not retried until the failure TTL passes.
+  // First matching rule wins, as before. Fails closed (#143): a rule that exceeds
+  // matchTimeoutMs ends the search with no preview, and the same href is not
+  // retried until the failure TTL passes. Earlier rules that matched still win.
   function matchRule(href) {
     const until = timedOut.get(href);
     if (until > now()) return null;
     if (until) timedOut.delete(href);
-    const matches = matchAll(href);
-    if (!matches) {
-      timedOut.set(href, now() + options.failureTtlMs);
-      while (timedOut.size > options.cacheEntries) timedOut.delete(timedOut.keys().next().value);
-      warnMatchTimeout();
-      return null;
-    }
     for (const [index, rule] of rules.entries()) {
-      const url = resolverUrlFromMatch(rule, matches[index]);
+      const match = matcher.match(index, href);
+      if (match === MATCH_TIMED_OUT) {
+        timedOut.set(href, now() + options.failureTtlMs);
+        while (timedOut.size > options.cacheEntries) timedOut.delete(timedOut.keys().next().value);
+        warnMatchTimeout(index);
+        return null;
+      }
+      const url = resolverUrlFromMatch(rule, match);
       if (url) return { rule, url };
     }
     return null;
   }
 
   // One line per interval; the href is visitor-controlled, so it is never logged.
-  function warnMatchTimeout() {
+  function warnMatchTimeout(index) {
     if (now() - lastWarningAt < options.matchWarningIntervalMs) {
       suppressedWarnings += 1;
       return;
@@ -471,7 +490,7 @@ export function createLinkPreviewResolver({
     const suppressed = suppressedWarnings ? ` (${suppressedWarnings} more since the last warning)` : "";
     lastWarningAt = now();
     suppressedWarnings = 0;
-    warn(`Link preview: a match pattern took longer than ${options.matchTimeoutMs}ms and was stopped; no preview served${suppressed}. Anchor patterns and avoid nested quantifiers.`);
+    warn(`Link preview: linkPreviews[${index}].match took longer than ${options.matchTimeoutMs}ms and was stopped; no preview served${suppressed}. Anchor patterns and avoid nested quantifiers.`);
   }
 
   async function fetchPreview({ rule, url }) {
