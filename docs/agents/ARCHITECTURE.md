@@ -149,6 +149,7 @@ The browser client owns reviewer interaction:
 - Hide only complete HTML comment tokens in rendered Markdown; preserve inline and fenced code literals and never remove text from the source file.
 - Allow only `details` and `summary` through Markdown raw-HTML escaping, strip all attributes except normalized `open` on `details`, and never activate nested arbitrary HTML.
 - Keep footnote labels out of generated raw attributes, route definition content through the normal HTML/link/media safety renderers, and leave undefined or code-contained footnote syntax literal.
+- Classify rendered Markdown links as external in the Markdown client against `location.origin`, never on the server. Add only `target="_blank"` and `rel="noopener noreferrer"`. Do not attach click handlers. Skip anchors that already set `target` or `download`, and never rewrite links in served HTML pages.
 - Keep unresolved wiki references semantically honest: escaped visible text and target metadata are allowed, but fake `href` values and vault-wide filesystem discovery are not.
 - Build document-map markers only from rendered blocks in the selected Markdown response; do not mutate source Markdown to add anchors or progress state.
 - Keep Mermaid local/offline and same-origin; do not add a CDN dependency or allow request paths to select arbitrary files from installed dependencies.

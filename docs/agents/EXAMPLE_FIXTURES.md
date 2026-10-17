@@ -51,6 +51,7 @@ For Markdown-specific changes, use this smaller risk-based set:
 | Basic Markdown shell or no-heading behavior | `minimal-text.md`, `paragraphs-only.md`, `single-long-paragraph.md` |
 | YAML parsing, drawer layout, escaping, or error recovery | `frontmatter-flat.md`, `frontmatter-nested.md`, `frontmatter-invalid.md`, `kitchen-sink.md` |
 | Wiki-link parsing and transform boundaries | `kitchen-sink.md`, `markdown-vault/index.md` |
+| Link targets (new tab vs current tab) and link titles | `kitchen-sink.md`, `footnotes.md`, `markdown-vault/`, plus the generated link folder in `npm run browser:check` |
 | HTML-comment hiding and code boundaries | `html-comments.md`, `kitchen-sink.md` |
 | GFM footnote rendering, safety, and comment reattachment | `footnotes.md`, `kitchen-sink.md` |
 | Native details/summary sanitizing or collapsed comment targeting | `details-summary.md`, `html-comments.md` |
