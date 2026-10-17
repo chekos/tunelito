@@ -37,6 +37,32 @@ Create `tunelito.config.json` beside a selected file or inside a selected folder
 
 A local `markdownCss` path is resolved relative to the config file, then loaded into the rendered Markdown response. The config file itself is not served in folder mode.
 
+## Link previews
+
+`linkPreviews` holds up to 20 resolver rules for [resolver-backed link previews](/how-it-works#resolver-backed-link-previews):
+
+```json
+{
+  "linkPreviews": [
+    {
+      "match": "^http://127\\.0\\.0\\.1:3100/(?<team>[A-Z]+)/issues/(?<id>[A-Z]+-\\d+)$",
+      "resolver": "http://127.0.0.1:3100/api/{team}/issues/{id}",
+      "fields": { "title": "title", "status": "state.name", "priority": "priority.label" }
+    }
+  ]
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `match` | JavaScript regular expression tested against the link's authored `href`. Rules are tried in order. |
+| `resolver` | Absolute `http(s)` URL template. `{0}` is the whole match, `{1}`–`{9}` are numbered groups, and `{name}` is a named group. The scheme and host must be literal. |
+| `fields` | Optional dotted JSON paths for `title`, `status`, and `priority`. A path can index an array, as in `labels.0`. Each path defaults to its own field name. |
+
+`--link-preview <regex> <url-template>` is the CLI form, with `--link-preview-fields title=…,status=…,priority=…` for the rule before it. As with other settings, CLI rules replace configured rules, and project rules replace global rules. Tunelito does not merge them.
+
+Two choices that widen the trust boundary are CLI-only, so a checked-in project config cannot turn them on: `--link-preview-allow-remote` for non-loopback `https` resolvers, and `--link-preview-visitors` for keyed tunnel visitors. `tunelito config show` lists the resolved rules and the layer they came from. The startup output prints each resolver origin. Don't put tokens in a resolver template, because `config show` prints templates in full and Tunelito sends no credentials upstream.
+
 ## Global configuration
 
 Global defaults live at:

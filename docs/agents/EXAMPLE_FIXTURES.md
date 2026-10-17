@@ -52,6 +52,7 @@ For Markdown-specific changes, use this smaller risk-based set:
 | YAML parsing, drawer layout, escaping, or error recovery | `frontmatter-flat.md`, `frontmatter-nested.md`, `frontmatter-invalid.md`, `kitchen-sink.md` |
 | Wiki-link parsing and transform boundaries | `kitchen-sink.md`, `markdown-vault/index.md` |
 | Link targets (new tab vs current tab) and link titles | `kitchen-sink.md`, `footnotes.md`, `markdown-vault/`, plus the generated link folder in `npm run browser:check` |
+| Resolver-backed link previews (`--link-preview`) | `npm run browser:check` (local fake resolver, owner vs visitor, authored-title priority, text-only fields) |
 | HTML-comment hiding and code boundaries | `html-comments.md`, `kitchen-sink.md` |
 | GFM footnote rendering, safety, and comment reattachment | `footnotes.md`, `kitchen-sink.md` |
 | Code block copy buttons and code-block comment anchoring | `kitchen-sink.md` (light and dark), plus `npm run browser:check` and `verify-tunelito drive code-copy` |

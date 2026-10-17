@@ -169,6 +169,50 @@ test("configuration resolution never creates user or project files", () => {
   assert.equal(existsSync(config.configPaths.project), false);
 });
 
+test("linkPreviews layers like other settings and validates each rule", () => {
+  const paths = workspace();
+  const globalRule = { match: "^g:(\\d+)$", resolver: "http://127.0.0.1:3100/g/{1}" };
+  const projectRule = {
+    match: "^http://127\\.0\\.0\\.1:3100/TLL/issues/(?<id>TLL-\\d+)$",
+    resolver: "http://127.0.0.1:3100/api/issues/{id}",
+    fields: { status: "state.name" },
+  };
+  writeFileSync(paths.globalConfigPath, JSON.stringify({ linkPreviews: [globalRule] }));
+
+  const globalOnly = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.equal(globalOnly.linkPreviews.source, "global");
+  assert.deepEqual(globalOnly.linkPreviews.rules.map((rule) => rule.match), [globalRule.match]);
+
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ linkPreviews: [projectRule] }));
+  const project = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.equal(project.linkPreviews.source, "project");
+  assert.deepEqual(project.linkPreviews.rules, [{
+    match: projectRule.match,
+    resolver: projectRule.resolver,
+    fields: { title: "title", status: "state.name", priority: "priority" },
+  }]);
+  assert.equal(project.linkPreviewRules[0].origin, "http://127.0.0.1:3100");
+
+  const cli = resolveTunelitoConfig({
+    targetPath: paths.targetPath,
+    homePath: paths.homePath,
+    env: {},
+    cliLinkPreviews: [{ match: "^c$", resolver: "http://localhost:1/c" }],
+    cliLinkPreviewsProvided: true,
+  });
+  assert.equal(cli.linkPreviews.source, "cli");
+  assert.deepEqual(cli.linkPreviews.rules.map((rule) => rule.match), ["^c$"]);
+
+  const defaults = resolveTunelitoConfig({ targetPath: join(paths.root, "elsewhere.md"), homePath: join(paths.root, "nohome"), env: {} });
+  assert.deepEqual(defaults.linkPreviews, { source: "default", configPath: null, rules: [] });
+
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ linkPreviews: [{ match: "x", resolver: "http://{1}/" }] }));
+  assert.throws(
+    () => resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} }),
+    new RegExp(`Invalid project Tunelito config at ${escapeRegex(paths.projectConfigPath)}: linkPreviews\\[0\\]\\.resolver cannot use placeholders`),
+  );
+});
+
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -168,6 +168,7 @@ Markdown reviews keep the source file untouched while adding presentation-only s
 - GFM footnote references render as numbered links to a footnotes section, with a back-link for every reference. Definitions remain selectable and commentable, while undefined references and footnote syntax inside code stay literal.
 - Links to another origin open in a new tab with `rel="noopener noreferrer"`, so the review room stays open. The browser compares each `http:` or `https:` link with the served origin. Same-origin absolute, relative, root-relative, and `#fragment` links stay in the current tab. `mailto:` links are left alone, and Tunelito never intercepts Cmd/Ctrl-click or middle-click.
 - CommonMark link titles become the `title` attribute, so the browser shows its native tooltip. Tracker links can carry a summary today: `[TLL-1](https://tracker.example/TLL-1 "Fix login redirect · todo · medium")`.
+- Bare tracker links can fill the same hover card from a resolver: `--link-preview '<regex>' '<json-url-template>'`, with an optional `--link-preview-fields title=…,status=…,priority=…`, or a `linkPreviews` config entry. The Tunelito server does the fetch, not the browser. By default it accepts loopback resolvers only, serves previews to the direct local owner only, and fails closed on redirects, non-JSON responses, bodies over 64 KiB, and requests that take longer than 3 seconds. `--link-preview-allow-remote` (https only) and `--link-preview-visitors` are explicit, CLI-only opt-ins. An authored title always wins. See [How it works](docs-site/how-it-works.mdx#resolver-backed-link-previews).
 - In folder sessions, the collapsible left sidebar begins with a clearly labeled `Tunelito navigation` section. Root documents remain visible, folders use independent native disclosures that start closed, every nested Markdown/HTML document remains reachable, and the current document is marked in text and with `aria-current="page"`. Single-file sessions do not receive a one-item tree.
 - A leading YAML front-matter mapping appears as a separate source-derived `Properties` section in that sidebar. Tunelito recognizes it only at the start of the file (after an optional UTF-8 BOM) with complete `---` delimiters. Real YAML scalars, quoted strings, booleans, numbers, dates, arrays, and nested values are accepted in source order. Parsing is bounded to 64 KB and eight nested levels. Invalid YAML leaves the article readable and exposes an escaped copy of the original front matter in an accessible error disclosure. Notes without front matter simply omit this section.
 - Obsidian wiki references render without bracket noise: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[#Heading]]`, and `[[Note#Heading|Alias]]`. This release deliberately does not resolve a vault, create fake links, or support `![[embeds]]`; unresolved references are styled inline text with normalized target metadata for future navigation. Wiki syntax inside inline/fenced code, escaped literals, and escaped raw HTML remains literal.
@@ -221,7 +222,7 @@ tunelito config show ./notes.md
 tunelito config show ./notes.md --json
 ```
 
-Project config files affect presentation only and are blocked from folder-mode static serving.
+Project config files affect presentation and `linkPreviews` resolver rules only. They are blocked from folder-mode static serving.
 
 The public [configuration guide](docs-site/configuration.mdx) documents the stable `--tl-*` token contract for typography, H1–H6 hierarchy, links, code, Mermaid, metadata, ruler state, and focus treatments.
 
@@ -262,6 +263,15 @@ Options:
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
+  --link-preview <regex> <url-template>
+                        Show a Markdown hover card for links matching regex, filled from
+                        resolver JSON fetched by the Tunelito server (repeatable)
+  --link-preview-fields <title=path,status=path,priority=path>
+                        JSON paths for the preceding --link-preview rule
+  --link-preview-allow-remote
+                        Allow https resolvers on non-loopback hosts (default: loopback only)
+  --link-preview-visitors
+                        Also resolve previews for keyed public visitors (default: owner only)
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral

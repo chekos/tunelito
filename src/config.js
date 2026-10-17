@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { normalizeLinkPreviewRules } from "./link-preview.js";
 import { normalizeMarkdownCssHref } from "./markdown.js";
 import { DEFAULT_THEME_NAME, THEME_DETAILS, THEME_NAMES, normalizeThemeName } from "./themes.js";
 
 export const PROJECT_CONFIG_FILENAME = "tunelito.config.json";
 export const CONFIG_FORMAT = "tunelito-config";
 export const CONFIG_VERSION = 1;
-const CONFIG_KEYS = new Set(["theme", "markdownCss"]);
+const CONFIG_KEYS = new Set(["theme", "markdownCss", "linkPreviews"]);
 
 export function resolveTunelitoConfig({
   targetPath = process.cwd(),
@@ -15,6 +16,8 @@ export function resolveTunelitoConfig({
   cliThemeProvided = false,
   cliMarkdownCss,
   cliMarkdownCssProvided = false,
+  cliLinkPreviews,
+  cliLinkPreviewsProvided = false,
   env = process.env,
   homePath = homedir(),
 } = {}) {
@@ -45,6 +48,19 @@ export function resolveTunelitoConfig({
   });
   const markdownCss = resolveMarkdownCss(cssCandidate);
 
+  // linkPreviews is replaced wholesale by a higher layer, like every other setting.
+  const linkPreviewCandidate = pickValue({
+    key: "linkPreviews",
+    cliProvided: cliLinkPreviewsProvided,
+    cliValue: cliLinkPreviews,
+    projectConfig,
+    globalConfig,
+    defaultValue: [],
+  });
+  const linkPreviewRules = normalizeLinkPreviewRules(linkPreviewCandidate.value || [], {
+    label: linkPreviewCandidate.source === "cli" ? "--link-preview" : "linkPreviews",
+  });
+
   return {
     format: CONFIG_FORMAT,
     version: CONFIG_VERSION,
@@ -67,6 +83,12 @@ export function resolveTunelitoConfig({
       kind: markdownCss.kind,
       resolved: markdownCss.path || markdownCss.href || "",
     },
+    linkPreviews: {
+      source: linkPreviewCandidate.source,
+      configPath: linkPreviewCandidate.configPath || null,
+      rules: linkPreviewRules.map(({ match, resolver, fields }) => ({ match, resolver, fields })),
+    },
+    linkPreviewRules,
     markdownCssHref: markdownCss.href,
     markdownCssText: markdownCss.text,
     blockedPaths: projectConfig.exists ? [projectConfigPath] : [],
@@ -113,6 +135,13 @@ function readConfigFile(path, layer) {
     }
   }
   if (parsed.theme) normalizeThemeName(parsed.theme);
+  if ("linkPreviews" in parsed) {
+    try {
+      normalizeLinkPreviewRules(parsed.linkPreviews);
+    } catch (error) {
+      throw new Error(`Invalid ${layer} Tunelito config at ${path}: ${error.message}`);
+    }
+  }
   return { exists: true, path, layer, values: parsed };
 }
 
