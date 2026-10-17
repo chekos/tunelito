@@ -701,6 +701,8 @@ body.tunelito-comments-open .tunelito-document-map {
 .tunelito-markdown pre[data-tunelito-copyable] > code {
   display: block;
   overflow-x: auto;
+  /* Keeps short lines and fully scrolled long lines clear of the copy button. */
+  padding-right: 1.75rem;
 }
 .tunelito-code-copy {
   position: absolute;

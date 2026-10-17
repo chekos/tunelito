@@ -689,9 +689,18 @@ async function verifyCodeCopy() {
       code.scrollLeft = code.scrollWidth;
       const button = pre.querySelector(".tunelito-code-copy").getBoundingClientRect();
       const box = pre.getBoundingClientRect();
-      return { scrolls: code.scrollLeft > 0, pinned: button.right <= box.right && button.left >= box.left };
+      const text = Array.from(code.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).at(-1);
+      const end = text.textContent.replace(/\n$/, "").length;
+      const lastCharacter = document.createRange();
+      lastCharacter.setStart(text, end - 1);
+      lastCharacter.setEnd(text, end);
+      return {
+        scrolls: code.scrollLeft > 0,
+        pinned: button.right <= box.right && button.left >= box.left,
+        lineEndClear: lastCharacter.getBoundingClientRect().right <= button.left,
+      };
     });
-    assert.deepEqual(scrolledGeometry, { scrolls: true, pinned: true }, "wide code scrolls inside the block while the copy button stays pinned");
+    assert.deepEqual(scrolledGeometry, { scrolls: true, pinned: true, lineEndClear: true }, "wide code scrolls inside the block, the copy button stays pinned, and the line end scrolls clear of it");
     await sqlPre.evaluate((pre) => { pre.querySelector("code").scrollLeft = 0; });
 
     await page.waitForFunction(() => {
