@@ -94,7 +94,12 @@ Public:  https://example.trycloudflare.com/?tunelito_key=...
 ```
 
 Tunelito prints `Public:` only after the randomized Quick Tunnel hostname has
-been verified against the running Tunelito server. Agent sessions also persist
+been verified against the running Tunelito server. A brand-new hostname can take
+a minute or more to resolve, especially on macOS, which caches the first "not
+found" answer. Tunelito prints `Public:  waiting for DNS to propagate...`,
+checks the hostname through public DNS (1.1.1.1) with normal certificate
+validation, and keeps retrying for up to about two minutes before giving up and
+naming the cause. Agent sessions also persist
 that verified URL in `.tunelito/session.json` for recovery. Share that URL with the
 person on your call. Open the `Local:` URL yourself; direct local sessions are
 marked as the owner, while public tunnel sessions are marked as visitors.

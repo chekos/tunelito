@@ -10,6 +10,26 @@ It ignores Cloudflare's provisioning endpoint, waits for the generated Quick
 Tunnel hostname, and verifies that the hostname reaches the current Tunelito
 server before printing `Public:`.
 
+A new Quick Tunnel hostname can take a minute or more to resolve. macOS in
+particular caches the first "not found" answer, so Tunelito may print:
+
+```text
+Public:  waiting for DNS to propagate for <host>.trycloudflare.com (ENOTFOUND; up to ~2 minutes)...
+```
+
+While it waits, Tunelito also looks the hostname up through public DNS
+(1.1.1.1 and 1.0.0.1) and connects to that address with the real hostname for
+TLS and certificate checks. It prints `Public:` only after the keyed request
+reaches this Tunelito server. If the tunnel still has not routed after about
+two minutes, the `Public:  unavailable (...)` line names the last cause:
+
+| Code in the message | Meaning |
+| --- | --- |
+| `ENOTFOUND`, `EAI_AGAIN` | The hostname never resolved, locally or through public DNS. Check network or firewall rules for DNS. |
+| `ERR_TLS_*`, `CERT_*` | A TLS or certificate check failed. Look for a proxy or firewall intercepting HTTPS. |
+| `HTTP_<status>`, `MISSING_MARKER` | Something answered, but it was not this Tunelito server. |
+| `ETIMEDOUT`, `ECONNREFUSED`, `ECONNRESET` | The connection did not complete. |
+
 If neither works:
 
 ```bash

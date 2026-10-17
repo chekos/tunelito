@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixes Quick Tunnel startup when the system resolver caches a first `ENOTFOUND` for the new hostname, as macOS does. Tunelito now prints a `Public:  waiting for DNS to propagate...` line, checks the hostname through public DNS (1.1.1.1/1.0.0.1) and connects to that address with normal TLS certificate validation, and keeps verifying for up to about two minutes with capped backoff. `Public:` still appears only after the keyed request returns HTTP 200 with Tunelito's marker. If it times out, the message names the cause code (`ENOTFOUND`, a TLS error, `HTTP_<status>`, or `MISSING_MARKER`).
+
 ## 0.24.0 - 2026-09-30
 
 - Keeps Markdown comments on an explicit `{#id}` or the nearest heading when the quoted text changes, and labels them stale only when that anchor is gone too. A repeated quote elsewhere on the page does not steal a comment whose anchor still exists. Nested `{#id}` markers stay on the list item that carries them.
