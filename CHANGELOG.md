@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Opens links to another origin from rendered Markdown in a new tab with `rel="noopener noreferrer"`, so the review room stays open. Same-origin absolute, relative, root-relative, fragment, footnote, and `mailto:` links stay in the current tab, and Cmd/Ctrl-click and middle-click keep their browser behavior. Served HTML pages are unchanged.
+- Documents that CommonMark link titles render as the native `title` tooltip, for example `[TLL-1](url "Title · status · priority")`, and adds regression coverage.
 - Fixes Quick Tunnel startup when the system resolver caches a first `ENOTFOUND` for the new hostname, as macOS does. Tunelito now prints a `Public:  waiting for DNS to propagate...` line, checks the hostname through public DNS (1.1.1.1/1.0.0.1) and connects to that address with normal TLS certificate validation, and keeps verifying for up to about two minutes with capped backoff. `Public:` still appears only after the keyed request returns HTTP 200 with Tunelito's marker. If it times out, the message names the cause code (`ENOTFOUND`, a TLS error, `HTTP_<status>`, or `MISSING_MARKER`).
 
 ## 0.24.0 - 2026-09-30

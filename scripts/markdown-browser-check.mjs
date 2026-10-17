@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,7 @@ try {
   await verifyFootnotesAndCommentAnchoring();
   await verifyDetailsAndCollapsedCommentTarget();
   await verifyReviewRoom();
+  await verifyLinkTargetsAndTitles();
   await verifyResponsiveAndComments();
   await verifyEditableSource();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, the folder vault, and local source editing.\n`);
@@ -711,6 +712,118 @@ async function verifyReviewRoom() {
     await page.waitForFunction(() => document.querySelector("#tll-563 .tunelito-fold"));
     assert.equal(await page.locator(".tunelito-markdown p", { hasText: "The launch copy stays here." }).isHidden(), true);
     assert.equal(readFileSync(filePath, "utf8"), source);
+  } finally {
+    await context.close();
+    await instance.close();
+  }
+}
+
+async function verifyLinkTargetsAndTitles() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-markdown-links-browser-"));
+  const siteDir = join(tempDir, "site");
+  mkdirSync(join(siteDir, "notes"), { recursive: true });
+  writeFileSync(join(siteDir, "workflow-final.md"), "# Workflow final\n\nRelative target.\n");
+  writeFileSync(join(siteDir, "notes", "next.md"), "# Next\n\nRoot-relative target.\n");
+  const indexPath = join(siteDir, "index.md");
+  writeFileSync(indexPath, "# Links\n");
+  const instance = await createTunelitoServer({
+    filePath: siteDir,
+    commentsPath: join(tempDir, "site.comments.md"),
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+  });
+  const origin = new URL(instance.localUrl).origin;
+  const source = [
+    "# Links",
+    "",
+    "Read the [external report](https://example.com/report.pdf) before the call.",
+    "",
+    '[TLL-1](https://tracker.example/TLL/issues/TLL-1 "Fix login redirect · todo · medium")',
+    "",
+    `[Same origin](${origin}/notes/next.md) [Relative](workflow-final.md) [Root relative](/notes/next.md) [Fragment](#verification) [Protocol relative](//example.org/brief) [Mail](mailto:team@example.com)`,
+    "",
+    "Footnote reference.[^1]",
+    "",
+    "## Verification",
+    "",
+    "Checked.",
+    "",
+    "[^1]: Footnote body.",
+    "",
+  ].join("\n");
+  writeFileSync(indexPath, source);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+  await context.route(/^https:\/\/(example\.com|example\.org|tracker\.example)\//, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>External</title>" }));
+  const page = await context.newPage();
+  const link = (name) => page.locator(".tunelito-markdown").getByRole("link", { name, exact: true });
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.documentElement.dataset.tunelitoMarkdownUi === "ready");
+    const reviewUrl = page.url();
+
+    for (const name of ["external report", "TLL-1", "Protocol relative"]) {
+      assert.equal(await link(name).getAttribute("target"), "_blank", `${name} must open in a new tab`);
+      assert.equal(await link(name).getAttribute("rel"), "noopener noreferrer", `${name} must carry noopener protection`);
+    }
+    for (const name of ["Same origin", "Relative", "Root relative", "Fragment", "Mail"]) {
+      assert.equal(await link(name).getAttribute("target"), null, `${name} must stay in the current tab`);
+      assert.equal(await link(name).getAttribute("rel"), null, `${name} must keep its plain anchor`);
+    }
+    assert.equal(await page.locator("[data-footnote-ref], [data-footnote-backref]").evaluateAll((links) => links.every((anchor) => !anchor.hasAttribute("target"))), true, "footnote links must stay in the current tab");
+    assert.equal(await page.locator(".tunelito-navigation a[target]").count(), 0, "folder navigation must stay in the current tab");
+
+    const [popup] = await Promise.all([context.waitForEvent("page"), link("external report").click()]);
+    await popup.waitForLoadState();
+    assert.equal(popup.url(), "https://example.com/report.pdf");
+    assert.equal(await popup.evaluate(() => window.opener), null, "the external tab must not keep an opener");
+    assert.equal(page.url(), reviewUrl, "the review room must stay open in its original tab");
+    await popup.close();
+
+    const [modifierTab] = await Promise.all([context.waitForEvent("page"), link("Relative").click({ modifiers: ["ControlOrMeta"] })]);
+    await modifierTab.close();
+    const [middleTab] = await Promise.all([context.waitForEvent("page"), link("Root relative").click({ button: "middle" })]);
+    await middleTab.close();
+    assert.equal(page.url(), reviewUrl, "modifier and middle clicks must stay with the browser");
+
+    await link("Fragment").click();
+    assert.equal(new URL(page.url()).hash, "#verification");
+    await page.locator("[data-footnote-ref]").click();
+    assert.equal(new URL(page.url()).hash, "#footnote-1");
+    await page.locator("[data-footnote-backref]").click();
+    assert.equal(new URL(page.url()).hash, "#footnote-ref-1");
+
+    const tracker = link("TLL-1");
+    assert.equal(await tracker.getAttribute("title"), "Fix login redirect · todo · medium");
+    await tracker.hover();
+    await page.waitForFunction(() => !document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await tracker.getAttribute("title"), "Fix login redirect · todo · medium", "hover UI must leave the native title tooltip in place");
+    assert.equal(await tracker.evaluate((anchor) => {
+      const rect = anchor.getBoundingClientRect();
+      return anchor.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    }), true, "injected UI must not cover a titled link");
+
+    await link("external report").evaluate((anchor) => {
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".selection")?.classList.contains("visible"));
+    await page.evaluate(() => window.getSelection().removeAllRanges());
+
+    await link("Same origin").click();
+    await page.waitForURL(/\/notes\/next\.md/);
+    await page.goBack({ waitUntil: "networkidle" });
+    await link("Relative").click();
+    await page.waitForURL(/\/workflow-final\.md/);
+    await page.goBack({ waitUntil: "networkidle" });
+    await link("Root relative").click();
+    await page.waitForURL(/\/notes\/next\.md/);
+    assert.equal(context.pages().length, 1, "same-origin links must not open new tabs");
+    assert.equal(readFileSync(indexPath, "utf8"), source);
   } finally {
     await context.close();
     await instance.close();

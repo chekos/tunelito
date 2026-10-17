@@ -5,6 +5,7 @@
   root.dataset.tunelitoMarkdownUi = "ready";
 
   let revealBlock = () => {};
+  setupExternalLinks();
   setupSourceEditor();
   setupPropertiesDrawer();
   setupDocumentMap();
@@ -810,6 +811,26 @@
       else if (!model.status) model.status = part;
     }
     return model;
+  }
+
+  // Only the browser knows the served origin, so external links are classified here.
+  // Native target/rel keep modifier and middle clicks with the browser.
+  function setupExternalLinks() {
+    for (const link of markdown.querySelectorAll("a[href]")) {
+      if (link.hasAttribute("target") || link.hasAttribute("download")) continue;
+      let url;
+      try {
+        url = new URL(link.getAttribute("href"), location.href);
+      } catch {
+        continue;
+      }
+      if ((url.protocol !== "http:" && url.protocol !== "https:") || url.origin === location.origin) continue;
+      const rel = new Set((link.getAttribute("rel") || "").split(/\s+/).filter(Boolean));
+      rel.add("noopener");
+      rel.add("noreferrer");
+      link.setAttribute("target", "_blank");
+      link.setAttribute("rel", [...rel].join(" "));
+    }
   }
 
   function ensureHeadingIds(blocks) {
