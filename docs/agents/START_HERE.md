@@ -30,6 +30,7 @@ If the tree is dirty, identify which changes are yours before editing. Preserve 
 - `src/comments.js`: markdown persistence and comment restoration.
 - `src/source-edit.js`: bounded UTF-8 snapshots, strong revisions, and atomic mode-preserving Markdown source saves.
 - `src/link-preview.js`: opt-in resolver rules, host policy, bounded server-side fetch, and cache for Markdown link hover cards.
+- `src/link-preview-headers.js`: opt-in resolver header validation and fetch-time `${env:NAME}` resolution; resolved values never leave the fetch.
 - `src/agent-worker.js`: opt-in local coding-agent worker, resolution ledger, provider commands.
 - `src/inject.js`: HTML injection and CSP meta handling.
 - `src/ws.js`: minimal WebSocket hub.

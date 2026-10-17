@@ -43,6 +43,12 @@ Options:
                         resolver JSON fetched by the Tunelito server (repeatable)
   --link-preview-fields <title=path,status=path,priority=path>
                         JSON paths for the preceding --link-preview rule
+  --link-preview-header '<Name>: <value>'
+                        Add a request header to the preceding --link-preview rule; read secrets
+                        with ${env:NAME} (single-quote it; repeatable, owner-only)
+  --link-preview-env <NAME>
+                        Allow resolver headers to read this environment variable; required
+                        for any resolver header, CLI only (repeatable)
   --link-preview-allow-remote
                         Allow https resolvers on non-loopback hosts (default: loopback only)
   --link-preview-visitors
@@ -144,6 +150,20 @@ tunelito ./briefing.md \
 ```
 
 The regex is matched against the link's `href` as written. `{0}` is the whole match, `{1}`–`{9}` are numbered groups, and `{name}` is a named group. Each value is URL-encoded before it goes into the template, and the scheme and host must be literal. The Tunelito server fetches the JSON, so the browser never contacts the resolver. Resolvers must be loopback hosts unless `--link-preview-allow-remote` is passed, and a remote resolver must use `https://`. Previews are served to the direct local owner only; `--link-preview-visitors` also serves keyed tunnel visitors. An authored link title always wins over resolved data. See [How it works](/how-it-works#resolver-backed-link-previews) for limits and the trust boundary.
+
+A resolver that needs a token can send a header. The value reads the secret from an environment variable, and `--link-preview-env` names each variable Tunelito may read:
+
+```bash
+export TRACKER_TOKEN=...
+tunelito ./briefing.md \
+  --link-preview '^https://tracker\.example\.com/issues/(?<id>[A-Z]+-\d+)$' \
+                 'https://tracker.example.com/api/issues/{id}' \
+  --link-preview-header 'Authorization: Bearer ${env:TRACKER_TOKEN}' \
+  --link-preview-env TRACKER_TOKEN \
+  --link-preview-allow-remote
+```
+
+Single-quote the header so your shell does not expand `${env:…}`. Headers go only to that rule's resolver origin, over `https://` or loopback `http://`, and never on a redirect. Credential-looking headers (`Authorization`, `Cookie`, or a name containing `token`, `key`, `secret`, `auth`, or `session`) must be `${env:NAME}` or `<Scheme> ${env:NAME}`; a literal secret is refused. A rule with headers serves the direct local owner only, even with `--link-preview-visitors`. If the variable is unset or empty, that rule shows no card and Tunelito prints one warning that names the variable. Startup output, `config show`, and errors show `${env:NAME}`, never the value.
 
 Fenced `mermaid` blocks render automatically from Tunelito's packaged same-origin runtime. Other fenced languages stay as source code, and invalid diagrams keep a readable source fallback. Each non-Mermaid code block shows a copy button on hover or keyboard focus; it copies the code exactly as written.
 

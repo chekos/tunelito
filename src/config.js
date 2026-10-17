@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { normalizeLinkPreviewRules } from "./link-preview.js";
+import { headerReport } from "./link-preview-headers.js";
 import { normalizeMarkdownCssHref } from "./markdown.js";
 import { DEFAULT_THEME_NAME, THEME_DETAILS, THEME_NAMES, normalizeThemeName } from "./themes.js";
 
@@ -86,7 +87,13 @@ export function resolveTunelitoConfig({
     linkPreviews: {
       source: linkPreviewCandidate.source,
       configPath: linkPreviewCandidate.configPath || null,
-      rules: linkPreviewRules.map(({ match, resolver, fields }) => ({ match, resolver, fields })),
+      // Header values are reported as their ${env:NAME} templates; resolved values never are.
+      rules: linkPreviewRules.map(({ match, resolver, fields, headers }) => ({
+        match,
+        resolver,
+        fields,
+        ...(headers.length ? { headers: headerReport(headers) } : {}),
+      })),
     },
     linkPreviewRules,
     markdownCssHref: markdownCss.href,
@@ -137,7 +144,12 @@ function readConfigFile(path, layer) {
   if (parsed.theme) normalizeThemeName(parsed.theme);
   if ("linkPreviews" in parsed) {
     try {
-      normalizeLinkPreviewRules(parsed.linkPreviews);
+      const rules = normalizeLinkPreviewRules(parsed.linkPreviews);
+      // A cloned project config must not be able to point an allowlisted secret at its own
+      // resolver, so credentialed rules belong only on the CLI or in the user's global config.
+      if (layer === "project" && rules.some((rule) => rule.headers.length)) {
+        throw new Error("linkPreviews headers are not allowed in a project config; use --link-preview-header or your global config");
+      }
     } catch (error) {
       throw new Error(`Invalid ${layer} Tunelito config at ${path}: ${error.message}`);
     }

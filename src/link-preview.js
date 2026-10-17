@@ -1,6 +1,8 @@
 // Resolver-backed link previews (#135). The Tunelito server fetches preview JSON on the
 // browser's behalf so origin, host, size, and timeout rules stay server-side.
 
+import { LinkPreviewHeaderError, normalizeLinkPreviewHeaders, resolveLinkPreviewHeaders } from "./link-preview-headers.js";
+
 export const LINK_PREVIEW_ROUTE = "/__tunelito/link-preview";
 export const LINK_PREVIEW_REQUEST_HEADER = "x-tunelito-link-preview";
 export const LINK_PREVIEW_FIELDS = ["title", "status", "priority"];
@@ -20,7 +22,7 @@ export const LINK_PREVIEW_LIMITS = Object.freeze({
   failureTtlMs: 15_000,
 });
 
-const RULE_KEYS = new Set(["match", "resolver", "fields"]);
+const RULE_KEYS = new Set(["match", "resolver", "fields", "headers"]);
 const FIELD_PATH = /^[A-Za-z0-9_$-]+(?:\.[A-Za-z0-9_$-]+)*$/;
 const PLACEHOLDER = /\{([A-Za-z_][A-Za-z0-9_]*|\d)\}/g;
 const JSON_CONTENT_TYPE = /^application\/(?:[\w.+-]+\+)?json\s*(?:;|$)/i;
@@ -65,7 +67,17 @@ function normalizeRule(rule, label) {
     hostname: origin.hostname,
     protocol: origin.protocol,
     fields: normalizeFields(rule.fields, label),
+    headers: normalizeRuleHeaders(rule.headers, label),
   };
+}
+
+function normalizeRuleHeaders(headers, label) {
+  try {
+    return normalizeLinkPreviewHeaders(headers, label);
+  } catch (error) {
+    if (error instanceof LinkPreviewHeaderError) throw new LinkPreviewConfigError(error.message);
+    throw error;
+  }
 }
 
 function templateOrigin(template, label) {
@@ -133,6 +145,31 @@ export function enforceLinkPreviewHostPolicy(rules, { allowRemote = false } = {}
     }
     if (isReservedAddressLiteral(rule.hostname)) {
       throw new LinkPreviewConfigError(`linkPreviews[${index}].resolver host ${rule.hostname} is a private, link-local, or unspecified address; remote resolvers must be public hosts`);
+    }
+  }
+  return rules;
+}
+
+// Resolver headers (#144) are off unless the CLI names, with --link-preview-env, every
+// environment variable they read. A config file alone can never enable them. Headers go only
+// to https or loopback-http resolvers.
+export function enforceLinkPreviewHeaderPolicy(rules, { allowedEnv = [] } = {}) {
+  const allowed = new Set(allowedEnv);
+  for (const [index, rule] of rules.entries()) {
+    if (!rule.headers?.length) continue;
+    const label = `linkPreviews[${index}].headers`;
+    if (!allowed.size) {
+      throw new LinkPreviewConfigError(`${label} is set, but resolver headers are off; pass --link-preview-env <NAME> for each environment variable they read (config files cannot enable headers)`);
+    }
+    if (rule.protocol !== "https:" && !isLoopbackHostname(rule.hostname)) {
+      throw new LinkPreviewConfigError(`${label} requires an https:// resolver or a loopback http:// resolver`);
+    }
+    for (const header of rule.headers) {
+      for (const name of header.env) {
+        if (!allowed.has(name)) {
+          throw new LinkPreviewConfigError(`${label}[${JSON.stringify(header.name)}] reads \${env:${name}}; pass --link-preview-env ${name} to allow it`);
+        }
+      }
     }
   }
   return rules;
@@ -218,11 +255,28 @@ export function createLinkPreviewResolver({
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
   limits = {},
+  allowedEnv = [],
+  env = process.env,
+  warn = (message) => console.warn(message),
 } = {}) {
   enforceLinkPreviewHostPolicy(rules, { allowRemote });
+  enforceLinkPreviewHeaderPolicy(rules, { allowedEnv });
   const options = { ...LINK_PREVIEW_LIMITS, ...limits };
   const cache = new Map();
   const inflight = new Map();
+  const warned = new Set();
+  // One warning per variable and reason. It names the variable, never its value.
+  const warnHeaderEnv = (name, reason) => {
+    if (warned.has(`${name}:${reason}`)) return;
+    warned.add(`${name}:${reason}`);
+    const problem = reason === "unset" ? "is not set or is empty"
+      : reason === "too-long" ? "makes a resolver header too long"
+        : "contains a line break, control character, or non-Latin-1 character";
+    warn(`Link previews: environment variable ${name} ${problem}; previews that need it are disabled.`);
+  };
+  for (const rule of rules) {
+    if (rule.headers?.length) resolveLinkPreviewHeaders(rule.headers, { env, warn: warnHeaderEnv });
+  }
 
   // Visitors (only with --link-preview-visitors) get shorter hrefs and cannot take the
   // last upstream slot, so they cannot starve the owner's previews.
@@ -230,38 +284,45 @@ export function createLinkPreviewResolver({
     const value = String(href || "").trim();
     const maxLength = visitor ? options.maxVisitorHrefLength : options.maxHrefLength;
     if (!value || value.length > maxLength) return { status: 404 };
-    const match = matchRule(value);
+    const match = matchRule(value, visitor);
     if (!match) return { status: 404 };
-    const cached = cache.get(match.url);
+    const cached = cache.get(match.key);
     if (cached && cached.expires > now()) return cached.result;
-    if (cached) cache.delete(match.url);
-    if (inflight.has(match.url)) return inflight.get(match.url);
+    if (cached) cache.delete(match.key);
+    if (inflight.has(match.key)) return inflight.get(match.key);
     const capacity = visitor ? Math.max(0, options.maxConcurrent - 1) : options.maxConcurrent;
     if (inflight.size >= capacity) return { status: 503 };
     const pending = fetchPreview(match).then((result) => {
-      remember(match.url, result);
+      remember(match.key, result);
       return result;
-    }).finally(() => inflight.delete(match.url));
-    inflight.set(match.url, pending);
+    }).finally(() => inflight.delete(match.key));
+    inflight.set(match.key, pending);
     return pending;
   }
 
-  function matchRule(href) {
-    for (const rule of rules) {
+  // Rules that send headers are owner-only: a visitor must never borrow the owner's
+  // credentials, even with --link-preview-visitors. Credentialed results get their own cache
+  // keys so an uncredentialed rule that builds the same URL cannot read them.
+  function matchRule(href, visitor) {
+    for (const [index, rule] of rules.entries()) {
+      const credentialed = Boolean(rule.headers?.length);
+      if (visitor && credentialed) continue;
       const url = buildResolverUrl(rule, href);
-      if (url) return { rule, url };
+      if (url) return { rule, url, key: credentialed ? `credentialed:${index} ${url}` : url };
     }
     return null;
   }
 
   async function fetchPreview({ rule, url }) {
+    const extraHeaders = rule.headers?.length ? resolveLinkPreviewHeaders(rule.headers, { env, warn: warnHeaderEnv }) : {};
+    if (!extraHeaders) return { status: 502 };
     let response;
     try {
       response = await fetchImpl(url, {
         method: "GET",
         redirect: "manual",
         credentials: "omit",
-        headers: { accept: "application/json" },
+        headers: { ...extraHeaders, accept: "application/json" },
         signal: AbortSignal.timeout(options.timeoutMs),
       });
     } catch {

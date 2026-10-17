@@ -29,7 +29,8 @@ import {
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { resolveTunelitoConfig } from "../src/config.js";
-import { enforceLinkPreviewHostPolicy, parseLinkPreviewFieldsArg } from "../src/link-preview.js";
+import { enforceLinkPreviewHeaderPolicy, enforceLinkPreviewHostPolicy, parseLinkPreviewFieldsArg } from "../src/link-preview.js";
+import { isValidEnvName, parseLinkPreviewHeaderArg } from "../src/link-preview-headers.js";
 import { buildDoctorReport } from "../src/doctor.js";
 import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { isMarkdownPath, normalizeMarkdownCssHref } from "../src/markdown.js";
@@ -89,6 +90,12 @@ Options:
                         resolver JSON fetched by the Tunelito server (repeatable)
   --link-preview-fields <title=path,status=path,priority=path>
                         JSON paths for the preceding --link-preview rule
+  --link-preview-header '<Name>: <value>'
+                        Add a request header to the preceding --link-preview rule; read secrets
+                        with \${env:NAME} (single-quote it; repeatable, owner-only)
+  --link-preview-env <NAME>
+                        Allow resolver headers to read this environment variable; required
+                        for any resolver header, CLI only (repeatable)
   --link-preview-allow-remote
                         Allow https resolvers on non-loopback hosts (default: loopback only)
   --link-preview-visitors
@@ -234,6 +241,20 @@ export function parseArgs(argv) {
       if (!last) throw new Error("--link-preview-fields must follow the --link-preview rule it maps");
       if (last.fields) throw new Error("--link-preview-fields was given twice for the same --link-preview rule");
       last.fields = parseLinkPreviewFieldsArg(value);
+    } else if (arg === "--link-preview-header") {
+      const value = requiredValue(argv[++i], "--link-preview-header", "'Name: value' header");
+      const last = opts.linkPreviews?.at(-1);
+      if (!last) throw new Error("--link-preview-header must follow the --link-preview rule it applies to");
+      const [name, template] = parseLinkPreviewHeaderArg(value);
+      last.headers = { ...(last.headers || {}) };
+      if (Object.keys(last.headers).some((key) => key.toLowerCase() === name.toLowerCase())) {
+        throw new Error(`--link-preview-header ${name} was given twice for the same --link-preview rule`);
+      }
+      last.headers[name] = template;
+    } else if (arg === "--link-preview-env") {
+      const name = requiredValue(argv[++i], "--link-preview-env", "environment variable name");
+      if (!isValidEnvName(name)) throw new Error("--link-preview-env requires an environment variable name such as TRACKER_TOKEN");
+      opts.linkPreviewAllowedEnv = [...new Set([...(opts.linkPreviewAllowedEnv || []), name])];
     } else if (arg === "--link-preview-allow-remote") {
       opts.linkPreviewAllowRemote = true;
     } else if (arg === "--link-preview-visitors") {
@@ -421,13 +442,14 @@ async function main() {
       cliLinkPreviewsProvided: Boolean(opts.linkPreviews),
     });
     enforceLinkPreviewHostPolicy(resolvedConfig.linkPreviewRules, { allowRemote: opts.linkPreviewAllowRemote });
+    enforceLinkPreviewHeaderPolicy(resolvedConfig.linkPreviewRules, { allowedEnv: opts.linkPreviewAllowedEnv });
   } catch (error) {
     console.error(error.message);
     process.exit(1);
   }
   const linkPreviewCount = resolvedConfig.linkPreviewRules.length;
-  if ((opts.linkPreviewAllowRemote || opts.linkPreviewVisitors) && !linkPreviewCount) {
-    console.error("--link-preview-allow-remote and --link-preview-visitors require at least one --link-preview rule or linkPreviews config entry.");
+  if ((opts.linkPreviewAllowRemote || opts.linkPreviewVisitors || opts.linkPreviewAllowedEnv) && !linkPreviewCount) {
+    console.error("--link-preview-allow-remote, --link-preview-visitors, and --link-preview-env require at least one --link-preview rule or linkPreviews config entry.");
     process.exit(1);
   }
 
@@ -457,6 +479,7 @@ async function main() {
     linkPreviewRules: resolvedConfig.linkPreviewRules,
     linkPreviewVisitors: Boolean(opts.linkPreviewVisitors),
     linkPreviewAllowRemote: Boolean(opts.linkPreviewAllowRemote),
+    linkPreviewAllowedEnv: opts.linkPreviewAllowedEnv || [],
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -519,10 +542,7 @@ async function main() {
   console.log(`Local:   ${instance.localUrl}`);
   console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
   if (opts.editable) console.log("Editing: direct local owner only; public links remain read-only");
-  if (linkPreviewCount) {
-    console.log(`Previews: ${linkPreviewCount} link-preview rule${linkPreviewCount === 1 ? "" : "s"} (${resolvedConfig.linkPreviews.source}); ${opts.linkPreviewVisitors ? "owner and keyed visitors" : "direct local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`);
-    console.log(`Resolvers: ${[...new Set(resolvedConfig.linkPreviewRules.map((rule) => rule.origin))].join(", ")}`);
-  }
+  for (const line of linkPreviewStartupLines(resolvedConfig, opts)) console.log(line);
   console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
@@ -1784,6 +1804,7 @@ export function runConfigCommand(args, {
       `Theme:        ${report.theme.value} (${report.theme.source})`,
       `Markdown CSS: ${report.markdownCss.resolved || "(none)"} (${report.markdownCss.source})`,
       `Link previews: ${report.linkPreviews.rules.length} rule${report.linkPreviews.rules.length === 1 ? "" : "s"} (${report.linkPreviews.source})`,
+      ...config.linkPreviewRules.filter((rule) => rule.headers.length).map((rule) => `  Headers:    ${rule.origin} <- ${describeLinkPreviewHeaders(rule.headers)} (needs --link-preview-env when serving)`),
       `Global file:  ${report.configFiles.global.path} (${report.configFiles.global.exists ? "found" : "missing"})`,
       `Project file: ${report.configFiles.project.path} (${report.configFiles.project.exists ? "found" : "missing"})`,
       `Themes:       ${report.availableThemes.map((theme) => theme.name).join(", ")}`,
@@ -1791,6 +1812,24 @@ export function runConfigCommand(args, {
     ].join("\n"));
   }
   return 0;
+}
+
+// Startup summary for link previews. Resolver headers are listed by name and source
+// variable only, never by value.
+export function linkPreviewStartupLines(resolvedConfig, opts = {}) {
+  const rules = resolvedConfig.linkPreviewRules || [];
+  if (!rules.length) return [];
+  const lines = [
+    `Previews: ${rules.length} link-preview rule${rules.length === 1 ? "" : "s"} (${resolvedConfig.linkPreviews.source}); ${opts.linkPreviewVisitors ? "owner and keyed visitors" : "direct local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`,
+    `Resolvers: ${[...new Set(rules.map((rule) => rule.origin))].join(", ")}`,
+  ];
+  const headerLines = rules.filter((rule) => rule.headers?.length).map((rule) => `${rule.origin} <- ${describeLinkPreviewHeaders(rule.headers)}`);
+  if (headerLines.length) lines.push(`Resolver headers (owner only): ${[...new Set(headerLines)].join("; ")}`);
+  return lines;
+}
+
+function describeLinkPreviewHeaders(headers) {
+  return headers.map((header) => `${header.name}${header.env.length ? ` from ${header.env.map((name) => `\${env:${name}}`).join(", ")}` : ""}`).join(", ");
 }
 
 function publicConfigReport(config) {
