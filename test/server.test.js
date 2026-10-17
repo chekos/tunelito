@@ -153,6 +153,10 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(markdownClientSource, /tunelito:comments-panel/);
     assert.match(markdownClientSource, /H5: "14px"/);
     assert.match(markdownClientSource, /H6: "12px"/);
+    assert.match(markdownClientSource, /setupCodeCopy\(\)/);
+    assert.match(markdownClientSource, /navigator\.clipboard\?\.writeText/);
+    assert.match(markdownClientSource, /document\.execCommand\("copy"\)/);
+    assert.match(markdownClientSource, /\[data-tunelito-mermaid\], \[data-tunelito-comment-ignore\]/);
 
     const mermaidLibrary = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.localUrl));
     assert.equal(mermaidLibrary.headers.get("content-type"), "text/javascript; charset=utf-8");

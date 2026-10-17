@@ -116,6 +116,12 @@ A CommonMark link title becomes the anchor's `title` attribute, so the browser s
 
 Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link.
 
+## Copying code blocks
+
+Every fenced code block in a rendered Markdown page gets a small copy button in its top-right corner. It appears when the pointer is over the block or when keyboard focus reaches it, and it stays visible on touch screens. The button copies the code exactly as written, without the button label or any added decoration, and screen readers hear "Copied code to clipboard". Tunelito uses the browser's async clipboard on `http://127.0.0.1` and HTTPS tunnel URLs, and falls back to a legacy copy if the browser denies it.
+
+The browser adds the button after the page loads. It contains only icons and is marked as review chrome, so selecting code for a comment, persisted quotes, and section mapping work the same as before. Mermaid diagrams and served HTML pages get no button.
+
 ## Mermaid diagrams
 
 Use a normal Mermaid fence in a Markdown document:

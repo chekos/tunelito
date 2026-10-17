@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { saveAgentState } from "../src/agent-worker.js";
-import { renderCommentsMarkdown } from "../src/comments.js";
+import { loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
 import { createTunelitoServer } from "../src/server.js";
 import { THEME_DETAILS, THEME_NAMES } from "../src/themes.js";
 
@@ -30,6 +30,8 @@ const accessibilityFixtures = [
   "examples/markdown/heading-ladder.md",
   "examples/markdown/kitchen-sink.md",
 ];
+const codeCopySql = `SELECT id, name\n  FROM accounts\n WHERE plan = 'pro';  \n-- ${"wide ".repeat(40)}`;
+const codeCopyShell = "$ npm run ci\n# trailing prompt-like text stays literal";
 
 const browser = await chromium.launch({ headless: true });
 try {
@@ -43,6 +45,8 @@ try {
   await verifyLinkTargetsAndTitles();
   await verifyResponsiveAndComments();
   await verifyEditableSource();
+  await verifyCodeCopy();
+  await verifyHtmlPageHasNoCodeCopy();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, the folder vault, and local source editing.\n`);
 } finally {
   await browser.close();
@@ -582,6 +586,205 @@ async function verifyEditableSource() {
       "Selection no longer found in this version",
       "comments whose quote was edited away should remain visible with a stale-anchor label",
     );
+  } finally {
+    await context.close();
+    await instance.close();
+  }
+}
+
+function codeCopySource() {
+  return [
+    "# Run of show",
+    "",
+    "## Query",
+    "",
+    "Paste this into Snowsight.",
+    "",
+    "```sql",
+    codeCopySql,
+    "```",
+    "",
+    "## Steps",
+    "",
+    "1. Run the gate:",
+    "",
+    "   ```bash",
+    ...codeCopyShell.split("\n").map((line) => `   ${line}`),
+    "   ```",
+    "",
+    "```mermaid",
+    "flowchart LR",
+    "  A --> B",
+    "```",
+    "",
+  ].join("\n");
+}
+
+async function verifyCodeCopy() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-code-copy-"));
+  const filePath = join(tempDir, "run-of-show.md");
+  const source = codeCopySource();
+  writeFileSync(filePath, source, "utf8");
+  const commentsPath = join(tempDir, "run-of-show.comments.md");
+  writeFileSync(commentsPath, renderCommentsMarkdown({
+    sourcePath: filePath,
+    comments: [{
+      id: "c_code_persisted",
+      author: "Browser check",
+      authorRole: "owner",
+      reviewerId: "r_browser_check",
+      scope: "page",
+      quote: "FROM accounts",
+      body: "A persisted comment inside a code block.",
+      anchorId: "query",
+      sectionId: "query",
+      prefix: "SELECT id, name\n  ",
+      suffix: "\n WHERE plan",
+      path: "body > main > pre > code",
+      pagePath: "/",
+      textStart: null,
+      textEnd: null,
+      created: "2026-10-17T00:00:00.000Z",
+    }],
+  }), "utf8");
+  const instance = await createTunelitoServer({
+    filePath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+  });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(instance.localUrl).origin });
+  const page = await context.newPage();
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelectorAll(".tunelito-code-copy").length > 0);
+
+    const buttons = page.locator(".tunelito-markdown .tunelito-code-copy");
+    assert.equal(await buttons.count(), 2, "every fenced code block except the Mermaid diagram gets a copy button");
+    assert.equal(await page.locator("[data-tunelito-mermaid] .tunelito-code-copy").count(), 0, "Mermaid diagrams must not get a copy button");
+    assert.equal(await page.getByRole("button", { name: "Copy sql code" }).count(), 1, "the button names the code language");
+    assert.equal(await page.getByRole("button", { name: "Copy bash code" }).count(), 1, "nested list code blocks are enhanced too");
+    const buttonShape = await buttons.first().evaluate((button) => ({
+      tagName: button.tagName,
+      type: button.type,
+      tabIndex: button.tabIndex,
+      ignored: button.hasAttribute("data-tunelito-comment-ignore"),
+      textNodes: Array.from(button.querySelectorAll("*")).concat(button).some((node) => Array.from(node.childNodes).some((child) => child.nodeType === Node.TEXT_NODE && child.textContent.trim())),
+      opacity: getComputedStyle(button).opacity,
+    }));
+    assert.deepEqual(buttonShape, { tagName: "BUTTON", type: "button", tabIndex: 0, ignored: true, textNodes: false, opacity: "0" }, "the copy button is a hidden-until-hover native button with no anchorable text");
+
+    const sqlPre = page.locator(".tunelito-markdown > pre").first();
+    assert.equal(
+      await sqlPre.evaluate((pre) => pre.textContent.replace(/\n$/, "")),
+      codeCopySql,
+      "the button must not add text to the code block that comments anchor against",
+    );
+    await sqlPre.hover();
+    assert.equal(await buttons.first().evaluate((button) => getComputedStyle(button).opacity), "1", "hovering a code block reveals its copy button");
+    const scrolledGeometry = await sqlPre.evaluate((pre) => {
+      const code = pre.querySelector("code");
+      code.scrollLeft = code.scrollWidth;
+      const button = pre.querySelector(".tunelito-code-copy").getBoundingClientRect();
+      const box = pre.getBoundingClientRect();
+      const text = Array.from(code.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).at(-1);
+      const end = text.textContent.replace(/\n$/, "").length;
+      const lastCharacter = document.createRange();
+      lastCharacter.setStart(text, end - 1);
+      lastCharacter.setEnd(text, end);
+      return {
+        scrolls: code.scrollLeft > 0,
+        pinned: button.right <= box.right && button.left >= box.left,
+        lineEndClear: lastCharacter.getBoundingClientRect().right <= button.left,
+      };
+    });
+    assert.deepEqual(scrolledGeometry, { scrolls: true, pinned: true, lineEndClear: true }, "wide code scrolls inside the block, the copy button stays pinned, and the line end scrolls clear of it");
+    await sqlPre.evaluate((pre) => { pre.querySelector("code").scrollLeft = 0; });
+
+    await page.waitForFunction(() => {
+      const highlights = CSS.highlights?.get("tunelito-comments");
+      return highlights && Array.from(highlights).some((range) => range.toString() === "FROM accounts");
+    });
+
+    await page.getByRole("button", { name: "Copy sql code" }).click();
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), codeCopySql, "copy writes the raw code exactly");
+    await page.waitForFunction(() => document.querySelector(".tunelito-code-copy-status")?.textContent === "Copied code to clipboard");
+    assert.equal(await page.locator(".tunelito-code-copy-status").getAttribute("aria-live"), "polite");
+    assert.equal(await buttons.first().getAttribute("data-state"), "copied");
+
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => {
+      document.activeElement?.blur();
+      document.querySelector(".tunelito-markdown ol p").setAttribute("tabindex", "-1");
+      document.querySelector(".tunelito-markdown ol p").focus();
+    });
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Copy bash code", "the copy button is reachable by keyboard");
+    assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).opacity), "1", "keyboard focus reveals the copy button");
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("denied"));
+    });
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelector(".tunelito-code-copy-status")?.textContent);
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Copy bash code", "the fallback copy keeps focus on the button");
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), codeCopyShell, "the fallback copy path keeps prompts and indentation literal");
+
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".status")?.textContent.startsWith("Connected"));
+    await sqlPre.evaluate((pre) => {
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    const commentButton = page.getByRole("button", { name: "Comment", exact: true });
+    await commentButton.waitFor({ state: "visible" });
+    await commentButton.click();
+    const dialog = page.getByRole("dialog", { name: "Add comment" });
+    await dialog.getByRole("textbox").fill("Anchored on the whole code block.");
+    await dialog.getByRole("button", { name: "Add comment" }).click();
+    let saved;
+    const deadline = Date.now() + 5000;
+    while (!saved && Date.now() < deadline) {
+      saved = loadCommentsFromMarkdown(commentsPath).find((comment) => comment.body === "Anchored on the whole code block.");
+      if (!saved) await page.waitForTimeout(50);
+    }
+    assert.ok(saved, "a comment on a code block selection must persist");
+    assert.equal(saved.quote.replace(/\n$/, ""), codeCopySql, "the selected quote must exclude the copy button");
+    assert.equal(saved.sectionId, "query", "the code block comment keeps its section mapping");
+    await page.waitForFunction(() => Array.from(CSS.highlights.get("tunelito-comments") || []).some((range) => range.toString().startsWith("SELECT id, name")));
+    await assertAccessible(page, "code copy buttons");
+    await assertNoOverflow(page, "code copy buttons");
+    assert.equal(readFileSync(filePath, "utf8"), source, "copy buttons must not change the Markdown source");
+  } finally {
+    await context.close();
+    await instance.close();
+  }
+}
+
+async function verifyHtmlPageHasNoCodeCopy() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-html-code-"));
+  const filePath = join(tempDir, "page.html");
+  const source = "<!doctype html><html lang=\"en\"><head><title>HTML code</title></head><body><main><h1>HTML code</h1><pre><code>echo user-authored</code></pre></main></body></html>\n";
+  writeFileSync(filePath, source, "utf8");
+  const instance = await createTunelitoServer({
+    filePath,
+    commentsPath: join(tempDir, "page.comments.md"),
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+  });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.locator("#tunelito-root").waitFor({ state: "attached" });
+    assert.equal(await page.locator(".tunelito-code-copy").count(), 0, "user-authored HTML pages must not get code copy buttons");
+    assert.equal(await page.locator("pre").evaluate((pre) => pre.outerHTML), "<pre><code>echo user-authored</code></pre>");
+    assert.equal(readFileSync(filePath, "utf8"), source);
   } finally {
     await context.close();
     await instance.close();

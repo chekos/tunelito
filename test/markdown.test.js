@@ -414,6 +414,19 @@ test("renderMarkdownDocument leaves ordinary fenced code unchanged and omits Mer
   assert.doesNotMatch(html, new RegExp(MERMAID_CLIENT_ROUTE));
 });
 
+test("renderMarkdownDocument leaves copy buttons to the client so code block anchors keep their DOM", () => {
+  const html = renderMarkdownDocument({
+    markdownSource: "## Query\n\n```sql\nSELECT 1;\n```\n",
+  });
+  const body = renderedMarkdownBody(html);
+
+  assert.equal(body, '<h2>Query</h2>\n<pre><code class="language-sql">SELECT 1;\n</code></pre>');
+  assert.doesNotMatch(body, /tunelito-code-copy|<button/);
+  assert.match(html, /\.tunelito-code-copy \{/);
+  assert.match(html, /pre\[data-tunelito-copyable\] > code \{\n  display: block;\n  overflow-x: auto;/);
+  assert.match(html, /prefers-reduced-motion: no-preference\) \{\n  \.tunelito-code-copy \{ transition/);
+});
+
 test("renderMarkdownDocument only treats an exact Mermaid language tag as a diagram", () => {
   const html = renderMarkdownDocument({ markdownSource: "```mermaid-example\ngraph TD\n```" });
 
