@@ -1112,6 +1112,7 @@ export function renderMarkdownDocument({
   navigation = null,
   editable = false,
   sectionIndex = false,
+  linkPreviews = false,
 } = {}) {
   const title = String(sourceName || "Markdown page");
   const theme = normalizeThemeName(themeName);
@@ -1137,7 +1138,7 @@ export function renderMarkdownDocument({
 
   return [
     "<!doctype html>",
-    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}${sectionIndex ? ' data-tunelito-section-index="true"' : ""}>`,
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}${sectionIndex ? ' data-tunelito-section-index="true"' : ""}${linkPreviews ? ' data-tunelito-link-previews="on"' : ""}>`,
     "<head>",
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',

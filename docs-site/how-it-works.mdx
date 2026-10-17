@@ -106,7 +106,7 @@ Only the browser knows which origin is serving the page, so the Markdown client 
 - root-relative links such as `/notes/next.md`
 - fragments such as `#verification`, footnote references, and back-links
 
-Tunelito does not attach click handlers to links, so Cmd/Ctrl-click and middle-click behave as they normally do in the browser. `mailto:` links and anchors that already set `target` or `download` are left alone. HTML pages are served as authored, and the new-tab rule applies only to rendered Markdown.
+Tunelito does not attach click handlers to links, so Cmd/Ctrl-click and middle-click behave as they normally do in the browser. `mailto:` links are left alone, and anchors that already set `target` or `download` keep them; cross-origin ones still get the external link colour. HTML pages are served as authored, and the new-tab rule applies only to rendered Markdown.
 
 A CommonMark link title becomes the anchor's `title` attribute. Status briefings can put the tracker summary into the title:
 
@@ -117,6 +117,25 @@ A CommonMark link title becomes the anchor's `title` attribute. Status briefings
 Tunelito also shows a small local card for titled links. It splits the title on `·` or `|` and treats `low`, `medium`, `high`, or `critical` as the priority. It never fetches the link. While the card is open on hover or keyboard focus, Tunelito moves the title into a data attribute so the browser does not show its native tooltip on top of the card, and points `aria-describedby` at the card. Leaving or blurring the link restores the `title`, so the native tooltip still works wherever the card is unavailable.
 
 The external link colour follows the same origin check as the new-tab rule: only links to another origin get it, so a same-origin absolute link looks like any other internal link.
+
+## Resolver-backed link previews
+
+Bare links such as `[TLL-563](http://127.0.0.1:3100/TLL/issues/TLL-563)` can fill the same card from a tracker's JSON API. Configure a rule with `--link-preview <regex> <url-template>` or the `linkPreviews` config key. Without a rule, nothing changes.
+
+1. The server renders the page with `data-tunelito-link-previews="on"`, but only for viewers allowed to resolve.
+2. When the pointer or keyboard focus reaches a link with no authored title, the browser calls Tunelito's same-origin `/__tunelito/link-preview?href=…` route. It sends an `x-tunelito-link-preview: 1` header.
+3. The server matches the authored `href` against each rule in order and builds the resolver URL from the template. Captures are URL-encoded, and the resolver's scheme and host are fixed in the template.
+4. The server fetches the URL itself and returns only plain-text `title`, `status`, and `priority` strings. The browser puts them in the card with `textContent`.
+
+The fetch fails closed. Tunelito returns no card on any of these:
+
+- a resolver host that is not loopback, unless `--link-preview-allow-remote` was passed. Remote resolvers must also use `https://` and cannot be a private, link-local, or cloud-metadata address literal. Tunelito does not re-check what a hostname resolves to, so allow only hosts you trust.
+- a redirect, a non-2xx status, a non-JSON `content-type`, a body over 64 KiB, invalid UTF-8 or JSON, or no response within 3 seconds
+- a field that is not a string, number, or boolean. Values are trimmed, control characters are stripped, and each is capped at 200 characters.
+
+Tunelito caches results for 60 seconds and failures for 15 seconds, keeps at most 256 entries, and runs no more than four resolver requests at once. Extra requests get `503` and no card. Tunelito sends no cookies, review key, or credentials to the resolver.
+
+The route sits behind the review key. It also refuses cross-site callers: a request needs the custom header, a matching `Origin` if one is sent, and `Sec-Fetch-Site: same-origin` if that header is sent. By default only the direct local owner can resolve. Public tunnel and forwarded requests get `403` and a page without the preview flag, so visitors cannot make your machine fetch from your local tracker. `--link-preview-visitors` lets keyed visitors resolve too. They can only reach the configured resolver origin, with hrefs capped at 512 characters, and one upstream slot always stays free for the owner. The flag is refused with `--no-auth`. Keep `match` patterns anchored and simple before you open them to visitors, because each regex runs on the server. Served HTML pages are unchanged; resolver previews are a Markdown-only feature.
 
 ## Copying code blocks
 

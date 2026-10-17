@@ -29,6 +29,7 @@ import {
 import { buildCommentsIndex } from "../src/comment-index.js";
 import { defaultCommentsPath } from "../src/comments.js";
 import { resolveTunelitoConfig } from "../src/config.js";
+import { enforceLinkPreviewHostPolicy, parseLinkPreviewFieldsArg } from "../src/link-preview.js";
 import { buildDoctorReport } from "../src/doctor.js";
 import { REVIEW_EVENTS_ROUTE } from "../src/inject.js";
 import { isMarkdownPath, normalizeMarkdownCssHref } from "../src/markdown.js";
@@ -83,6 +84,15 @@ Options:
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
+  --link-preview <regex> <url-template>
+                        Show a Markdown hover card for links matching regex, filled from
+                        resolver JSON fetched by the Tunelito server (repeatable)
+  --link-preview-fields <title=path,status=path,priority=path>
+                        JSON paths for the preceding --link-preview rule
+  --link-preview-allow-remote
+                        Allow https resolvers on non-loopback hosts (default: loopback only)
+  --link-preview-visitors
+                        Also resolve previews for keyed public visitors (default: owner only)
   --owner <name>        Seed the editable owner name for the direct local viewer
   --ephemeral           Keep comments in memory only; all feedback is lost on restart
   --live                Deprecated alias for --ephemeral
@@ -214,6 +224,20 @@ export function parseArgs(argv) {
       opts.markdownCssProvided = true;
     } else if (arg === "--editable") {
       opts.editable = true;
+    } else if (arg === "--link-preview") {
+      const match = requiredValue(argv[++i], "--link-preview", "match regex and a resolver URL template");
+      const resolver = requiredValue(argv[++i], "--link-preview", "resolver URL template after the match regex");
+      opts.linkPreviews = [...(opts.linkPreviews || []), { match, resolver }];
+    } else if (arg === "--link-preview-fields") {
+      const value = requiredValue(argv[++i], "--link-preview-fields", "title=path,status=path,priority=path mapping");
+      const last = opts.linkPreviews?.at(-1);
+      if (!last) throw new Error("--link-preview-fields must follow the --link-preview rule it maps");
+      if (last.fields) throw new Error("--link-preview-fields was given twice for the same --link-preview rule");
+      last.fields = parseLinkPreviewFieldsArg(value);
+    } else if (arg === "--link-preview-allow-remote") {
+      opts.linkPreviewAllowRemote = true;
+    } else if (arg === "--link-preview-visitors") {
+      opts.linkPreviewVisitors = true;
     } else if (arg === "--section-index") {
       opts.sectionIndex = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
@@ -264,6 +288,9 @@ export function parseArgs(argv) {
   }
   if (opts.agent && opts.agentSession) {
     throw new Error("Use either --agent or --agent-session, not both");
+  }
+  if (opts.linkPreviewVisitors && !opts.auth) {
+    throw new Error("--link-preview-visitors requires the review-key gate; remove --no-auth");
   }
   if (positional[0]) opts.filePath = resolve(positional[0]);
   return opts;
@@ -390,9 +417,17 @@ async function main() {
       cliThemeProvided: opts.themeProvided,
       cliMarkdownCss: opts.markdownCssHref,
       cliMarkdownCssProvided: opts.markdownCssProvided,
+      cliLinkPreviews: opts.linkPreviews,
+      cliLinkPreviewsProvided: Boolean(opts.linkPreviews),
     });
+    enforceLinkPreviewHostPolicy(resolvedConfig.linkPreviewRules, { allowRemote: opts.linkPreviewAllowRemote });
   } catch (error) {
     console.error(error.message);
+    process.exit(1);
+  }
+  const linkPreviewCount = resolvedConfig.linkPreviewRules.length;
+  if ((opts.linkPreviewAllowRemote || opts.linkPreviewVisitors) && !linkPreviewCount) {
+    console.error("--link-preview-allow-remote and --link-preview-visitors require at least one --link-preview rule or linkPreviews config entry.");
     process.exit(1);
   }
 
@@ -419,6 +454,9 @@ async function main() {
     markdownTheme: resolvedConfig.theme.value,
     editable: opts.editable,
     sectionIndex: Boolean(opts.sectionIndex),
+    linkPreviewRules: resolvedConfig.linkPreviewRules,
+    linkPreviewVisitors: Boolean(opts.linkPreviewVisitors),
+    linkPreviewAllowRemote: Boolean(opts.linkPreviewAllowRemote),
   });
   const agentWorker = opts.agent
     ? createAgentWorker({
@@ -481,6 +519,10 @@ async function main() {
   console.log(`Local:   ${instance.localUrl}`);
   console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
   if (opts.editable) console.log("Editing: direct local owner only; public links remain read-only");
+  if (linkPreviewCount) {
+    console.log(`Previews: ${linkPreviewCount} link-preview rule${linkPreviewCount === 1 ? "" : "s"} (${resolvedConfig.linkPreviews.source}); ${opts.linkPreviewVisitors ? "owner and keyed visitors" : "direct local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`);
+    console.log(`Resolvers: ${[...new Set(resolvedConfig.linkPreviewRules.map((rule) => rule.origin))].join(", ")}`);
+  }
   console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
   console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
   if (opts.ownerName) {
@@ -1741,6 +1783,7 @@ export function runConfigCommand(args, {
       `Project root: ${report.projectRoot}`,
       `Theme:        ${report.theme.value} (${report.theme.source})`,
       `Markdown CSS: ${report.markdownCss.resolved || "(none)"} (${report.markdownCss.source})`,
+      `Link previews: ${report.linkPreviews.rules.length} rule${report.linkPreviews.rules.length === 1 ? "" : "s"} (${report.linkPreviews.source})`,
       `Global file:  ${report.configFiles.global.path} (${report.configFiles.global.exists ? "found" : "missing"})`,
       `Project file: ${report.configFiles.project.path} (${report.configFiles.project.exists ? "found" : "missing"})`,
       `Themes:       ${report.availableThemes.map((theme) => theme.name).join(", ")}`,
@@ -1758,6 +1801,7 @@ function publicConfigReport(config) {
     projectRoot: config.projectRoot,
     theme: config.theme,
     markdownCss: config.markdownCss,
+    linkPreviews: config.linkPreviews,
     configFiles: {
       global: {
         path: config.configPaths.global,

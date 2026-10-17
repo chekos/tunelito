@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { createServer as createHttpServer } from "node:http";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -8,6 +9,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 import { saveAgentState } from "../src/agent-worker.js";
 import { loadCommentsFromMarkdown, renderCommentsMarkdown } from "../src/comments.js";
+import { normalizeLinkPreviewRules } from "../src/link-preview.js";
 import { createTunelitoServer } from "../src/server.js";
 import { THEME_DETAILS, THEME_NAMES } from "../src/themes.js";
 
@@ -44,6 +46,7 @@ try {
   await verifyDetailsAndCollapsedCommentTarget();
   await verifyReviewRoom();
   await verifyLinkTargetsAndTitles();
+  await verifyLinkPreviewResolver();
   await verifyResponsiveAndComments();
   await verifyEditableSource();
   await verifyCodeCopy();
@@ -943,7 +946,7 @@ async function verifyLinkTargetsAndTitles() {
     "",
     "Read the [external report](https://example.com/report.pdf) before the call.",
     "",
-    '[TLL-1](https://tracker.example/TLL/issues/TLL-1 "Fix login redirect · todo · medium")',
+    '[TLL-1](https://tracker.example/TLL/issues/TLL-1 "Fix login redirect · todo · medium") [](https://tracker.example/TLL/issues/TLL-2 "Only a title")',
     "",
     `[Same origin](${origin}/notes/next.md) [Relative](workflow-final.md) [Root relative](/notes/next.md) [Fragment](#verification) [Protocol relative](//example.org/brief) [Mail](mailto:team@example.com)`,
     "",
@@ -959,7 +962,9 @@ async function verifyLinkTargetsAndTitles() {
   // The source needs the served origin, so it is written after the watcher starts. macOS also
   // reports writes made just before the watch began. Wait for the debounced document-changed
   // event that covers all of them before opening the page, or it live-reloads mid-check.
-  const settled = once(instance.events, "document-changed");
+  const settled = once(instance.events, "document-changed", { signal: AbortSignal.timeout(10_000) }).catch((error) => {
+    throw new Error(`the link check never saw the watcher report its source write: ${error.message}`);
+  });
   writeFileSync(indexPath, source);
   await settled;
   let documentChanges = 0;
@@ -1047,6 +1052,20 @@ async function verifyLinkTargetsAndTitles() {
     await tracker.evaluate((anchor) => anchor.blur());
     await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
     assert.equal(await tracker.getAttribute("title"), trackerTitle, "blur must restore the native title");
+
+    // A link whose only name is its title keeps that name, and an authored description survives.
+    const titleOnly = page.locator('.tunelito-markdown a[href$="/TLL-2"]');
+    await titleOnly.evaluate((anchor) => anchor.setAttribute("aria-describedby", "verification"));
+    assert.equal(await link("Only a title").count(), 1);
+    await titleOnly.focus();
+    await page.waitForFunction(() => /Only a title/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    assert.equal(await titleOnly.getAttribute("title"), null);
+    assert.equal(await link("Only a title").count(), 1, "a title-only link must keep its accessible name while the card is open");
+    assert.equal(await titleOnly.getAttribute("aria-describedby"), "verification tunelito-link-card");
+    await titleOnly.evaluate((anchor) => anchor.blur());
+    await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    assert.deepEqual(await titleOnly.evaluate((anchor) => [anchor.getAttribute("title"), anchor.getAttribute("aria-label"), anchor.getAttribute("aria-describedby")]), ["Only a title", null, "verification"]);
+
     await tracker.hover();
     await page.waitForFunction(() => !document.querySelector(".tunelito-link-card")?.hidden);
     assert.equal(await tracker.evaluate((anchor) => {
@@ -1079,6 +1098,114 @@ async function verifyLinkTargetsAndTitles() {
   } finally {
     await context.close();
     await instance.close();
+  }
+}
+
+// #135: resolver-backed hover cards. A local fake resolver stands in for the tracker; the
+// browser must only ever call Tunelito's same-origin route, never the resolver origin.
+async function verifyLinkPreviewResolver() {
+  const resolverHits = [];
+  const resolver = createHttpServer((req, res) => {
+    resolverHits.push(req.url);
+    const id = decodeURIComponent(req.url.split("/").pop());
+    const payload = id === "TLL-666"
+      ? { title: '<img src=x onerror="window.__tunelitoXss=1">Escaped', state: { name: "blocked" } }
+      : { title: `Resolved ${id}`, state: { name: "todo" }, priority: { label: "high" } };
+    const body = JSON.stringify(payload);
+    const reply = () => {
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+      res.end(body);
+    };
+    if (id === "TLL-777") setTimeout(reply, 400);
+    else reply();
+  });
+  await new Promise((resolveListen) => resolver.listen(0, "127.0.0.1", resolveListen));
+  const resolverOrigin = `http://127.0.0.1:${resolver.address().port}`;
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-link-preview-browser-"));
+  const notePath = join(tempDir, "briefing.md");
+  const issue = (id) => `${resolverOrigin}/TLL/issues/${id}`;
+  writeFileSync(notePath, [
+    "# Briefing",
+    "",
+    `Bare [TLL-563](${issue("TLL-563")}) and [TLL-666](${issue("TLL-666")}).`,
+    "",
+    `Authored [TLL-700](${issue("TLL-700")} "Authored title · done · low") and [plain](https://example.com/x).`,
+    "",
+    `Slow [TLL-777](${issue("TLL-777")}).`,
+    "",
+  ].join("\n"));
+  const rules = normalizeLinkPreviewRules([{
+    match: `^${resolverOrigin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(?<team>[A-Z]+)/issues/(?<id>[A-Z]+-\\d+)$`,
+    resolver: `${resolverOrigin}/api/{team}/{id}`,
+    fields: { title: "title", status: "state.name", priority: "priority.label" },
+  }]);
+  const instance = await createTunelitoServer({
+    filePath: notePath,
+    commentsPath: join(tempDir, "briefing.comments.md"),
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+    linkPreviewRules: rules,
+  });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  const browserRequests = [];
+  context.on("request", (request) => browserRequests.push(request.url()));
+  const page = await context.newPage();
+  const link = (name) => page.locator(".tunelito-markdown").getByRole("link", { name, exact: true });
+  const cardText = () => page.locator(".tunelito-link-card").evaluate((card) => (card.hidden ? "" : card.innerText.replace(/\s+/g, " ").trim()));
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.documentElement.dataset.tunelitoMarkdownUi === "ready");
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.tunelitoLinkPreviews), "on");
+
+    await link("TLL-563").hover();
+    await page.waitForFunction(() => /Resolved TLL-563/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    assert.equal(await cardText(), "Resolved TLL-563 todo · high");
+    assert.equal(await link("TLL-563").getAttribute("title"), null, "resolved previews must not inject a title attribute");
+
+    await page.mouse.move(5, 5);
+    await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    await link("TLL-666").focus();
+    await page.waitForFunction(() => /Escaped/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    assert.equal(await page.locator(".tunelito-link-card img").count(), 0, "resolver fields must render as text");
+    assert.equal(await page.evaluate(() => window.__tunelitoXss), undefined);
+    assert.match(await cardText(), /^<img src=x onerror="window.__tunelitoXss=1">Escaped blocked$/);
+    await link("TLL-666").blur();
+
+    await link("TLL-700").hover();
+    await page.waitForFunction(() => /Authored title/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    assert.equal(await cardText(), "Authored title done · low", "an authored title keeps priority over the resolver");
+    assert.equal(await link("TLL-700").getAttribute("title"), null, "with a resolver configured the card is still the only popup");
+    await link("plain").hover();
+    await page.waitForTimeout(150);
+    await link("TLL-563").hover();
+    await page.waitForFunction(() => /Resolved TLL-563/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+
+    // A slow response for a link the reader already left must not replace the current card.
+    await page.mouse.move(5, 5);
+    await link("TLL-777").focus();
+    await link("TLL-700").focus();
+    await page.waitForFunction(() => /Authored title/.test(document.querySelector(".tunelito-link-card:not([hidden])")?.textContent || ""));
+    await page.waitForTimeout(700);
+    assert.equal(await cardText(), "Authored title done · low", "a late resolver response must not overwrite the focused link's card");
+    await link("TLL-700").blur();
+    await page.waitForTimeout(100);
+    assert.equal(await cardText(), "", "a late response after blur must not reopen the card");
+
+    assert.deepEqual([...new Set(resolverHits)].sort(), ["/api/TLL/TLL-563", "/api/TLL/TLL-666", "/api/TLL/TLL-777"], "only bare matching links reach the resolver, once each");
+    assert.equal(resolverHits.length, 3, "repeat hovers are served from cache");
+    assert.equal(browserRequests.some((url) => url.startsWith(resolverOrigin)), false, "the browser must never fetch the resolver origin");
+    assert.equal(browserRequests.filter((url) => url.includes("/__tunelito/link-preview")).length, 4, "the browser asks Tunelito once per distinct bare link");
+
+    const visitor = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.10" } });
+    const visitorPage = await visitor.newPage();
+    await visitorPage.goto(instance.localUrl, { waitUntil: "networkidle" });
+    assert.equal(await visitorPage.evaluate(() => document.documentElement.dataset.tunelitoLinkPreviews), undefined, "tunnel visitors get no resolver previews by default");
+    await visitor.close();
+  } finally {
+    await context.close();
+    await instance.close();
+    await new Promise((resolveClose) => resolver.close(resolveClose));
   }
 }
 

@@ -880,17 +880,20 @@
     card.setAttribute("role", "tooltip");
     card.setAttribute("data-tunelito-comment-ignore", "");
     document.body.append(card);
+    // Resolver previews (#135) widen the hover target to untitled links when the server enabled them.
+    const linkSelector = root.dataset.tunelitoLinkPreviews === "on" ? "a[title], a[data-tunelito-title], a[href]" : "a[title], a[data-tunelito-title]";
     let activeLink = null;
+    let pendingLink = null;
     markdown.addEventListener("pointerover", (event) => showLinkCard(event.target));
     markdown.addEventListener("pointerout", (event) => {
-      const link = titledLink(event.target);
+      const link = previewLink(event.target);
       if (link && !link.contains(event.relatedTarget) && !link.matches(":focus-visible")) hideLinkCard();
     });
     markdown.addEventListener("focusin", (event) => showLinkCard(event.target));
     markdown.addEventListener("focusout", hideLinkCard);
 
-    function titledLink(target) {
-      return target?.closest?.("a[title], a[data-tunelito-title]");
+    function previewLink(target) {
+      return target?.closest?.(linkSelector);
     }
 
     // The card replaces the native tooltip while it is open: the title moves to a
@@ -912,6 +915,7 @@
     }
 
     function hideLinkCard() {
+      pendingLink = null;
       card.hidden = true;
       const link = activeLink;
       activeLink = null;
@@ -931,11 +935,24 @@
     }
 
     function showLinkCard(target) {
-      const link = titledLink(target);
+      const link = previewLink(target);
       if (!link || !markdown.contains(link)) return;
       const title = link.getAttribute("title") ?? link.getAttribute("data-tunelito-title");
+      if (title === null) {
+        if (pendingLink === link) return;
+        hideLinkCard();
+        pendingLink = link;
+        resolveLinkPreview(link).then((model) => {
+          if (model && pendingLink === link) renderLinkCard(link, model);
+        });
+        return;
+      }
+      pendingLink = null;
       suppressNativeTitle(link);
-      const model = linkCardModel(title);
+      renderLinkCard(link, linkCardModel(title));
+    }
+
+    function renderLinkCard(link, model) {
       card.replaceChildren(element("p", "", model.title));
       if (model.status || model.priority) card.append(element("p", "meta", [model.status, model.priority].filter(Boolean).join(" · ")));
       const rect = link.getBoundingClientRect();
@@ -944,6 +961,34 @@
       card.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
       card.style.top = `${rect.bottom + 6}px`;
     }
+  }
+
+  // The server matches the authored href against configured rules and fetches the resolver;
+  // the browser only ever talks to this same-origin route and renders the fields as text.
+  const linkPreviewCache = new Map();
+  function resolveLinkPreview(link) {
+    const href = (link.getAttribute("href") || "").trim();
+    if (!href || href.startsWith("#") || href.length > 2048) return Promise.resolve(null);
+    if (!linkPreviewCache.has(href)) {
+      const request = fetch(`/__tunelito/link-preview?href=${encodeURIComponent(href)}`, {
+        credentials: "same-origin",
+        headers: { "x-tunelito-link-preview": "1" },
+      }).then(async (response) => {
+        // Keep "no match" answers for the page; retry transient failures on a later hover.
+        if (!response.ok && response.status !== 404) linkPreviewCache.delete(href);
+        if (!response.ok) return null;
+        const data = await response.json();
+        const text = (value) => (typeof value === "string" ? value : "");
+        const model = { title: text(data.title), status: text(data.status), priority: text(data.priority) };
+        if (!model.title) model.title = link.textContent.trim() || href;
+        return model;
+      }).catch(() => {
+        linkPreviewCache.delete(href);
+        return null;
+      });
+      linkPreviewCache.set(href, request);
+    }
+    return linkPreviewCache.get(href);
   }
 
   function linkCardModel(title) {
