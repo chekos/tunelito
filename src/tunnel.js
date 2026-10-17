@@ -217,12 +217,15 @@ export async function verifyTunelitoTunnel({
   let reportedDnsWait = false;
 
   const attempt = async (lookup) => {
-    const response = await requestFn(candidate, {
+    const attemptTimeoutMs = Math.min(Math.max(1, deadline - now()), Math.max(1, requestTimeoutMs));
+    // Wall-clock guard: a stalled DNS lookup or connect must not outlive the
+    // per-attempt timeout, whatever request function is in use.
+    const response = await withTimeout(requestFn(candidate, {
       method: "HEAD",
-      timeoutMs: Math.min(Math.max(1, deadline - now()), Math.max(1, requestTimeoutMs)),
+      timeoutMs: attemptTimeoutMs,
       signal,
       ...(lookup ? { lookup } : {}),
-    });
+    }), attemptTimeoutMs + 250);
     if (response.status === 200 && response.headers.get(TUNELITO_RESPONSE_HEADER) === "1") return null;
     return {
       code: response.status === 200 ? "MISSING_MARKER" : `HTTP_${response.status}`,
@@ -306,6 +309,16 @@ function describeFailure(error) {
   };
 }
 
+function withTimeout(promise, milliseconds) {
+  let timer;
+  const timeout = new Promise((_resolve, rejectTimeout) => {
+    timer = setTimeout(() => {
+      rejectTimeout(Object.assign(new Error("request timed out"), { code: "ETIMEDOUT_REQUEST" }));
+    }, Math.max(1, milliseconds));
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
+
 function cancelledError(hostname) {
   const error = new Error(`Quick Tunnel ${hostname} verification was cancelled`);
   error.code = "ABORT_ERR";
@@ -359,10 +372,16 @@ export function headRequest(url, { method = "HEAD", timeoutMs = DEFAULT_REQUEST_
       });
       response.destroy();
     });
-    request.setTimeout(Math.max(1, timeoutMs), () => {
+    // `request.setTimeout` only arms once a socket exists, so it would not
+    // cover a stalled DNS lookup. Use a wall-clock timer for the whole request.
+    const timer = setTimeout(() => {
       request.destroy(Object.assign(new Error("request timed out"), { code: "ETIMEDOUT_REQUEST" }));
+    }, Math.max(1, timeoutMs));
+    request.on("close", () => clearTimeout(timer));
+    request.on("error", (error) => {
+      clearTimeout(timer);
+      rejectResponse(error);
     });
-    request.on("error", rejectResponse);
     request.end();
   });
 }

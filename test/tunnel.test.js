@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { cloudflaredFallbackPackage, cloudflaredNpxArgs, startCloudflareTunnel, verifyTunelitoTunnel } from "../src/tunnel.js";
+import { cloudflaredFallbackPackage, cloudflaredNpxArgs, headRequest, startCloudflareTunnel, verifyTunelitoTunnel } from "../src/tunnel.js";
 
 test("cloudflared fallback package defaults to latest", () => {
   assert.equal(cloudflaredFallbackPackage({}), "cloudflared@latest");
@@ -428,6 +428,47 @@ test("verifyTunelitoTunnel fails within its bounded window and names the DNS cau
     },
   );
   assert.ok(clock.now() >= 120_000 && clock.now() < 125_000);
+});
+
+test("verifyTunelitoTunnel times out a request that stalls before connecting", async () => {
+  const started = Date.now();
+  let attempts = 0;
+  await assert.rejects(
+    verifyTunelitoTunnel({
+      url: "https://stalled-lookup.trycloudflare.com",
+      timeoutMs: 120,
+      requestTimeoutMs: 20,
+      retryMs: 0,
+      requestFn() {
+        attempts += 1;
+        return new Promise(() => {});
+      },
+    }),
+    (error) => {
+      assert.match(error.message, /ETIMEDOUT: request timed out/);
+      assert.equal(error.causeCode, "ETIMEDOUT");
+      return true;
+    },
+  );
+  assert.ok(attempts >= 1);
+  assert.ok(Date.now() - started < 2_000, "stalled requests do not outlive the deadline");
+});
+
+test("headRequest timeout covers a stalled DNS lookup", async () => {
+  const started = Date.now();
+  await assert.rejects(
+    headRequest(new URL("https://stalled-lookup.trycloudflare.com/"), {
+      timeoutMs: 30,
+      lookup() {
+        // Never call back: simulates getaddrinfo hanging.
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, "ETIMEDOUT_REQUEST");
+      return true;
+    },
+  );
+  assert.ok(Date.now() - started < 1_000);
 });
 
 test("verifyTunelitoTunnel stops promptly when cancelled", async () => {
