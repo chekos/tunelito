@@ -154,6 +154,8 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(markdownClientSource, /H5: "14px"/);
     assert.match(markdownClientSource, /H6: "12px"/);
     assert.match(markdownClientSource, /setupCodeCopy\(\)/);
+    assert.match(markdownClientSource, /tunelito-code-wrap/);
+    assert.match(markdownClientSource, /aria-pressed/);
     assert.match(markdownClientSource, /navigator\.clipboard\?\.writeText/);
     assert.match(markdownClientSource, /document\.execCommand\("copy"\)/);
     assert.match(markdownClientSource, /\[data-tunelito-mermaid\], \[data-tunelito-comment-ignore\]/);

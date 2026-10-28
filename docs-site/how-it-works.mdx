@@ -147,6 +147,8 @@ Every fenced code block in a rendered Markdown page gets a small copy button in 
 
 The browser adds the button after the page loads. It contains only icons and is marked as review chrome, so selecting code for a comment, persisted quotes, and section mapping work the same as before. Mermaid diagrams and served HTML pages get no button.
 
+Long lines wrap by default, including long URLs and paths, so a block never needs a horizontal scrollbar. A wrap toggle sits beside the copy button; it is a pressed/unpressed button that switches that one block between wrapping and sideways scrolling. Wrapping only changes how the block is displayed, so copying still returns the original lines with no added newlines. Start a session with `--no-code-wrap`, or set `"codeWrap": false` in [configuration](/configuration#code-block-wrapping), to make scrolling the default.
+
 ## Mermaid diagrams
 
 Use a normal Mermaid fence in a Markdown document:

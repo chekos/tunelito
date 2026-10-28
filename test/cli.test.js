@@ -93,6 +93,17 @@ test("parseArgs supports named Markdown themes", () => {
   assert.throws(() => parseArgs(["notes.md", "--theme"]), /--theme requires a theme name/);
 });
 
+test("parseArgs toggles Markdown code block wrapping", () => {
+  const off = parseArgs(["notes.md", "--no-code-wrap"]);
+  assert.equal(off.codeWrap, false);
+  assert.equal(off.codeWrapProvided, true);
+  const on = parseArgs(["notes.md", "--code-wrap"]);
+  assert.equal(on.codeWrap, true);
+  assert.equal(on.codeWrapProvided, true);
+  assert.equal(parseArgs(["notes.md"]).codeWrapProvided, undefined);
+  assert.match(usage(), /--no-code-wrap\s+Scroll long lines in Markdown code blocks instead of wrapping/);
+});
+
 test("parseArgs supports explicit local Markdown editing", () => {
   const opts = parseArgs(["notes.md", "--editable"]);
   assert.equal(opts.editable, true);
@@ -741,6 +752,26 @@ test("config show resolves project settings and reports CLI overrides", () => {
   assert.equal(report.configFiles.global.exists, true);
   assert.equal(report.configFiles.project.exists, true);
   assert.deepEqual(report.availableThemes.map(({ name }) => name), ["default", "editorial", "technical", "bns-pitaya"]);
+});
+
+test("config show reports code block wrapping and its CLI override", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-wrap-"));
+  const homePath = join(dir, "home");
+  const projectPath = join(dir, "project");
+  mkdirSync(homePath);
+  mkdirSync(projectPath);
+  writeFileSync(join(projectPath, "tunelito.config.json"), JSON.stringify({ codeWrap: false }));
+  writeFileSync(join(projectPath, "notes.md"), "# Notes");
+
+  const projectOut = streamCollector();
+  assert.equal(runConfigCommand(["show", join(projectPath, "notes.md")], { stdout: projectOut, stderr: streamCollector(), env: {}, homePath }), 0);
+  assert.match(projectOut.text(), /Code wrap:\s+off \(project\)/);
+
+  assert.equal(parseConfigArgs(["show", "--code-wrap"]).codeWrap, true);
+  const cliOut = streamCollector();
+  assert.equal(runConfigCommand(["show", join(projectPath, "notes.md"), "--code-wrap", "--json"], { stdout: cliOut, stderr: streamCollector(), env: {}, homePath }), 0);
+  const report = JSON.parse(cliOut.text());
+  assert.deepEqual(report.codeWrap, { value: true, source: "cli", configPath: null });
 });
 
 test("config show reports BNS Pitaya as the implicit theme", () => {

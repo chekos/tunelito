@@ -462,7 +462,7 @@
         resetTimer = setTimeout(() => delete button.dataset.state, 1800);
       });
       pre.dataset.tunelitoCopyable = "true";
-      pre.append(button);
+      pre.append(codeWrapToggle(pre, language), button);
     }
     // The code element now owns horizontal scrolling, so wide blocks stay reachable by keyboard.
     const syncScrollFocus = () => {
@@ -473,6 +473,31 @@
     };
     syncScrollFocus();
     window.addEventListener("resize", syncScrollFocus, { passive: true });
+
+    function codeWrapToggle(pre, language) {
+      const toggle = element("button", "tunelito-code-wrap");
+      toggle.type = "button";
+      toggle.setAttribute("data-tunelito-comment-ignore", "");
+      toggle.setAttribute("aria-label", language ? `Wrap long lines in ${language} code` : "Wrap long lines");
+      toggle.title = "Wrap long lines";
+      // Icons only, like the copy button, so wrapping never adds anchorable text to the block.
+      toggle.innerHTML = '<svg class="tunelito-code-wrap-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 4h11M2.5 8h9a2 2 0 0 1 0 4H8m1.5-1.5L8 12l1.5 1.5M2.5 12h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const apply = (wrapped) => {
+        pre.dataset.tunelitoWrap = wrapped ? "on" : "off";
+        toggle.setAttribute("aria-pressed", String(wrapped));
+      };
+      apply(root.dataset.tunelitoCodeWrap !== "off");
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const wrapped = pre.dataset.tunelitoWrap !== "on";
+        apply(wrapped);
+        syncScrollFocus();
+        announce(wrapped ? "Long lines wrap" : "Long lines scroll");
+        requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("tunelito:markdown-layout")));
+      });
+      return toggle;
+    }
 
     function announce(message) {
       clearTimeout(statusTimer);

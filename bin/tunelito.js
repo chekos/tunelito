@@ -83,6 +83,8 @@ Options:
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
+  --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
+                        them (--code-wrap restores the wrapping default)
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
   --link-preview <regex> <url-template>
@@ -229,6 +231,9 @@ export function parseArgs(argv) {
     } else if (arg === "--markdown-css") {
       opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
       opts.markdownCssProvided = true;
+    } else if (arg === "--code-wrap" || arg === "--no-code-wrap") {
+      opts.codeWrap = arg === "--code-wrap";
+      opts.codeWrapProvided = true;
     } else if (arg === "--editable") {
       opts.editable = true;
     } else if (arg === "--link-preview") {
@@ -440,6 +445,8 @@ async function main() {
       cliMarkdownCssProvided: opts.markdownCssProvided,
       cliLinkPreviews: opts.linkPreviews,
       cliLinkPreviewsProvided: Boolean(opts.linkPreviews),
+      cliCodeWrap: opts.codeWrap,
+      cliCodeWrapProvided: opts.codeWrapProvided,
     });
     enforceLinkPreviewHostPolicy(resolvedConfig.linkPreviewRules, { allowRemote: opts.linkPreviewAllowRemote });
     enforceLinkPreviewHeaderPolicy(resolvedConfig.linkPreviewRules, { allowedEnv: opts.linkPreviewAllowedEnv });
@@ -474,6 +481,7 @@ async function main() {
     markdownCssHref: resolvedConfig.markdownCssHref,
     markdownCssText: resolvedConfig.markdownCssText,
     markdownTheme: resolvedConfig.theme.value,
+    codeWrap: resolvedConfig.codeWrap.value,
     editable: opts.editable,
     sectionIndex: Boolean(opts.sectionIndex),
     linkPreviewRules: resolvedConfig.linkPreviewRules,
@@ -1721,6 +1729,8 @@ Usage:
 Options:
   --theme <name>        Override the resolved theme for this invocation
   --markdown-css <href> Override configured Markdown CSS for this invocation
+  --code-wrap, --no-code-wrap
+                        Override configured code block wrapping for this invocation
   --json                Print the versioned machine-readable config report
 `;
 }
@@ -1744,6 +1754,9 @@ export function parseConfigArgs(argv) {
     } else if (arg === "--markdown-css") {
       opts.markdownCssHref = normalizeMarkdownCssHref(requiredValue(argv[++i], "--markdown-css"));
       opts.markdownCssProvided = true;
+    } else if (arg === "--code-wrap" || arg === "--no-code-wrap") {
+      opts.codeWrap = arg === "--code-wrap";
+      opts.codeWrapProvided = true;
     } else if (arg === "--json") {
       opts.format = "json";
     } else if (arg.startsWith("--")) {
@@ -1785,6 +1798,8 @@ export function runConfigCommand(args, {
       cliThemeProvided: opts.themeProvided,
       cliMarkdownCss: opts.markdownCssHref,
       cliMarkdownCssProvided: opts.markdownCssProvided,
+      cliCodeWrap: opts.codeWrap,
+      cliCodeWrapProvided: opts.codeWrapProvided,
       env,
       ...(homePath ? { homePath } : {}),
     });
@@ -1803,6 +1818,7 @@ export function runConfigCommand(args, {
       `Project root: ${report.projectRoot}`,
       `Theme:        ${report.theme.value} (${report.theme.source})`,
       `Markdown CSS: ${report.markdownCss.resolved || "(none)"} (${report.markdownCss.source})`,
+      `Code wrap:    ${report.codeWrap.value ? "on" : "off"} (${report.codeWrap.source})`,
       `Link previews: ${report.linkPreviews.rules.length} rule${report.linkPreviews.rules.length === 1 ? "" : "s"} (${report.linkPreviews.source})`,
       ...config.linkPreviewRules.filter((rule) => rule.headers.length).map((rule) => `  Headers:    ${rule.origin} <- ${describeLinkPreviewHeaders(rule.headers)} (needs --link-preview-env when serving)`),
       `Global file:  ${report.configFiles.global.path} (${report.configFiles.global.exists ? "found" : "missing"})`,
@@ -1840,6 +1856,7 @@ function publicConfigReport(config) {
     projectRoot: config.projectRoot,
     theme: config.theme,
     markdownCss: config.markdownCss,
+    codeWrap: config.codeWrap,
     linkPreviews: config.linkPreviews,
     configFiles: {
       global: {

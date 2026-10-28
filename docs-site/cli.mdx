@@ -36,6 +36,8 @@ Options:
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
+  --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
+                        them (--code-wrap restores the wrapping default)
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
   --link-preview <regex> <url-template>
@@ -165,7 +167,7 @@ tunelito ./briefing.md \
 
 Single-quote the header so your shell does not expand `${env:…}`. Headers go only to that rule's resolver origin, over `https://` or loopback `http://`, and never on a redirect. Credential-looking headers (`Authorization`, `Cookie`, or a name containing `token`, `key`, `secret`, `auth`, or `session`) must be `${env:NAME}` or `<Scheme> ${env:NAME}`; a literal secret is refused. A rule with headers serves the direct local owner only, even with `--link-preview-visitors`. If the variable is unset or empty, that rule shows no card and Tunelito prints one warning that names the variable. Startup output, `config show`, and errors show `${env:NAME}`, never the value.
 
-Fenced `mermaid` blocks render automatically from Tunelito's packaged same-origin runtime. Other fenced languages stay as source code, and invalid diagrams keep a readable source fallback. Each non-Mermaid code block shows a copy button on hover or keyboard focus; it copies the code exactly as written.
+Fenced `mermaid` blocks render automatically from Tunelito's packaged same-origin runtime. Other fenced languages stay as source code, and invalid diagrams keep a readable source fallback. Each non-Mermaid code block shows a copy button on hover or keyboard focus; it copies the code exactly as written. Long code lines wrap by default, and a wrap toggle beside the copy button switches one block back to sideways scrolling. `--no-code-wrap` (or `"codeWrap": false` in config) makes scrolling the default.
 
 Defined GFM footnotes such as `statement[^note]` render as numbered links with a footnotes section and return links. Definitions remain selectable for comments; undefined references and footnote syntax inside code remain literal.
 

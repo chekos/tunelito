@@ -693,6 +693,20 @@ body.tunelito-comments-open .tunelito-document-map {
   background: transparent;
   color: inherit;
 }
+/* Long lines wrap by default; wrapping is display only, so copied text and comment offsets are unchanged. */
+.tunelito-markdown pre > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+:root[data-tunelito-code-wrap="off"] .tunelito-markdown pre > code,
+:root .tunelito-markdown pre[data-tunelito-wrap="off"] > code {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+:root .tunelito-markdown pre[data-tunelito-wrap="on"] > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .tunelito-markdown pre[data-tunelito-copyable] {
   position: relative;
   overflow: visible;
@@ -700,10 +714,11 @@ body.tunelito-comments-open .tunelito-document-map {
 .tunelito-markdown pre[data-tunelito-copyable] > code {
   display: block;
   overflow-x: auto;
-  /* Keeps short lines and fully scrolled long lines clear of the copy button. */
-  padding-right: 1.75rem;
+  /* Keeps short lines, wrapped lines, and fully scrolled long lines clear of the block toolbar. */
+  padding-right: 3.75rem;
 }
-.tunelito-code-copy {
+.tunelito-code-copy,
+.tunelito-code-wrap {
   position: absolute;
   top: 0.45rem;
   right: 0.45rem;
@@ -721,16 +736,27 @@ body.tunelito-comments-open .tunelito-document-map {
   -webkit-user-select: none;
   user-select: none;
 }
+.tunelito-code-wrap {
+  right: 2.7rem;
+}
 .tunelito-markdown pre:hover > .tunelito-code-copy,
 .tunelito-markdown pre:focus-within > .tunelito-code-copy,
+.tunelito-markdown pre:hover > .tunelito-code-wrap,
+.tunelito-markdown pre:focus-within > .tunelito-code-wrap,
 .tunelito-code-copy[data-state] {
   opacity: 1;
 }
-.tunelito-code-copy:hover {
+.tunelito-code-copy:hover,
+.tunelito-code-wrap:hover {
   border-color: color-mix(in srgb, var(--tl-code-text) 60%, transparent);
   background: color-mix(in srgb, var(--tl-code-text) 18%, var(--tl-code-bg));
 }
-.tunelito-markdown .tunelito-code-copy:focus-visible {
+.tunelito-code-wrap[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--tl-code-text) 60%, transparent);
+  background: color-mix(in srgb, var(--tl-code-text) 22%, var(--tl-code-bg));
+}
+.tunelito-markdown .tunelito-code-copy:focus-visible,
+.tunelito-markdown .tunelito-code-wrap:focus-visible {
   opacity: 1;
   outline: 2px solid var(--tl-code-text);
   outline-offset: 2px;
@@ -771,13 +797,16 @@ body.tunelito-comments-open .tunelito-document-map {
   border: 0;
 }
 @media (hover: none) {
-  .tunelito-code-copy { opacity: 1; }
+  .tunelito-code-copy,
+  .tunelito-code-wrap { opacity: 1; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .tunelito-code-copy { transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease; }
+  .tunelito-code-copy,
+  .tunelito-code-wrap { transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease; }
 }
 @media print {
-  .tunelito-code-copy { display: none; }
+  .tunelito-code-copy,
+  .tunelito-code-wrap { display: none; }
 }
 .tunelito-mermaid {
   margin: 0 0 var(--tl-paragraph-rhythm);
@@ -1109,6 +1138,7 @@ export function renderMarkdownDocument({
   cssHref = "",
   cssText = "",
   themeName = DEFAULT_THEME_NAME,
+  codeWrap = true,
   navigation = null,
   editable = false,
   sectionIndex = false,
@@ -1138,7 +1168,7 @@ export function renderMarkdownDocument({
 
   return [
     "<!doctype html>",
-    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}${sectionIndex ? ' data-tunelito-section-index="true"' : ""}${linkPreviews ? ' data-tunelito-link-previews="on"' : ""}>`,
+    `<html lang="en" data-tunelito-theme="${escapeAttribute(theme)}"${editable ? ' data-tunelito-editable="true"' : ""}${sectionIndex ? ' data-tunelito-section-index="true"' : ""}${linkPreviews ? ' data-tunelito-link-previews="on"' : ""}${codeWrap === false ? ' data-tunelito-code-wrap="off"' : ""}>`,
     "<head>",
     '  <meta charset="utf-8">',
     '  <meta name="viewport" content="width=device-width, initial-scale=1">',

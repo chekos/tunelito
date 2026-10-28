@@ -213,6 +213,35 @@ test("linkPreviews layers like other settings and validates each rule", () => {
   );
 });
 
+test("codeWrap defaults on and follows CLI over project over global", () => {
+  const paths = workspace();
+  const defaults = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.deepEqual(defaults.codeWrap, { value: true, source: "default", configPath: null });
+
+  writeFileSync(paths.globalConfigPath, JSON.stringify({ codeWrap: false }));
+  const global = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.deepEqual(global.codeWrap, { value: false, source: "global", configPath: paths.globalConfigPath });
+
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ codeWrap: true }));
+  const project = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.deepEqual(project.codeWrap, { value: true, source: "project", configPath: paths.projectConfigPath });
+
+  const cli = resolveTunelitoConfig({
+    targetPath: paths.targetPath,
+    homePath: paths.homePath,
+    env: {},
+    cliCodeWrap: false,
+    cliCodeWrapProvided: true,
+  });
+  assert.deepEqual(cli.codeWrap, { value: false, source: "cli", configPath: null });
+
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ codeWrap: "off" }));
+  assert.throws(
+    () => resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} }),
+    new RegExp(`Invalid project Tunelito config at ${escapeRegex(paths.projectConfigPath)}: "codeWrap" must be true or false`),
+  );
+});
+
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

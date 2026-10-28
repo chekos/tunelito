@@ -37,6 +37,18 @@ Create `tunelito.config.json` beside a selected file or inside a selected folder
 
 A local `markdownCss` path is resolved relative to the config file, then loaded into the rendered Markdown response. The config file itself is not served in folder mode.
 
+## Code block wrapping
+
+`codeWrap` sets whether long lines in rendered Markdown code blocks wrap. It defaults to `true`, so prose-like blocks such as agent prompts read without sideways scrolling. Set it to `false` for code where alignment matters:
+
+```json
+{
+  "codeWrap": false
+}
+```
+
+`--code-wrap` and `--no-code-wrap` override the config for one session, and `tunelito config show` prints the resolved value and its source. Reviewers can still flip a single block with the wrap toggle beside its copy button. Wrapping is display only: copied text, comment quotes, and the source file are unchanged.
+
 ## Link previews
 
 `linkPreviews` holds up to 20 resolver rules for [resolver-backed link previews](/how-it-works#resolver-backed-link-previews):
