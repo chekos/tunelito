@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.27.0 - 2026-10-28
 
+- Updates the bundled Tunelito agent skill: code blocks wrap by default and get a wrap toggle beside the copy button; pass `--no-code-wrap` or set `"codeWrap": false` when alignment matters.
 - Wraps long lines in rendered Markdown code blocks by default (#148), so prose-like blocks such as agent prompts read without sideways scrolling. Long tokens such as URLs and paths break too. Wrapping is display only: the copy button still copies the original text with no added newlines, and comment quotes and offsets are unchanged. Each code block gets a wrap toggle next to its copy button (`aria-pressed`, keyboard reachable) for code where alignment matters. Agents and scripts set the default with `--no-code-wrap` / `--code-wrap` or `"codeWrap": false` in `tunelito.config.json` or the global config, and `tunelito config show` reports the resolved value and its source.
 
 ## 0.26.0 - 2026-10-17
