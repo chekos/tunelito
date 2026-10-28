@@ -203,9 +203,12 @@ Persist a project setting beside the selected file or inside the selected folder
 ```json
 {
   "theme": "editorial",
-  "markdownCss": "./review.css"
+  "markdownCss": "./review.css",
+  "codeWrap": true
 }
 ```
+
+`codeWrap` (default `true`) wraps long lines in Markdown code blocks; set it to `false`, or pass `--no-code-wrap`, to keep sideways scrolling. Reviewers can still flip any single block with its wrap toggle.
 
 Global defaults live at `$XDG_CONFIG_HOME/tunelito/config.json`, or `~/.config/tunelito/config.json` when `XDG_CONFIG_HOME` is unset. Resolution is deterministic:
 
@@ -229,7 +232,7 @@ The public [configuration guide](docs-site/configuration.mdx) documents the stab
 ## CLI
 
 ```text
-Tunelito 0.26.0
+Tunelito 0.27.0
 
 Usage: tunelito <page.html|notes.md|folder> [options]
        tunelito doctor [page.html|notes.md|folder] [options]
@@ -261,6 +264,8 @@ Options:
   --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
   --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
+  --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
+                        them (--code-wrap restores the wrapping default)
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
   --link-preview <regex> <url-template>
@@ -366,6 +371,7 @@ The server also:
 - builds a keyboard-accessible, opacity-based desktop document map from the real rendered Markdown blocks, including explicit h1–h6 navigation
 - renders fenced `mermaid` blocks from a packaged same-origin runtime, with Mermaid strict security, bounded diagram complexity, and an accessible source fallback if JavaScript or diagram syntax fails
 - adds a hover/focus copy button to every other fenced code block in the browser; it copies the exact code text and never changes the text that comments anchor to
+- wraps long code block lines by default, with a per-block wrap toggle beside the copy button and a `--no-code-wrap` flag or `"codeWrap": false` config default for code where alignment matters
 - can expose an opt-in, local-owner-only Markdown source route with conditional atomic saves while keeping public tunnel responses read-only
 - writes comments to markdown atomically
 - restores prior comments from hidden Tunelito metadata in that markdown

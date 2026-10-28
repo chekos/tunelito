@@ -422,9 +422,22 @@ test("renderMarkdownDocument leaves copy buttons to the client so code block anc
 
   assert.equal(body, '<h2>Query</h2>\n<pre><code class="language-sql">SELECT 1;\n</code></pre>');
   assert.doesNotMatch(body, /tunelito-code-copy|<button/);
-  assert.match(html, /\.tunelito-code-copy \{/);
+  assert.match(html, /\.tunelito-code-copy,\n\.tunelito-code-wrap \{/);
   assert.match(html, /pre\[data-tunelito-copyable\] > code \{\n  display: block;\n  overflow-x: auto;/);
-  assert.match(html, /prefers-reduced-motion: no-preference\) \{\n  \.tunelito-code-copy \{ transition/);
+  assert.match(html, /prefers-reduced-motion: no-preference\) \{\n  \.tunelito-code-copy,\n  \.tunelito-code-wrap \{ transition/);
+});
+
+test("renderMarkdownDocument wraps code block lines by default and marks the opt-out on the root", () => {
+  const longLine = "long ".repeat(200);
+  const wrapped = renderMarkdownDocument({ markdownSource: `\`\`\`text\n${longLine}\n\`\`\`\n` });
+  assert.match(wrapped, /<html lang="en" data-tunelito-theme="[^"]+">/);
+  assert.match(wrapped, /\.tunelito-markdown pre > code \{\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;/);
+  assert.match(wrapped, /:root\[data-tunelito-code-wrap="off"\] \.tunelito-markdown pre > code,\n:root \.tunelito-markdown pre\[data-tunelito-wrap="off"\] > code \{\n  white-space: pre;/);
+  assert.match(wrapped, /\.tunelito-code-wrap\[aria-pressed="true"\]/);
+  assert.equal(renderedMarkdownBody(wrapped), `<pre><code class="language-text">${longLine}\n</code></pre>`);
+
+  const scrolling = renderMarkdownDocument({ markdownSource: "```\nx\n```\n", codeWrap: false });
+  assert.match(scrolling, /<html lang="en" data-tunelito-theme="[^"]+" data-tunelito-code-wrap="off">/);
 });
 
 test("renderMarkdownDocument only treats an exact Mermaid language tag as a diagram", () => {

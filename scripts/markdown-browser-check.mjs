@@ -50,6 +50,7 @@ try {
   await verifyResponsiveAndComments();
   await verifyEditableSource();
   await verifyCodeCopy();
+  await verifyCodeWrap();
   await verifyHtmlPageHasNoCodeCopy();
   process.stdout.write(`Markdown browser checks passed for ${new Set([...markerFixtures, ...accessibilityFixtures]).size} files, ${THEME_NAMES.length} themes, the folder vault, and local source editing.\n`);
 } finally {
@@ -668,6 +669,8 @@ async function verifyCodeCopy() {
     const buttons = page.locator(".tunelito-markdown .tunelito-code-copy");
     assert.equal(await buttons.count(), 2, "every fenced code block except the Mermaid diagram gets a copy button");
     assert.equal(await page.locator("[data-tunelito-mermaid] .tunelito-code-copy").count(), 0, "Mermaid diagrams must not get a copy button");
+    assert.equal(await page.locator(".tunelito-markdown .tunelito-code-wrap").count(), 2, "every copyable code block gets a wrap toggle");
+    assert.equal(await page.locator("[data-tunelito-mermaid] .tunelito-code-wrap").count(), 0, "Mermaid diagrams must not get a wrap toggle");
     assert.equal(await page.getByRole("button", { name: "Copy sql code" }).count(), 1, "the button names the code language");
     assert.equal(await page.getByRole("button", { name: "Copy bash code" }).count(), 1, "nested list code blocks are enhanced too");
     const buttonShape = await buttons.first().evaluate((button) => ({
@@ -688,23 +691,48 @@ async function verifyCodeCopy() {
     );
     await sqlPre.hover();
     assert.equal(await buttons.first().evaluate((button) => getComputedStyle(button).opacity), "1", "hovering a code block reveals its copy button");
-    const scrolledGeometry = await sqlPre.evaluate((pre) => {
+    const toolbarGeometry = (pre) => {
       const code = pre.querySelector("code");
       code.scrollLeft = code.scrollWidth;
-      const button = pre.querySelector(".tunelito-code-copy").getBoundingClientRect();
+      const copy = pre.querySelector(".tunelito-code-copy").getBoundingClientRect();
+      const wrap = pre.querySelector(".tunelito-code-wrap").getBoundingClientRect();
       const box = pre.getBoundingClientRect();
       const text = Array.from(code.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE).at(-1);
       const end = text.textContent.replace(/\n$/, "").length;
       const lastCharacter = document.createRange();
       lastCharacter.setStart(text, end - 1);
       lastCharacter.setEnd(text, end);
+      // Spaces at a soft wrap hang invisibly past the line box, so only visible characters count.
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      const glyph = document.createRange();
+      let textClear = true;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (let index = 0; index < node.length; index += 1) {
+          if (/\s/.test(node.data[index])) continue;
+          glyph.setStart(node, index);
+          glyph.setEnd(node, index + 1);
+          if (glyph.getBoundingClientRect().right > wrap.left) textClear = false;
+        }
+      }
       return {
         scrolls: code.scrollLeft > 0,
-        pinned: button.right <= box.right && button.left >= box.left,
-        lineEndClear: lastCharacter.getBoundingClientRect().right <= button.left,
+        pinned: copy.right <= box.right && wrap.left >= box.left && wrap.right <= copy.left,
+        lineEndClear: lastCharacter.getBoundingClientRect().right <= wrap.left,
+        textClear,
       };
-    });
-    assert.deepEqual(scrolledGeometry, { scrolls: true, pinned: true, lineEndClear: true }, "wide code scrolls inside the block, the copy button stays pinned, and the line end scrolls clear of it");
+    };
+    const wrapToggle = page.getByRole("button", { name: "Wrap long lines in sql code" });
+    assert.equal(await wrapToggle.getAttribute("aria-pressed"), "true", "code blocks wrap long lines by default");
+    assert.deepEqual(await sqlPre.evaluate(toolbarGeometry), { scrolls: false, pinned: true, lineEndClear: true, textClear: true }, "wrapped code never scrolls sideways and every wrapped line stays clear of the toolbar");
+    await wrapToggle.click();
+    assert.equal(await wrapToggle.getAttribute("aria-pressed"), "false");
+    await page.waitForFunction(() => document.querySelector(".tunelito-code-copy-status")?.textContent === "Long lines scroll");
+    const { textClear: _scrolledTextClear, ...scrolledGeometry } = await sqlPre.evaluate(toolbarGeometry);
+    assert.deepEqual(scrolledGeometry, { scrolls: true, pinned: true, lineEndClear: true }, "opting out restores sideways scrolling, the toolbar stays pinned, and the line end scrolls clear of it");
+    assert.equal(await sqlPre.evaluate((pre) => pre.querySelector("code").tabIndex), 0, "scrolling code becomes keyboard reachable after opting out");
+    await wrapToggle.click();
+    assert.equal(await wrapToggle.getAttribute("aria-pressed"), "true");
+    assert.equal(await sqlPre.evaluate((pre) => pre.querySelector("code").hasAttribute("tabindex")), false, "wrapped code drops its scroll tab stop");
     await sqlPre.evaluate((pre) => { pre.querySelector("code").scrollLeft = 0; });
 
     await page.waitForFunction(() => {
@@ -724,6 +752,9 @@ async function verifyCodeCopy() {
       document.querySelector(".tunelito-markdown ol p").setAttribute("tabindex", "-1");
       document.querySelector(".tunelito-markdown ol p").focus();
     });
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Wrap long lines in bash code", "the wrap toggle is reachable by keyboard before the copy button");
+    assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).opacity), "1", "keyboard focus reveals the wrap toggle");
     await page.keyboard.press("Tab");
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Copy bash code", "the copy button is reachable by keyboard");
     assert.equal(await page.evaluate(() => getComputedStyle(document.activeElement).opacity), "1", "keyboard focus reveals the copy button");
@@ -769,6 +800,61 @@ async function verifyCodeCopy() {
   }
 }
 
+async function verifyCodeWrap() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-code-wrap-"));
+  const filePath = join(tempDir, "prompt.md");
+  const prompt = `Review https://example.com/${"a".repeat(120)} then ${"summarize the open review comments and propose edits ".repeat(18)}`.slice(0, 1000);
+  assert.equal(prompt.length, 1000);
+  const source = `# Agent prompt\n\n\`\`\`text\n${prompt}\n\`\`\`\n`;
+  writeFileSync(filePath, source, "utf8");
+
+  for (const codeWrap of [undefined, false]) {
+    const instance = await createTunelitoServer({
+      filePath,
+      commentsPath: join(tempDir, "prompt.comments.md"),
+      host: "127.0.0.1",
+      port: 0,
+      accessKey: "browser-check",
+      ...(codeWrap === undefined ? {} : { codeWrap }),
+    });
+    try {
+      for (const width of [390, 1280]) {
+        const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
+        await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(instance.localUrl).origin });
+        const page = await context.newPage();
+        try {
+          await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+          const toggle = page.getByRole("button", { name: "Wrap long lines in text code" });
+          await toggle.waitFor({ state: "attached" });
+          const label = `${width}px ${codeWrap === false ? "--no-code-wrap" : "default"}`;
+          const overflow = () => page.evaluate(() => {
+            const code = document.querySelector(".tunelito-markdown pre > code");
+            return code.scrollWidth > code.clientWidth;
+          });
+
+          if (codeWrap === false) {
+            assert.equal(await toggle.getAttribute("aria-pressed"), "false", `${label}: the configured opt-out starts unwrapped`);
+            assert.equal(await overflow(), true, `${label}: the opt-out keeps today's sideways scrolling`);
+            await toggle.click();
+          }
+          assert.equal(await toggle.getAttribute("aria-pressed"), "true", `${label}: the block is wrapped`);
+          assert.equal(await overflow(), false, `${label}: a 1,000-character line has no horizontal scrollbar`);
+          await assertNoOverflow(page, `${label} wrapped code`);
+
+          await page.getByRole("button", { name: "Copy text code" }).click();
+          assert.equal(await page.evaluate(() => navigator.clipboard.readText()), prompt, `${label}: copying a wrapped block returns the original line with no added newlines`);
+          if (width === 390 && codeWrap === undefined) await assertAccessible(page, "code wrap toggle");
+        } finally {
+          await context.close();
+        }
+      }
+    } finally {
+      await instance.close();
+    }
+  }
+  assert.equal(readFileSync(filePath, "utf8"), source, "wrapping must not change the Markdown source");
+}
+
 async function verifyHtmlPageHasNoCodeCopy() {
   const tempDir = mkdtempSync(join(tmpdir(), "tunelito-html-code-"));
   const filePath = join(tempDir, "page.html");
@@ -787,6 +873,7 @@ async function verifyHtmlPageHasNoCodeCopy() {
     await page.goto(instance.localUrl, { waitUntil: "networkidle" });
     await page.locator("#tunelito-root").waitFor({ state: "attached" });
     assert.equal(await page.locator(".tunelito-code-copy").count(), 0, "user-authored HTML pages must not get code copy buttons");
+    assert.equal(await page.locator(".tunelito-code-wrap").count(), 0, "user-authored HTML pages must not get code wrap toggles");
     assert.equal(await page.locator("pre").evaluate((pre) => pre.outerHTML), "<pre><code>echo user-authored</code></pre>");
     assert.equal(readFileSync(filePath, "utf8"), source);
   } finally {

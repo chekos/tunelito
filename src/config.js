@@ -9,7 +9,7 @@ import { DEFAULT_THEME_NAME, THEME_DETAILS, THEME_NAMES, normalizeThemeName } fr
 export const PROJECT_CONFIG_FILENAME = "tunelito.config.json";
 export const CONFIG_FORMAT = "tunelito-config";
 export const CONFIG_VERSION = 1;
-const CONFIG_KEYS = new Set(["theme", "markdownCss", "linkPreviews"]);
+const CONFIG_KEYS = new Set(["theme", "markdownCss", "linkPreviews", "codeWrap"]);
 
 export function resolveTunelitoConfig({
   targetPath = process.cwd(),
@@ -19,6 +19,8 @@ export function resolveTunelitoConfig({
   cliMarkdownCssProvided = false,
   cliLinkPreviews,
   cliLinkPreviewsProvided = false,
+  cliCodeWrap,
+  cliCodeWrapProvided = false,
   env = process.env,
   homePath = homedir(),
 } = {}) {
@@ -62,6 +64,15 @@ export function resolveTunelitoConfig({
     label: linkPreviewCandidate.source === "cli" ? "--link-preview" : "linkPreviews",
   });
 
+  const codeWrapCandidate = pickValue({
+    key: "codeWrap",
+    cliProvided: cliCodeWrapProvided,
+    cliValue: cliCodeWrap,
+    projectConfig,
+    globalConfig,
+    defaultValue: true,
+  });
+
   return {
     format: CONFIG_FORMAT,
     version: CONFIG_VERSION,
@@ -94,6 +105,11 @@ export function resolveTunelitoConfig({
         fields,
         ...(headers.length ? { headers: headerReport(headers) } : {}),
       })),
+    },
+    codeWrap: {
+      value: codeWrapCandidate.value !== false,
+      source: codeWrapCandidate.source,
+      configPath: codeWrapCandidate.configPath || null,
     },
     linkPreviewRules,
     markdownCssHref: markdownCss.href,
@@ -140,6 +156,9 @@ function readConfigFile(path, layer) {
     if (key in parsed && typeof parsed[key] !== "string") {
       throw new Error(`Invalid ${layer} Tunelito config at ${path}: "${key}" must be a string`);
     }
+  }
+  if ("codeWrap" in parsed && typeof parsed.codeWrap !== "boolean") {
+    throw new Error(`Invalid ${layer} Tunelito config at ${path}: "codeWrap" must be true or false`);
   }
   if (parsed.theme) normalizeThemeName(parsed.theme);
   if ("linkPreviews" in parsed) {

@@ -151,7 +151,9 @@ Links to another origin open in a new tab so the review room stays open;
 relative, same-origin, and fragment links stay in place. A CommonMark link
 title, such as `[TLL-1](url "Title · status · priority")`, shows on hover, so
 put tracker context in the title when writing briefings. Fenced code blocks get
-a copy button; it is presentation-only chrome.
+a copy button and a wrap toggle; both are presentation-only chrome. Long code
+lines wrap by default, so prompts in code blocks read without scrolling; pass
+`--no-code-wrap` (or set `"codeWrap": false`) when alignment matters.
 
 For bare tracker links, a resolver can fill the hover card instead:
 `--link-preview '<regex>' '<json-url-template>'` (optionally

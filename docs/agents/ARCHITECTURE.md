@@ -115,6 +115,7 @@ The browser client owns reviewer interaction:
 - build the right-edge Markdown document map from direct rendered content blocks, preserve existing heading ids, provide h1-h6 and paragraph navigation with scroll-progress state, and clamp that state to the first block at the top and the last block at the bottom
 - coordinate the Markdown drawer, document map, Mermaid completion, and comments panel across responsive, dark-mode, keyboard, and reduced-motion states
 - add text-free, `data-tunelito-comment-ignore` copy buttons to non-Mermaid fenced code blocks at load time, so server-rendered Markdown, text offsets, quotes, and section mapping stay identical with or without the button
+- add a text-free wrap toggle beside each copy button; it sets `data-tunelito-wrap="on|off"` on the `pre`, while the server only marks a `codeWrap: false` default as `data-tunelito-code-wrap="off"` on `<html>`, so wrapping stays CSS-only and never changes copied text or comment offsets
 - initialize Mermaid once per rendered Markdown page with strict security and render each pending figure once, preserving readable source on success or failure
 
 ## Invariants

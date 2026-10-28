@@ -51,6 +51,7 @@ export async function createTunelitoServer(options) {
   const markdownCssHref = normalizeMarkdownCssHref(options.markdownCssHref || "");
   const markdownCssText = String(options.markdownCssText || "");
   const markdownTheme = String(options.markdownTheme || DEFAULT_THEME_NAME);
+  const codeWrap = options.codeWrap !== false;
   const editable = Boolean(options.editable);
   const linkPreviews = options.linkPreviewResolver || createLinkPreviewResolver({
     rules: options.linkPreviewRules || [],
@@ -89,6 +90,7 @@ export async function createTunelitoServer(options) {
       markdownCssHref,
       markdownCssText,
       markdownTheme,
+      codeWrap,
       editable,
       sectionIndex: Boolean(options.sectionIndex),
       linkPreviews,
@@ -385,7 +387,7 @@ export async function createTunelitoServer(options) {
   };
 }
 
-function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, editable, sectionIndex, linkPreviews, linkPreviewVisitors, sessionId, startedAt, sessionSnapshot, touchActivity }) {
+function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, directoryMode, sourceName, comments, commentsPath, reviewEvents, agentStatePath, blockedPaths, liveMode, accessKey, ownerName, ownerSessionId, markdownCssHref, markdownCssText, markdownTheme, codeWrap, editable, sectionIndex, linkPreviews, linkPreviewVisitors, sessionId, startedAt, sessionSnapshot, touchActivity }) {
   const url = new URL(req.url || "/", "http://localhost");
   let pathname;
   try {
@@ -541,6 +543,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
         markdownCssHref,
         markdownCssText,
         markdownTheme,
+        codeWrap,
         editable: editable && owner && isEditableMarkdownPath(asset.path),
         sectionIndex,
         linkPreviews: linkPreviewsOn,
@@ -571,7 +574,7 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
       blockedPaths,
     }));
     const html = isMarkdownPath(filePath)
-      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, editable: sourceEditable, sectionIndex, linkPreviews: linkPreviewsOn })
+      ? renderMarkdownFile({ path: filePath, sourceName, markdownCssHref, markdownCssText, markdownTheme, codeWrap, editable: sourceEditable, sectionIndex, linkPreviews: linkPreviewsOn })
       : readFileSync(filePath, "utf8");
     sendText(res, 200, injectTunelitoClient(html, { sourceName, ...injectOptions }), "text/html; charset=utf-8", req.method, responseHeaders);
     return;
@@ -856,13 +859,14 @@ function pathnameSegments(pathname) {
   return String(pathname || "/").split("/").filter(Boolean);
 }
 
-function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, navigation = null, editable = false, sectionIndex = false, linkPreviews = false }) {
+function renderMarkdownFile({ path, sourceName, markdownCssHref, markdownCssText, markdownTheme, codeWrap = true, navigation = null, editable = false, sectionIndex = false, linkPreviews = false }) {
   return renderMarkdownDocument({
     markdownSource: readFileSync(path, "utf8"),
     sourceName,
     cssHref: markdownCssHref,
     cssText: markdownCssText,
     themeName: markdownTheme,
+    codeWrap,
     navigation,
     editable,
     sectionIndex,
