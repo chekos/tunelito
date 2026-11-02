@@ -119,13 +119,14 @@ Bundled themes and custom CSS share stable `--tl-*` properties. The structural r
 
 | Group | Custom properties |
 | --- | --- |
-| Typography | `--tl-font-body`, `--tl-font-display`, `--tl-font-mono`, `--tl-line-height`, `--tl-paragraph-rhythm` |
+| Typography | `--tl-font-body`, `--tl-font-display`, `--tl-font-mono`, `--tl-line-height`, `--tl-paragraph-rhythm`, `--tl-section-rhythm` (space above footnotes) |
 | Reading geometry | `--tl-reading-measure`, `--tl-page-padding` |
 | Heading hierarchy | `--tl-heading-line-height`; `--tl-h1-*` through `--tl-h6-*` for size, weight, and margin; `--tl-heading-1` through `--tl-heading-6` for color |
 | Core color | `--tl-page-bg`, `--tl-paper-bg`, `--tl-text`, `--tl-muted`, `--tl-faint`, `--tl-accent`, `--tl-border`, `--tl-soft`, `--tl-selection` |
 | Links and emphasis | `--tl-link`, `--tl-link-external`, `--tl-link-hover`, `--tl-wikilink`, `--tl-wikilink-hover`, `--tl-strong`, `--tl-emphasis`, `--tl-list-marker` |
 | Code and errors | `--tl-code-bg`, `--tl-code-text`, `--tl-inline-code-bg`, `--tl-code-keyword`, `--tl-code-string`, `--tl-code-comment`, `--tl-error-*` |
-| Review chrome | `--tl-properties-*`, `--tl-pill-*`, `--tl-ruler-unread`, `--tl-ruler-consumed`, `--tl-ruler-current`, `--tl-focus-ring` |
+| Review chrome | `--tl-properties-*`, `--tl-pill-*`, `--tl-ruler-unread`, `--tl-ruler-consumed`, `--tl-ruler-current`, `--tl-focus-ring` (solid keyboard focus outline, defaults to `--tl-accent`) |
+| Review badges | `--tl-tone-active`, `--tl-tone-done`, `--tl-tone-warning`, `--tl-tone-danger` for `{in_progress}`, `{done}`, `{high}`, `{blocked}`, and the other inline review tokens |
 | Mermaid | `--tl-mermaid-background`, `--tl-mermaid-primary`, `--tl-mermaid-primary-text`, `--tl-mermaid-border`, `--tl-mermaid-secondary`, `--tl-mermaid-tertiary`, `--tl-mermaid-line`, `--tl-mermaid-edge-label` |
 
 Custom CSS may override these tokens or style `.tunelito-markdown`. Themes must not hide review controls, remove focus visibility, or style undocumented comments-panel internals.

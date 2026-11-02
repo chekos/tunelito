@@ -225,6 +225,21 @@ test("renderMarkdownDocument selects each bundled theme and keeps custom CSS las
   }
 });
 
+test("every bundled theme defines each --tl-* token the Markdown and folder shells reference", () => {
+  for (const themeName of ["default", "editorial", "technical", "bns-pitaya"]) {
+    for (const html of [
+      renderMarkdownDocument({ markdownSource: "# Tokens", themeName }),
+      renderFolderLandingDocument({ folderName: "Tokens", themeName }),
+    ]) {
+      const css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join("\n");
+      const defined = new Set([...css.matchAll(/(--tl-[\w-]+)\s*:/g)].map((match) => match[1]));
+      const missing = [...new Set([...css.matchAll(/var\((--tl-[\w-]+)/g)].map((match) => match[1]))]
+        .filter((name) => !defined.has(name));
+      assert.deepEqual(missing, [], `${themeName} references undefined tokens`);
+    }
+  }
+});
+
 test("renderMarkdownDocument advertises source editing only when explicitly enabled", () => {
   const readOnly = renderMarkdownDocument({ markdownSource: "# Read only" });
   const editable = renderMarkdownDocument({ markdownSource: "# Editable", editable: true });

@@ -342,7 +342,7 @@ const THEMES = {
   border-width: 0 0 1px;
 }
 :root[data-tunelito-theme="bns-pitaya"] .tunelito-markdown th {
-  color: #908d9e;
+  color: var(--tl-muted);
   background: transparent;
   font-family: var(--tl-font-display);
   font-size: 0.82em;
@@ -350,7 +350,7 @@ const THEMES = {
   text-transform: uppercase;
 }
 :root[data-tunelito-theme="bns-pitaya"] .tunelito-markdown pre {
-  box-shadow: inset 3px 0 #f26196;
+  box-shadow: inset 3px 0 var(--tl-code-keyword);
 }
 `,
 };

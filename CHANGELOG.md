@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Polishes the four Markdown themes. Long URLs and words wrap inside the article instead of widening the page, and on viewports up to 760px wide, wide tables scroll inside the article. On viewports up to 960px wide, the article starts below the collapsed properties tab so the tab no longer covers the first heading. Footnotes get the space above them they were meant to have; the `--tl-section-rhythm` token they used was never defined. Keyboard focus outlines are now a solid 2px ring in the theme accent (`--tl-focus-ring`) instead of the faint selection tint; footnote `:target` highlights keep the soft tint. Inline review badges (`{in_progress}`, `{done}`, `{high}`, `{blocked}`, …) get tinted fills and borders from new `--tl-tone-*` tokens that switch between light and dark mode, and `{low}` reads as muted. Task-list items drop the bullet in front of their checkbox, `<details>` summaries show a pointer and accent hover, table numerals use tabular figures, headings balance their line breaks, and `bns-pitaya` reads table-header and code-rail colors from theme tokens instead of hard-coded values.
+
 ## 0.27.0 - 2026-10-28
 
 - Updates the bundled Tunelito agent skill: code blocks wrap by default and get a wrap toggle beside the copy button; pass `--no-code-wrap` or set `"codeWrap": false` when alignment matters.
