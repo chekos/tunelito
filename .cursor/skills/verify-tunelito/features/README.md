@@ -6,7 +6,7 @@ This directory is the maintained source for verifying Tunelito's browser review 
 
 - Run commands from the repo root after `npm install`.
 - Launch with `node .cursor/skills/verify-tunelito/scripts/verify-tunelito.mjs launch <fixture>`.
-- The helper copies the fixture and passes `--no-tunnel --port 0 --out <run>/comments.md`.
+- The helper copies the fixture and passes `--no-tunnel --port 0 --comments <run>/comments.md`.
 - Run `doctor` and require `"ok": true` before driving.
 - Never drive an instance this run did not start. One checkout, one live instance.
 

@@ -9,7 +9,7 @@ The index does not replace the Markdown inbox and is not durable state. Tunelito
 ```bash
 tunelito comments inspect ./page.html --json
 tunelito comments inspect ./site --json
-tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site --comments ./custom.comments.md --json
 tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```

@@ -18,6 +18,8 @@ import {
   suggestSiblingPath,
 } from "../src/cli-output.js";
 import {
+  createHumanReporter,
+  createJsonReporter,
   formatAgentLogLine,
   formatCommentEvent,
   formatShutdownSummary,
@@ -183,6 +185,107 @@ test("shutdown summary reports duration, new comments, and the next step", () =>
     "Stopped after 1s · 0 new comments in a.comments.md",
   );
   assert.equal(formatShutdownSummary({ elapsedMs: 1000, newComments: 1, ephemeral: true }), "Stopped after 1s · 1 comment discarded (in-memory session)");
+});
+
+function collect() {
+  const chunks = [];
+  return { write: (chunk) => chunks.push(chunk), text: () => chunks.join(""), isTTY: false };
+}
+
+const startupModel = {
+  version: "1.0.0",
+  targetPath: "/work/site",
+  localUrl: "http://127.0.0.1:4317/?tunelito_key=k",
+  commentsPath: "/work/site.comments.md",
+  sessionPath: "/work/site/.tunelito/session.json",
+  auth: true,
+  tunnel: true,
+  theme: { value: "bns-pitaya", source: "default", details: { description: "long" } },
+  handoff: "tunelito review watch --url 'u' --json",
+  agentMode: "session",
+  agentSession: { description: "this session", tracker: "tunelito inbox status x", record: "tunelito inbox record x" },
+};
+
+test("JSON reporter emits one typed, timestamped object per line", () => {
+  const stream = collect();
+  const at = new Date("2026-11-02T10:00:00.000Z");
+  const reporter = createJsonReporter({ stream, now: () => at });
+  reporter.startup(startupModel);
+  reporter.tunnel("starting");
+  reporter.tunnel("dns-wait", { hostname: "a.trycloudflare.com", code: "ENOTFOUND" });
+  reporter.tunnel("ready", { publicUrl: "https://a.trycloudflare.com/?tunelito_key=k" });
+  reporter.viewers(2);
+  reporter.comment({ id: "c_1", author: "Ana", authorRole: "visitor", scope: "page", pagePath: "/", body: "Tighten", quote: "q", prefix: "p" });
+  reporter.reload();
+  reporter.review({ sequence: 1, summary: { comments: 3 } });
+  reporter.agentLog("Agent:   processed 1 comment");
+  reporter.agentLog("\nAgent inbox: claimed c_1\nprompt body");
+  reporter.stopped({ elapsedMs: 1000, newComments: 1 });
+
+  const events = stream.text().trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.type), ["started", "tunnel", "tunnel", "tunnel", "viewers", "comment", "reload", "review", "agent", "prompt", "stopped"]);
+  assert.ok(events.every((event) => event.time === "2026-11-02T10:00:00.000Z"));
+  const [started] = events;
+  assert.equal(started.localUrl, startupModel.localUrl);
+  assert.deepEqual(started.theme, { value: "bns-pitaya", source: "default" });
+  assert.equal(started.agent, "session");
+  assert.equal(started.commands.record, "tunelito inbox record x");
+  assert.equal(events[3].state, "ready");
+  assert.equal(events[3].publicUrl, "https://a.trycloudflare.com/?tunelito_key=k");
+  assert.deepEqual(Object.keys(events[5]).sort(), ["author", "authorRole", "body", "id", "pagePath", "scope", "time", "type"]);
+  assert.equal(events[8].message, "processed 1 comment");
+  assert.match(events[9].text, /prompt body/);
+  assert.equal(createJsonReporter({ stream: collect() }) !== null, true);
+});
+
+test("muted reporters drop shutdown noise so stopped is the last event", () => {
+  const stream = collect();
+  const reporter = createJsonReporter({ stream });
+  reporter.viewers(1);
+  reporter.mute();
+  reporter.viewers(0);
+  reporter.agentLog("Agent:   stopping");
+  reporter.stopped({ elapsedMs: 5, newComments: 0 });
+  reporter.viewers(0);
+  const types = stream.text().trim().split("\n").map((line) => JSON.parse(line).type);
+  assert.deepEqual(types, ["viewers", "stopped"]);
+
+  const human = collect();
+  const humanReporter = createHumanReporter({ stream: human });
+  humanReporter.mute();
+  humanReporter.viewers(0);
+  humanReporter.stopped({ elapsedMs: 1000, newComments: 0, commentsPath: join(process.cwd(), "a.comments.md"), targetPath: join(process.cwd(), "a.html") });
+  assert.equal(human.text(), "Stopped after 1s · 0 new comments in a.comments.md\n");
+});
+
+test("--flag=value explains the space-separated form", () => {
+  assert.throws(
+    () => parseArgs(["page.html", "--comments=x.md"]),
+    (error) => error.message === '--comments takes its value after a space, not "="' && error.hint === "Use --comments <value>.",
+  );
+});
+
+test("JSON started event hides the comments path for ephemeral rooms", () => {
+  const stream = collect();
+  createJsonReporter({ stream }).startup({ ...startupModel, ephemeral: true });
+  assert.equal(JSON.parse(stream.text()).commentsPath, null);
+});
+
+test("human reporter renders the same events as terminal lines", () => {
+  const stream = collect();
+  const reporter = createHumanReporter({ stream, now: () => new Date(2026, 10, 2, 9, 5) });
+  reporter.startup({ ...startupModel, agentSession: null, agentMode: null });
+  reporter.tunnel("starting");
+  reporter.tunnel("ready", { publicUrl: "https://a.trycloudflare.com/?tunelito_key=k" });
+  reporter.comment({ author: "Ana", body: "Tighten" });
+  reporter.warning("could not update metadata (EACCES)");
+  reporter.stopped({ elapsedMs: 60_000, newComments: 1, commentsPath: join(process.cwd(), "site.comments.md"), targetPath: join(process.cwd(), "site") });
+  const text = stream.text();
+  assert.match(text, /^ {2}Public {5}starting Cloudflare Tunnel…$/m, "piped output appends progress");
+  assert.match(text, /^ {2}Public {5}https:\/\/a\.trycloudflare\.com\/\?tunelito_key=k {3}share this$/m);
+  assert.match(text, /^09:05 {2}comment {2}Ana: Tighten$/m);
+  assert.match(text, /^09:05 {2}warning {2}could not update metadata \(EACCES\)$/m);
+  assert.match(text, /^Stopped after 1m · 1 new comment in site\.comments\.md$/m);
 });
 
 test("terminal writer keeps a sticky status line on a TTY and appends otherwise", () => {

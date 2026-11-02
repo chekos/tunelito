@@ -74,7 +74,7 @@ export function formatRows(rows, style = plainStyle, { indent = "  ", gap = 3, l
   });
 }
 
-function toneValue(value, tone, style) {
+export function toneValue(value, tone, style = plainStyle) {
   if (tone === "strong") return style.bold(value);
   if (tone === "warn") return style.yellow(value);
   if (tone === "error") return style.red(value);

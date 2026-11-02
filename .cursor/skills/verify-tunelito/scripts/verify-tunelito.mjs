@@ -73,7 +73,7 @@ async function launch(fixtureRel) {
       "--no-tunnel",
       "--port",
       "0",
-      "--out",
+      "--comments",
       commentsPath,
     ], {
       cwd: repoRoot,

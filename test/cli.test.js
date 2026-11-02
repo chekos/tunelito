@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { agentBlockedPaths, generateAccessKey, installSkill, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, parseSessionArgs, parseSkillInstallArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, skillInstallDestination, updateAgentSessionPublicUrl, usage, VERSION, withReviewKey, writeAgentSessionFile } from "../bin/tunelito.js";
+import { agentBlockedPaths, generateAccessKey, helpTopic, installSkill, isCliEntry, loadAgentPromptOptions, openBrowser, parseArgs, parseCommentsArgs, parseConfigArgs, parseDoctorArgs, parseInboxArgs, parseReviewArgs, parseSessionArgs, parseSkillInstallArgs, readBundledSkill, runCommentsCommand, runConfigCommand, runDoctorCommand, runInboxCommand, runMcpCommand, runReviewCommand, runSkillCommand, skillInstallDestination, updateAgentSessionPublicUrl, usage, VERSION, withReviewKey, writeAgentSessionFile } from "../bin/tunelito.js";
 import { loadAgentState } from "../src/agent-worker.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 
@@ -60,9 +60,35 @@ test("verified public URLs are persisted for agent-session recovery", () => {
   assert.match(session.reviewWatchCommand, /verified-session\.trycloudflare\.com/);
 });
 
-test("parseArgs rejects --out without a value", () => {
-  assert.throws(() => parseArgs(["page.html", "--out"]), /--out requires a value/);
-  assert.throws(() => parseArgs(["page.html", "--out", "--no-tunnel"]), /--out requires a value/);
+test("parseArgs rejects --comments without a value", () => {
+  assert.throws(() => parseArgs(["page.html", "--comments"]), /--comments requires a path/);
+  assert.throws(() => parseArgs(["page.html", "--comments", "--no-tunnel"]), /--comments requires a path/);
+});
+
+test("flags removed in 1.0 fail with their replacement", () => {
+  for (const [removed, replacement] of [["--out", "--comments"], ["--live", "--ephemeral"], ["--owner-name", "--owner"]]) {
+    assert.throws(
+      () => parseArgs(["page.html", removed, "x"]),
+      (error) => error.message === `${removed} was removed in Tunelito 1.0` && error.hint === `Use ${replacement} instead.`,
+    );
+  }
+  assert.throws(() => parseDoctorArgs(["--out", "x.md"]), /--out was removed/);
+  assert.throws(() => parseInboxArgs(["status", "page.html", "--out", "x.md"]), /--out was removed/);
+  assert.throws(() => parseCommentsArgs(["inspect", "page.html", "--out", "x.md"]), /--out was removed/);
+});
+
+test("help is layered: short main help, topics, and a full list", () => {
+  const main = usage();
+  assert.ok(main.split("\n").length <= 60, "main help fits on one screen");
+  assert.doesNotMatch(main, /--link-preview-header|--agent-max-passes/);
+  assert.match(main, /tunelito help all/);
+  const all = helpTopic("all");
+  for (const flag of ["--link-preview-header", "--agent-max-passes", "--section-index", "--no-auth", "--port", "--json"]) {
+    assert.match(all, new RegExp(flag));
+  }
+  assert.match(helpTopic("json"), /started[\s\S]*tunnel[\s\S]*stopped/);
+  assert.match(helpTopic("doctor"), /tunelito doctor/);
+  assert.throws(() => helpTopic("agnet"), (error) => error.hint === "Did you mean tunelito help agent?");
 });
 
 test("parseArgs supports version flag without a file", () => {
@@ -75,15 +101,12 @@ test("parseArgs enables review-key auth by default and can disable it", () => {
   assert.equal(parseArgs(["page.html", "--no-auth"]).auth, false);
 });
 
-test("parseArgs supports canonical ephemeral mode and deprecated live alias", () => {
+test("parseArgs supports ephemeral mode and the --json event stream", () => {
   const opts = parseArgs(["page.html", "--ephemeral"]);
-  const alias = parseArgs(["page.html", "--live"]);
   assert.equal(opts.ephemeral, true);
   assert.equal(opts.live, true);
-  assert.equal(opts.liveAlias, undefined);
-  assert.equal(alias.ephemeral, true);
-  assert.equal(alias.liveAlias, true);
   assert.equal(opts.filePath, resolve("page.html"));
+  assert.equal(parseArgs(["page.html", "--json"]).json, true);
 });
 
 test("parseArgs supports named Markdown themes", () => {
@@ -101,19 +124,20 @@ test("parseArgs toggles Markdown code block wrapping", () => {
   assert.equal(on.codeWrap, true);
   assert.equal(on.codeWrapProvided, true);
   assert.equal(parseArgs(["notes.md"]).codeWrapProvided, undefined);
-  assert.match(usage(), /--no-code-wrap\s+Scroll long lines in Markdown code blocks instead of wrapping/);
+  assert.match(helpTopic("markdown"), /--no-code-wrap\s+Scroll long lines in Markdown code blocks instead of wrapping/);
 });
 
 test("parseArgs supports explicit local Markdown editing", () => {
   const opts = parseArgs(["notes.md", "--editable"]);
   assert.equal(opts.editable, true);
-  assert.match(usage(), /--editable\s+Let the direct local owner edit safely served Markdown/);
+  assert.match(helpTopic("markdown"), /--editable\s+Let the direct local owner edit safely served Markdown/);
+  assert.match(usage(), /--editable\s+Edit Markdown source from the Local URL/);
 });
 
 test("parseArgs supports the Markdown section index", () => {
   const opts = parseArgs(["notes.md", "--section-index"]);
   assert.equal(opts.sectionIndex, true);
-  assert.match(usage(), /--section-index\s+Show a sticky Markdown section index on wide viewports/);
+  assert.match(helpTopic("markdown"), /--section-index\s+Show a sticky Markdown section index on wide viewports/);
 });
 
 test("parseArgs supports local agent worker options", () => {
@@ -237,7 +261,7 @@ test("parseArgs rejects agent mode with live comments", () => {
 });
 
 test("parseArgs rejects agent session conflicts", () => {
-  assert.throws(() => parseArgs(["site", "--live", "--agent-session"]), /--agent-session requires persistent comments.*--ephemeral/);
+  assert.throws(() => parseArgs(["site", "--ephemeral", "--agent-session"]), /--agent-session requires persistent comments.*--ephemeral/);
   assert.throws(() => parseArgs(["site", "--agent", "codex", "--agent-session"]), /Use either --agent or --agent-session/);
   assert.throws(() => parseArgs(["site", "--agent-session", "--agent-prompt", "A"]), /--agent-prompt is only supported/);
   assert.throws(() => parseArgs(["site", "--agent-session", "--agent-interval", "30"]), /--agent-session watches automatically/);
@@ -253,7 +277,7 @@ test("parseArgs rejects prompt options without an agent", () => {
 test("parseDoctorArgs supports read-only diagnostic options", () => {
   const opts = parseDoctorArgs([
     "site",
-    "--out",
+    "--comments",
     "site.comments.md",
     "--agent-state",
     "state.json",
@@ -263,7 +287,7 @@ test("parseDoctorArgs supports read-only diagnostic options", () => {
     "0",
     "--no-auth",
     "--no-tunnel",
-    "--live",
+    "--ephemeral",
     "--agent-session",
     "--agent-policy",
     "owner",
@@ -341,7 +365,7 @@ test("mcp help is side-effect free and unknown arguments fail", () => {
     stdout: streamCollector(),
     stderr,
   });
-  assert.equal(badCode, 1);
+  assert.equal(badCode, 2);
   assert.match(stderr.text(), /Unknown mcp argument/);
 });
 
@@ -432,7 +456,7 @@ test("review watch can read session metadata and returns nonzero on timeout", as
 });
 
 test("parseCommentsArgs supports target and direct comments inspection", () => {
-  const target = parseCommentsArgs(["inspect", "page.html", "--out", "review.md", "--agent-state", "state.json", "--json"]);
+  const target = parseCommentsArgs(["inspect", "page.html", "--comments", "review.md", "--agent-state", "state.json", "--json"]);
   assert.equal(target.command, "inspect");
   assert.equal(target.format, "json");
   assert.equal(target.targetPath, resolve("page.html"));
@@ -449,8 +473,8 @@ test("parseCommentsArgs supports target and direct comments inspection", () => {
   assert.equal(direct.requireCommentsFile, true);
 
   assert.throws(
-    () => parseCommentsArgs(["inspect", "review.comments.md", "--out", "other.md"]),
-    /--out is only supported/,
+    () => parseCommentsArgs(["inspect", "review.comments.md", "--comments", "other.md"]),
+    /--comments only applies/,
   );
 });
 
@@ -507,7 +531,7 @@ test("runCommentsCommand supports custom and direct comments paths", () => {
   }));
 
   const customOut = streamCollector();
-  const customCode = runCommentsCommand(["inspect", sourcePath, "--out", commentsPath, "--json"], {
+  const customCode = runCommentsCommand(["inspect", sourcePath, "--comments", commentsPath, "--json"], {
     stdout: customOut,
     stderr: streamCollector(),
   });
@@ -613,7 +637,7 @@ test("runInboxCommand claims, records, and reports comment status", async () => 
   const nextCode = await runInboxCommand([
     "next",
     siteDir,
-    "--out",
+    "--comments",
     commentsPath,
     "--agent-state",
     statePath,
@@ -630,7 +654,7 @@ test("runInboxCommand claims, records, and reports comment status", async () => 
   const claimedStatusCode = await runInboxCommand([
     "status",
     siteDir,
-    "--out",
+    "--comments",
     commentsPath,
     "--agent-state",
     statePath,
@@ -645,7 +669,7 @@ test("runInboxCommand claims, records, and reports comment status", async () => 
   const recordCode = await runInboxCommand([
     "record",
     siteDir,
-    "--out",
+    "--comments",
     commentsPath,
     "--agent-state",
     statePath,
@@ -701,7 +725,7 @@ test("isCliEntry recognizes npm-style symlinked bin paths", () => {
 });
 
 test("parseArgs accepts an explicit comments path", () => {
-  const opts = parseArgs(["page.html", "--out", "notes.md", "--no-tunnel"]);
+  const opts = parseArgs(["page.html", "--comments", "notes.md", "--no-tunnel"]);
   assert.equal(opts.filePath, resolve("page.html"));
   assert.equal(opts.commentsPath, resolve("notes.md"));
   assert.equal(opts.tunnel, false);
@@ -765,7 +789,7 @@ test("config show reports code block wrapping and its CLI override", () => {
 
   const projectOut = streamCollector();
   assert.equal(runConfigCommand(["show", join(projectPath, "notes.md")], { stdout: projectOut, stderr: streamCollector(), env: {}, homePath }), 0);
-  assert.match(projectOut.text(), /Code wrap:\s+off \(project\)/);
+  assert.match(projectOut.text(), /Code wrap\s+off\s+from project/);
 
   assert.equal(parseConfigArgs(["show", "--code-wrap"]).codeWrap, true);
   const cliOut = streamCollector();
@@ -902,7 +926,7 @@ test("skill show prints the bundled skill to stdout", () => {
   assert.match(stdout.text(), /## Step 3 -- Process the comments/);
   assert.match(stdout.text(), /Default to the rolling active-agent loop/);
   assert.match(stdout.text(), /Batch review is an explicit opt-in/);
-  assert.match(stdout.text(), /Theme:.*bns-pitaya \(default\)/);
+  assert.match(stdout.text(), /Theme\s+bns-pitaya\s+default/);
   assert.match(stdout.text(), /tunelito config show \.\/notes\.md/);
   assert.match(stdout.text(), /`needs_followup` means the agent made implementation progress/);
   assert.match(stdout.text(), /It is not a question or reply to the\s+reviewer\./);
@@ -1033,6 +1057,6 @@ test("skill rejects an unknown subcommand with a nonzero exit", () => {
   const stdout = streamCollector();
   const stderr = streamCollector();
   const code = runSkillCommand(["bogus"], { stdout, stderr });
-  assert.equal(code, 1);
-  assert.match(stderr.text(), /Unknown skill command: bogus/);
+  assert.equal(code, 2);
+  assert.match(stderr.text(), /Unknown skill command bogus/);
 });

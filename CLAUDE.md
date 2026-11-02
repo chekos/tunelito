@@ -7,7 +7,7 @@ Read `docs/agents/START_HERE.md` before making changes. For feature, PR, package
 ## Non-Negotiables
 
 - The source HTML file must remain untouched by the annotation system.
-- Comments persist to markdown beside the source page or to the explicit `--out` path.
+- Comments persist to markdown beside the source page or to the explicit `--comments` path.
 - Public tunnel sessions require keyed URLs by default.
 - Do not edit `*.comments.md`, `.env*`, `.claude/settings.local.json`, `.git/`, `node_modules/`, local archives, or walkthrough exports.
 - Use Node.js 22+ and no runtime dependencies unless the benefit is obvious and documented.

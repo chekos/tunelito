@@ -114,7 +114,8 @@ test("session status reports tunnel loss as degraded and can redact keys", async
   assert.equal(report.agent.unhandled, 3);
   assert.match(report.urls.local, /tunelito_key=REDACTED/);
   assert.doesNotMatch(JSON.stringify(report), /tunelito_key=secret/);
-  assert.match(formatSessionStatus(report), /Status:\s+degraded/);
+  assert.match(formatSessionStatus(report), /^tunelito session · degraded$/m);
+  assert.match(formatSessionStatus(report), /^ {2}Next\s+\S/m);
 });
 
 test("session status distinguishes stopped, missing, and corrupt metadata", async () => {
