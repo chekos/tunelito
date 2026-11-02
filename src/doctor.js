@@ -293,12 +293,13 @@ async function addPortCheck(checks, { host, port, checkPort }) {
   const result = await checkPort({ host, port });
   addCheck(checks, {
     id: "network.port",
-    severity: result.available === false ? "error" : result.available === true ? "info" : "warning",
-    status: result.available === false ? "fail" : result.available === true ? "pass" : "warn",
+    // A busy port is not an error: serve walks forward to the next free port.
+    severity: typeof result.available === "boolean" ? "info" : "warning",
+    status: typeof result.available === "boolean" ? "pass" : "warn",
     message: result.available === true
       ? `Port ${port} appears available on ${host}.`
       : result.available === false
-        ? `Port ${port} appears in use on ${host}: ${result.error || "listener detected"}`
+        ? `Port ${port} is in use on ${host} (${result.error || "listener detected"}); Tunelito will use the next free port.`
         : `Port ${port} availability on ${host} could not be determined without binding a socket: ${result.error || "no non-binding checker available"}`,
     details: { host, port },
   });

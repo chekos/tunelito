@@ -63,15 +63,16 @@ npx --yes tunelito ./review-site --agent-session --agent-policy owner-or-mention
 Tunelito prints a local URL, a comments file, and, when tunneling works, a public URL:
 
 ```text
-Tunelito is running
-Local:   http://127.0.0.1:4317/?tunelito_key=...
-Comments: /path/to/review-site.comments.md
-Agent:   codex; checks all comments every 120s; max 5 passes; state /path/to/review-site/.tunelito/agent/state.json
-Access:  review key required by the printed URLs
-Public:  https://example.trycloudflare.com/?tunelito_key=...
+tunelito <version> · review-site
+Keyed links · Ctrl-C to stop
+
+  Local      http://127.0.0.1:4317/?tunelito_key=...   you, on this machine
+  Comments   review-site.comments.md
+  Agent      codex; checks all comments every 120s; max 5 passes; state review-site/.tunelito/agent/state.json
+  Public     https://example.trycloudflare.com/?tunelito_key=...   share this
 ```
 
-Share the `Public:` URL with reviewers. Keep the terminal process running while the review is active.
+Share the `Public` URL with reviewers. Keep the terminal process running while the review is active.
 
 If the folder should behave like an iPhone Home Screen app, add site-level web app metadata before sharing. See the [iPhone Home Screen guide](/iphone-home-screen).
 

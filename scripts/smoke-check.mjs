@@ -53,7 +53,7 @@ async function startTunelito() {
     return await new Promise((resolveLocalUrl, reject) => {
       child.stdout.on("data", (chunk) => {
         output += chunk;
-        const match = output.match(/^Local:\s+(\S+)/m);
+        const match = output.match(/^\s*Local\s+(https?:\/\/\S+)/m);
         if (match) {
           clearTimeout(timer);
           resolveLocalUrl(match[1]);

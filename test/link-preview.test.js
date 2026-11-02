@@ -700,7 +700,7 @@ test("config show, startup output, and errors show header templates but never re
 
   const resolved = resolveTunelitoConfig({ targetPath: join(dir, "notes.md"), homePath, env });
   const lines = linkPreviewStartupLines(resolved, {}).join("\n");
-  assert.match(lines, /Resolver headers \(owner only\): https:\/\/tracker\.example\.com <- Authorization from \$\{env:TRACKER_TOKEN\}/);
+  assert.match(lines, /Headers\s+https:\/\/tracker\.example\.com <- Authorization from \$\{env:TRACKER_TOKEN\}\s+owner only/);
   assert.ok(!lines.includes(SECRET));
   assert.throws(() => enforceLinkPreviewHeaderPolicy(resolved.linkPreviewRules), (error) => /--link-preview-env/.test(error.message) && !error.message.includes(SECRET), "a config file alone cannot enable headers");
 

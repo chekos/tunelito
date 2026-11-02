@@ -151,8 +151,9 @@ test("doctor reports unavailable ports and cloudflared fallback", async () => {
     commandExists: () => false,
   });
 
-  assert.equal(report.ok, false);
-  assert.equal(findCheck(report, "network.port").status, "fail");
+  assert.equal(report.ok, true, "a busy port is not an error; serve uses the next free port");
+  assert.equal(findCheck(report, "network.port").status, "pass");
+  assert.match(findCheck(report, "network.port").message, /will use the next free port/);
   assert.equal(findCheck(report, "network.cloudflared").status, "warn");
 });
 

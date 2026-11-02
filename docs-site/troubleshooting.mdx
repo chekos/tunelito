@@ -8,20 +8,20 @@ description: "Fix common Tunelito install, tunnel, comment, and browser issues."
 Tunelito starts Cloudflare Tunnel with installed `cloudflared` first, then falls back to `npx cloudflared@latest`.
 It ignores Cloudflare's provisioning endpoint, waits for the generated Quick
 Tunnel hostname, and verifies that the hostname reaches the current Tunelito
-server before printing `Public:`.
+server before printing the `Public` URL.
 
 A new Quick Tunnel hostname can take a minute or more to resolve. macOS in
-particular caches the first "not found" answer, so Tunelito may print:
+particular caches the first "not found" answer, so the `Public` row may read:
 
 ```text
-Public:  waiting for DNS to propagate for <host>.trycloudflare.com (ENOTFOUND; up to ~2 minutes)...
+  Public     waiting for DNS on <host>.trycloudflare.com (ENOTFOUND; up to ~2 min)…
 ```
 
 While it waits, Tunelito also looks the hostname up through public DNS
 (1.1.1.1 and 1.0.0.1) and connects to that address with the real hostname for
-TLS and certificate checks. It prints `Public:` only after the keyed request
+TLS and certificate checks. It prints the `Public` URL only after the keyed request
 reaches this Tunelito server. If the tunnel still has not routed after about
-two minutes, the `Public:  unavailable (...)` line names the last cause:
+two minutes, the `Public     unavailable: ...` row names the last cause:
 
 | Code in the message | Meaning |
 | --- | --- |
