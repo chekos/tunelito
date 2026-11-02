@@ -489,7 +489,7 @@ are Tunelito's data store and ledger, not your edit targets.
 
 ## Step 4 -- Wrap up
 
-- Tell the user where comments landed (the `Comments:` path) and which files you
+- Tell the user where comments landed (the `Comments` row) and which files you
   changed, keyed by comment id.
 - If a session is still running, stop it (Ctrl-C) when the review is done so the
   bearer URL dies. (When you only processed an inbox in 3c, there is no server

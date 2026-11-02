@@ -286,7 +286,8 @@ export function parseArgs(argv) {
       opts.sectionIndex = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
-    } else if (arg.startsWith("-") && arg !== "-") {
+    } else if (arg.startsWith("--") || /^-[A-Za-z]$/.test(arg)) {
+      // Longer single-dash words such as "-draft.html" stay positional paths.
       throw unknownOptionError(arg, SERVE_OPTIONS);
     } else {
       positional.push(arg);
@@ -294,8 +295,8 @@ export function parseArgs(argv) {
   }
 
   if (positional.length > 1) {
-    throw new UsageError(`Expected one HTML file, Markdown file, or folder, got ${positional.length}: ${positional.join(" ")}`, {
-      hint: "Serve a folder to review several pages in one room.",
+    throw new UsageError(`Expected one HTML file, Markdown file, or folder, got ${positional.length}`, {
+      hint: "Serve a folder to review several pages in one room, and quote flag values that contain spaces.",
     });
   }
   if (opts.agent === "custom" && !opts.agentCommand) {
@@ -456,8 +457,9 @@ async function main() {
   }
 
   if (!opts.filePath) {
+    // Never echo argv back: flag values can carry secrets (resolver headers).
     fail(new UsageError("Missing the HTML file, Markdown file, or folder to review", {
-      hint: `Try: tunelito ./page.html ${argv.join(" ")}`.trimEnd(),
+      hint: "Put the target first, e.g. tunelito ./page.html --no-tunnel",
     }));
   }
 
@@ -537,6 +539,7 @@ async function main() {
   const style = createStyle({ stream: process.stdout });
   const out = createTerminalWriter({ stream: process.stdout });
   const agentLog = (message) => out.line(formatAgentLogLine(message, style));
+  runtimeSessionWarning = (message) => out.line(formatEvent("session", message, { style, tone: "warn" }));
   const agentWorker = opts.agent
     ? createAgentWorker({
       provider: opts.agent,
@@ -650,7 +653,7 @@ async function main() {
   agentSessionWatcher?.start();
 
   if (opts.open) {
-    openBrowser(instance.localUrl);
+    openBrowser(instance.localUrl, { log: (message) => out.line(message) });
   }
 
   const publicRow = (value, extra = {}) => formatRows([{ label: STARTUP_LABEL_PUBLIC, value, ...extra }], style, { labelWidth: STARTUP_LABEL_WIDTH })[0];
@@ -726,12 +729,16 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
+// Serve swaps this for a writer-aware logger so warnings do not land inside
+// the pending Public row on a TTY.
+let runtimeSessionWarning = (message) => console.warn(`Session: ${message}`);
+
 function tryUpdateRuntimeSession(sessionPath, update) {
   if (!sessionPath) return;
   try {
     update();
   } catch (error) {
-    console.warn(`Session:  could not update metadata (${error.message})`);
+    runtimeSessionWarning(`could not update metadata (${error.message})`);
   }
 }
 

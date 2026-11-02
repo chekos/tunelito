@@ -108,7 +108,7 @@ Expected behavior:
 - Prefer installed `cloudflared`.
 - Fall back to `npx cloudflared@latest`.
 - Correlate Quick Tunnel hostname discovery with cloudflared's successful creation lifecycle; never treat `api.trycloudflare.com` as the review URL.
-- Verify the candidate hostname through an authenticated `HEAD` request carrying the review key, and require Tunelito's authorized-response marker before printing `Public:`.
+- Verify the candidate hostname through an authenticated `HEAD` request carrying the review key, and require Tunelito's authorized-response marker before printing the `Public` URL.
 - Keep verification bounded (about 120 seconds with capped backoff) and cancel it when cloudflared exits or the session stops.
 - When the system resolver returns `ENOTFOUND`/`EAI_AGAIN` for the new hostname, resolve only that `*.trycloudflare.com` hostname through public DNS (1.1.1.1/1.0.0.1) and connect to that address with the original hostname for SNI, Host, and certificate validation. Never disable certificate validation, never follow redirects, and never send the review key anywhere but the candidate hostname.
 - Name the underlying cause code (DNS, TLS, HTTP status, or missing marker) in the timeout diagnostic without logging the keyed URL.

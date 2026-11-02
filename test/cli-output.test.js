@@ -89,6 +89,16 @@ test("unknown options suggest the closest real flag", () => {
   assert.equal(closestMatch("--epheral", ["--ephemeral", "--editable"]), "--ephemeral");
   assert.throws(() => parseArgs(["page.html", "--opne"]), (thrown) => thrown instanceof UsageError && thrown.hint === "Did you mean --open?");
   assert.throws(() => parseArgs(["a.html", "b.html"]), UsageError);
+  assert.throws(() => parseArgs(["-x"]), UsageError);
+  assert.match(parseArgs(["-draft.html"]).filePath, /-draft\.html$/, "longer single-dash words stay paths");
+});
+
+test("usage errors never echo flag values or extra positionals", () => {
+  const secret = "Bearer s3cr3t-value";
+  assert.throws(
+    () => parseArgs(["page.html", "Authorization:", secret]),
+    (error) => error instanceof UsageError && !`${error.message}\n${error.hint}`.includes("s3cr3t"),
+  );
 });
 
 test("CLI errors are short: problem, fix, help pointer", () => {

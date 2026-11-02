@@ -372,7 +372,7 @@ async function waitForLocalUrl(logPath, pid) {
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline) {
     const text = existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
-    const match = text.match(/^Local:\s+(\S+)/m);
+    const match = text.match(/^\s*Local\s+(https?:\/\/\S+)/m);
     if (match) return match[1];
     if (!isAlive(pid)) throw new Error(`tunelito exited before printing Local:\n${text.trim()}`);
     await sleep(50);

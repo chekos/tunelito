@@ -608,7 +608,7 @@ Before sharing a live session:
 3. Open that URL on your phone.
 4. Select text and submit a short comment.
 5. Add a short page note or site note from the comments panel.
-6. Confirm the terminal logs `Comment from ...`.
+6. Confirm the terminal logs a `comment` line (`14:03  comment  Name: ...`).
 7. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
 8. Edit and save the source file; the phone should reload.
 

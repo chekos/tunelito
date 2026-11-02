@@ -10,7 +10,7 @@ An anchored comment lets a reviewer select text on the served page, write a note
 
 ## How to get to it (user POV)
 
-- Open the keyed `Local:` URL for `examples/simple-review.html`.
+- Open the keyed `Local` URL for `examples/simple-review.html`.
 - Select the sentence that starts `Select this sentence`.
 - Choose `Comment`, write the note, and choose `Add comment`.
 - Choose `Open Tunelito comments` to read it back.
