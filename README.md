@@ -345,7 +345,7 @@ Owner-authored comments are marked in Markdown, and the local owner can approve 
 
 `--no-auth` only removes the review-key gate; it does **not** disable the tunnel. A tunneled session started with `--no-auth` is a public, unauthenticated URL that anyone who finds it can open and comment on. It still cannot use `--editable`, which requires a direct loopback request, but the reviewed document is exposed. If you want no key you almost always want local-only too, so add `--no-tunnel`. Use `--no-auth` only for local demos or trusted networks.
 
-`--ephemeral` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--ephemeral`) or avoid sharing the session link. `--live` remains a deprecated alias and prints a warning.
+`--ephemeral` changes persistence, not exposure: it keeps comments in memory instead of writing them to disk, but the session is still served over the same tunnel and review key. For sensitive material, prefer `--no-tunnel` (optionally with `--ephemeral`) or avoid sharing the session link. The old `--live` alias was removed in 1.0; use `--ephemeral`.
 
 ## Comment Files
 

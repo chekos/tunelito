@@ -238,6 +238,33 @@ test("JSON reporter emits one typed, timestamped object per line", () => {
   assert.equal(createJsonReporter({ stream: collect() }) !== null, true);
 });
 
+test("muted reporters drop shutdown noise so stopped is the last event", () => {
+  const stream = collect();
+  const reporter = createJsonReporter({ stream });
+  reporter.viewers(1);
+  reporter.mute();
+  reporter.viewers(0);
+  reporter.agentLog("Agent:   stopping");
+  reporter.stopped({ elapsedMs: 5, newComments: 0 });
+  reporter.viewers(0);
+  const types = stream.text().trim().split("\n").map((line) => JSON.parse(line).type);
+  assert.deepEqual(types, ["viewers", "stopped"]);
+
+  const human = collect();
+  const humanReporter = createHumanReporter({ stream: human });
+  humanReporter.mute();
+  humanReporter.viewers(0);
+  humanReporter.stopped({ elapsedMs: 1000, newComments: 0, commentsPath: join(process.cwd(), "a.comments.md"), targetPath: join(process.cwd(), "a.html") });
+  assert.equal(human.text(), "Stopped after 1s · 0 new comments in a.comments.md\n");
+});
+
+test("--flag=value explains the space-separated form", () => {
+  assert.throws(
+    () => parseArgs(["page.html", "--comments=x.md"]),
+    (error) => error.message === '--comments takes its value after a space, not "="' && error.hint === "Use --comments <value>.",
+  );
+});
+
 test("JSON started event hides the comments path for ephemeral rooms", () => {
   const stream = collect();
   createJsonReporter({ stream }).startup({ ...startupModel, ephemeral: true });

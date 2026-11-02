@@ -440,6 +440,9 @@ export function unknownOptionError(arg, knownOptions = SERVE_OPTIONS) {
   if (REMOVED_OPTIONS[name]) {
     return new UsageError(`${name} was removed in Tunelito 1.0`, { hint: `Use ${REMOVED_OPTIONS[name]} instead.` });
   }
+  if (arg.includes("=") && knownOptions.includes(name)) {
+    return new UsageError(`${name} takes its value after a space, not "="`, { hint: `Use ${name} <value>.` });
+  }
   const suggestion = closestMatch(name, knownOptions);
   return new UsageError(`Unknown option ${name}`, {
     hint: suggestion ? `Did you mean ${suggestion}?` : undefined,
@@ -788,13 +791,10 @@ async function main() {
   async function shutdown() {
     if (shuttingDown) return;
     shuttingDown = true;
-    reporter.stopped({
-      elapsedMs: Date.now() - startedAt,
-      newComments,
-      ephemeral: opts.ephemeral,
-      commentsPath: instance.commentsPath,
-      targetPath: opts.filePath,
-    });
+    // Closing sockets and workers fires viewer and agent events; mute them so
+    // `stopped` is always the last line, especially in the --json stream.
+    reporter.mute();
+    const elapsedMs = Date.now() - startedAt;
     if (tunnel) tunnel.stop();
     await agentWorker?.stop();
     await agentSessionWatcher?.stop();
@@ -806,6 +806,15 @@ async function main() {
       lastActivityAt: new Date().toISOString(),
       tunnel: { ...session.tunnel, state: session.tunnel?.enabled ? "stopped" : "disabled" },
     })));
+    reporter.stopped({
+      elapsedMs,
+      newComments,
+      ephemeral: opts.ephemeral,
+      commentsPath: instance.commentsPath,
+      targetPath: opts.filePath,
+    });
+    // Let a piped stdout drain the final line before exiting.
+    await new Promise((resolveFlush) => process.stdout.write("", resolveFlush));
     process.exit(0);
   }
 
@@ -2077,7 +2086,10 @@ export function formatStartup(model, style = plainStyle) {
 // events: a human terminal view, or one JSON object per line with --json.
 export function createHumanReporter({ stream = process.stdout, folder = false, style = createStyle({ stream }), now = () => new Date() } = {}) {
   const out = createTerminalWriter({ stream });
-  const event = (verb, text, tone) => out.line(formatEvent(verb, text, { style, tone, now: now() }));
+  let muted = false;
+  const event = (verb, text, tone) => {
+    if (!muted) out.line(formatEvent(verb, text, { style, tone, now: now() }));
+  };
   const publicRow = (value, extra = {}) => formatRows([{ label: STARTUP_LABEL_PUBLIC, value, ...extra }], style, { labelWidth: STARTUP_LABEL_WIDTH })[0];
   const indentRow = (value) => formatRows([{ label: "", value }], style, { labelWidth: STARTUP_LABEL_WIDTH })[0];
   return {
@@ -2113,10 +2125,13 @@ export function createHumanReporter({ stream = process.stdout, folder = false, s
       event("reload", "source changed; browsers reloading");
     },
     agentLog(message) {
-      out.line(formatAgentLogLine(message, style, now()));
+      if (!muted) out.line(formatAgentLogLine(message, style, now()));
     },
     warning(message) {
       event("warning", message, "warn");
+    },
+    mute() {
+      muted = true;
     },
     stopped(summary) {
       out.settle();
@@ -2128,8 +2143,15 @@ export function createHumanReporter({ stream = process.stdout, folder = false, s
 }
 
 export function createJsonReporter({ stream = process.stdout, now = () => new Date() } = {}) {
-  const emit = (type, payload = {}) => stream.write(`${JSON.stringify({ type, time: now().toISOString(), ...payload })}\n`);
+  let muted = false;
+  const write = (type, payload) => stream.write(`${JSON.stringify({ type, time: now().toISOString(), ...payload })}\n`);
+  const emit = (type, payload = {}) => {
+    if (!muted) write(type, payload);
+  };
   return {
+    mute() {
+      muted = true;
+    },
     startup(model) {
       emit("started", {
         version: model.version,
@@ -2184,7 +2206,8 @@ export function createJsonReporter({ stream = process.stdout, now = () => new Da
       emit("warning", { message });
     },
     stopped(summary) {
-      emit("stopped", { elapsedMs: summary.elapsedMs, newComments: summary.newComments });
+      write("stopped", { elapsedMs: summary.elapsedMs, newComments: summary.newComments });
+      muted = true;
     },
   };
 }
