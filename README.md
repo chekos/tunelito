@@ -6,7 +6,7 @@ Tunelito turns any local HTML or Markdown file, or a folder of HTML and Markdown
 
 Run one command, share the printed URL on a call, and reviewers can select text, leave page notes, or leave site-wide notes. You can keep editing the source in your normal editor or add `--editable` to make deliberate Markdown edits from the direct local browser; connected browsers reload when files change, and reload waits while a comment or source draft is open. Comments are saved as readable markdown beside the page or folder by default, or kept in memory only with `--ephemeral`.
 
-Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and source-edit access never leaves the direct loopback `Local:` URL.
+Tunelito is local-first: your files stay on your machine, the public URL is a temporary tunnel to your laptop, and source-edit access never leaves the direct loopback `Local` URL.
 
 ## Quickstart
 
@@ -86,22 +86,33 @@ tunelito ./examples/simple-review.html
 Tunelito prints:
 
 ```text
-Tunelito is running
-Local:   http://127.0.0.1:4317/?tunelito_key=...
-Comments: /path/to/page.comments.md
-Access:  review key required by the printed URLs
-Public:  https://example.trycloudflare.com/?tunelito_key=...
+tunelito <version> · examples/simple-review.html
+Keyed links · Ctrl-C to stop
+
+  Local      http://127.0.0.1:4317/?tunelito_key=...   you, on this machine
+  Comments   examples/simple-review.comments.md
+  Public     https://example.trycloudflare.com/?tunelito_key=...   share this
+
+14:03  comment  Ana: The hero copy feels long
 ```
 
-Tunelito prints `Public:` only after the randomized Quick Tunnel hostname has
+On a terminal the `Public` URL is bold and its row updates in place while the
+tunnel starts; paths print relative to your working directory. Comments, viewer
+changes, reloads, and review handoffs stream below as one timestamped line
+each, and Ctrl-C prints a one-line summary of the session. Add `--verbose` to
+also print the resolved theme, session metadata path, and handoff command.
+Color appears only on a TTY and honors `NO_COLOR` and `FORCE_COLOR`.
+
+Tunelito prints the `Public` URL only after the randomized Quick Tunnel hostname has
 been verified against the running Tunelito server. A brand-new hostname can take
 a minute or more to resolve, especially on macOS, which caches the first "not
-found" answer. Tunelito prints `Public:  waiting for DNS to propagate...`,
+found" answer. The `Public` row reads
+`waiting for DNS on <host> (ENOTFOUND; up to ~2 min)…` meanwhile,
 checks the hostname through public DNS (1.1.1.1) with normal certificate
 validation, and keeps retrying for up to about two minutes before giving up and
 naming the cause. Agent sessions also persist
 that verified URL in `.tunelito/session.json` for recovery. Share that URL with the
-person on your call. Open the `Local:` URL yourself; direct local sessions are
+person on your call. Open the `Local` URL yourself; direct local sessions are
 marked as the owner, while public tunnel sessions are marked as visitors.
 
 To seed your local owner display name:
@@ -386,7 +397,7 @@ Set `TUNELITO_CLOUDFLARED_PACKAGE=cloudflared@<version>` to pin the fallback pac
 
 Shared sessions include a generated `tunelito_key` in the printed URLs by default. The key is bearer access: anyone with the full URL can view the page and leave comments. The first valid request sets a short-lived, HTTP-only cookie so page assets and WebSocket sync keep working.
 
-Tunelito assigns roles on the server. Requests made through the direct loopback `Local:` URL are treated as the owner; requests made through public tunnel or forwarded URLs are treated as visitors. `--owner <name>` only seeds the editable display name for the local owner. Visitors cannot become owners by changing browser state or submitted comment fields, and the public tunnel URL never carries owner privileges. If the owner opens the `Public:` URL, that browser is treated as a visitor.
+Tunelito assigns roles on the server. Requests made through the direct loopback `Local` URL are treated as the owner; requests made through public tunnel or forwarded URLs are treated as visitors. `--owner <name>` only seeds the editable display name for the local owner. Visitors cannot become owners by changing browser state or submitted comment fields, and the public tunnel URL never carries owner privileges. If the owner opens the `Public` URL, that browser is treated as a visitor.
 
 Owner-authored comments are marked in Markdown, and the local owner can approve specific visitor comments for local-agent work. The local agent worker receives the owner name when configured, each comment's author role, and any owner approval metadata. Owner labels are still collaboration metadata, not account authentication; the review key remains the access gate.
 
@@ -593,11 +604,11 @@ Tunelito uses WebRTC data channels between browsers when possible. The authentic
 Before sharing a live session:
 
 1. Run `npx --yes tunelito ./page.html`.
-2. Wait for the `Public:` URL.
+2. Wait for the `Public` URL.
 3. Open that URL on your phone.
 4. Select text and submit a short comment.
 5. Add a short page note or site note from the comments panel.
-6. Confirm the terminal logs `Comment from ...`.
+6. Confirm the terminal logs a `comment` line (`14:03  comment  Name: ...`).
 7. Confirm `<page>.comments.md` contains the comment with `scope: ...`.
 8. Edit and save the source file; the phone should reload.
 

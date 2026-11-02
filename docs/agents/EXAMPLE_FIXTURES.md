@@ -90,7 +90,7 @@ node bin/tunelito.js examples/markdown --no-tunnel --port 4317
 node bin/tunelito.js examples/markdown-vault --no-tunnel --port 4318
 ```
 
-Use the keyed `Local:` URL printed by the CLI. Do not commit generated `*.comments.md`, session files, screenshots, or tunnel artifacts unless the user explicitly asks for them.
+Use the keyed `Local` URL printed by the CLI. Do not commit generated `*.comments.md`, session files, screenshots, or tunnel artifacts unless the user explicitly asks for them.
 
 ## Browser Checks
 

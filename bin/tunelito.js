@@ -46,6 +46,21 @@ import {
   writeSessionFile,
 } from "../src/session.js";
 import { startCloudflareTunnel } from "../src/tunnel.js";
+import {
+  UsageError,
+  closestMatch,
+  createStyle,
+  createTerminalWriter,
+  displayPath,
+  formatCliError,
+  formatDuration,
+  formatEvent,
+  formatRows,
+  plainStyle,
+  plural,
+  suggestSiblingPath,
+  truncate,
+} from "../src/cli-output.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 export const VERSION = pkg.version;
@@ -127,6 +142,7 @@ Options:
   --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
   --no-auth             Disable the generated review-key URL gate
   --open                Open the local URL in your default browser
+  --verbose             Also print theme, session metadata, and handoff rows at startup
   -v, --version         Show version
   -h, --help            Show this help
 
@@ -217,6 +233,8 @@ export function parseArgs(argv) {
       opts.auth = false;
     } else if (arg === "--open") {
       opts.open = true;
+    } else if (arg === "--verbose") {
+      opts.verbose = true;
     } else if (arg === "--port") {
       const value = argv[++i];
       opts.port = parseIntegerValue(value, "--port", { min: 0, max: 65535 });
@@ -268,15 +286,18 @@ export function parseArgs(argv) {
       opts.sectionIndex = true;
     } else if (arg === "--owner" || arg === "--owner-name") {
       opts.ownerName = requiredName(argv[++i], arg);
-    } else if (arg.startsWith("--")) {
-      throw new Error(`Unknown option: ${arg}`);
+    } else if (arg.startsWith("--") || /^-[A-Za-z]$/.test(arg)) {
+      // Longer single-dash words such as "-draft.html" stay positional paths.
+      throw unknownOptionError(arg, SERVE_OPTIONS);
     } else {
       positional.push(arg);
     }
   }
 
   if (positional.length > 1) {
-    throw new Error(`Expected one HTML file, Markdown file, or folder, got ${positional.length}`);
+    throw new UsageError(`Expected one HTML file, Markdown file, or folder, got ${positional.length}`, {
+      hint: "Serve a folder to review several pages in one room, and quote flag values that contain spaces.",
+    });
   }
   if (opts.agent === "custom" && !opts.agentCommand) {
     throw new Error("--agent custom requires --agent-command");
@@ -320,6 +341,23 @@ export function parseArgs(argv) {
   }
   if (positional[0]) opts.filePath = resolve(positional[0]);
   return opts;
+}
+
+const SERVE_OPTIONS = [
+  "--help", "--version", "--verbose", "--port", "--host", "--out", "--theme", "--markdown-css", "--code-wrap", "--no-code-wrap",
+  "--editable", "--section-index", "--link-preview", "--link-preview-fields", "--link-preview-header", "--link-preview-env",
+  "--link-preview-allow-remote", "--link-preview-visitors", "--owner", "--ephemeral", "--live", "--agent", "--agent-command",
+  "--agent-interval", "--agent-policy", "--agent-trigger", "--agent-instructions", "--agent-instructions-file", "--agent-prompt",
+  "--agent-prompt-file", "--agent-max-attempts", "--agent-max-passes", "--agent-state", "--agent-session", "--no-tunnel",
+  "--no-auth", "--open",
+];
+
+export function unknownOptionError(arg, knownOptions = SERVE_OPTIONS) {
+  const name = arg.split("=")[0];
+  const suggestion = closestMatch(name, knownOptions);
+  return new UsageError(`Unknown option ${name}`, {
+    hint: suggestion ? `Did you mean ${suggestion}?` : undefined,
+  });
 }
 
 function requiredValue(value, option, detail = "value") {
@@ -390,14 +428,22 @@ async function main() {
     process.exitCode = runSkillCommand(argv.slice(1));
     return;
   }
+  const errStyle = createStyle({ stream: process.stderr });
+  const fail = (error, code = error instanceof UsageError ? 2 : 1) => {
+    process.stderr.write(formatCliError(error, { style: errStyle, helpCommand: code === 2 ? "tunelito --help" : "" }));
+    process.exit(code);
+  };
+
+  if (argv.length === 0) {
+    console.log(usage());
+    return;
+  }
+
   let opts;
   try {
     opts = parseArgs(argv);
   } catch (error) {
-    console.error(error.message);
-    console.error("");
-    console.error(usage());
-    process.exit(1);
+    fail(error instanceof UsageError ? error : new UsageError(error.message));
   }
 
   if (opts.help) {
@@ -411,29 +457,30 @@ async function main() {
   }
 
   if (!opts.filePath) {
-    console.error("Missing HTML file, Markdown file, or folder.");
-    console.error("");
-    console.error(usage());
-    process.exit(1);
+    // Never echo argv back: flag values can carry secrets (resolver headers).
+    fail(new UsageError("Missing the HTML file, Markdown file, or folder to review", {
+      hint: "Put the target first, e.g. tunelito ./page.html --no-tunnel",
+    }));
   }
 
   if (!existsSync(opts.filePath)) {
-    console.error(`File not found: ${opts.filePath}`);
-    process.exit(1);
+    const suggestion = suggestSiblingPath(opts.filePath);
+    fail(new UsageError(`No such file or folder: ${displayPath(opts.filePath)}`, {
+      hint: suggestion ? `Did you mean ${displayPath(suggestion)}?` : undefined,
+    }));
   }
   if (opts.liveAlias) {
-    console.warn("--live currently means ephemeral comments. Comments will not be saved or watched");
-    console.warn("by an agent. Use --ephemeral for this behavior, or --agent-session for a");
-    console.warn("persistent live agent review.");
+    process.stderr.write(`${errStyle.yellow("tunelito:")} --live is deprecated and means --ephemeral: comments stay in memory and are lost on stop.\n`);
+    process.stderr.write("Use --ephemeral for that, or --agent-session for a persistent agent review.\n");
   }
   const targetStat = statSync(opts.filePath);
   if (!targetStat.isFile() && !targetStat.isDirectory()) {
-    console.error(`Not a file or folder: ${opts.filePath}`);
-    process.exit(1);
+    fail(new UsageError(`Not a file or folder: ${displayPath(opts.filePath)}`));
   }
   if (opts.editable && targetStat.isFile() && (!isMarkdownPath(opts.filePath) || opts.filePath.toLowerCase().endsWith(".comments.md"))) {
-    console.error("--editable requires a source Markdown file or a folder containing source Markdown files.");
-    process.exit(1);
+    fail(new UsageError("--editable needs a source Markdown file, or a folder that contains one", {
+      hint: "HTML pages are reviewed read-only; edit them in your editor and browsers reload.",
+    }));
   }
   let resolvedConfig;
   try {
@@ -451,13 +498,13 @@ async function main() {
     enforceLinkPreviewHostPolicy(resolvedConfig.linkPreviewRules, { allowRemote: opts.linkPreviewAllowRemote });
     enforceLinkPreviewHeaderPolicy(resolvedConfig.linkPreviewRules, { allowedEnv: opts.linkPreviewAllowedEnv });
   } catch (error) {
-    console.error(error.message);
-    process.exit(1);
+    fail(error, 1);
   }
   const linkPreviewCount = resolvedConfig.linkPreviewRules.length;
   if ((opts.linkPreviewAllowRemote || opts.linkPreviewVisitors || opts.linkPreviewAllowedEnv) && !linkPreviewCount) {
-    console.error("--link-preview-allow-remote, --link-preview-visitors, and --link-preview-env require at least one --link-preview rule or linkPreviews config entry.");
-    process.exit(1);
+    fail(new UsageError("--link-preview-allow-remote, --link-preview-visitors, and --link-preview-env need a link-preview rule", {
+      hint: "Add --link-preview <regex> <url-template>, or a linkPreviews entry in tunelito.config.json.",
+    }));
   }
 
   const accessKey = opts.auth ? generateAccessKey() : null;
@@ -489,6 +536,10 @@ async function main() {
     linkPreviewAllowRemote: Boolean(opts.linkPreviewAllowRemote),
     linkPreviewAllowedEnv: opts.linkPreviewAllowedEnv || [],
   });
+  const style = createStyle({ stream: process.stdout });
+  const out = createTerminalWriter({ stream: process.stdout });
+  const agentLog = (message) => out.line(formatAgentLogLine(message, style));
+  runtimeSessionWarning = (message) => out.line(formatEvent("session", message, { style, tone: "warn" }));
   const agentWorker = opts.agent
     ? createAgentWorker({
       provider: opts.agent,
@@ -504,6 +555,7 @@ async function main() {
       ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
       promptOverride: agentPromptOptions.override,
+      log: agentLog,
     })
     : null;
   const agentSessionRecordCommand = opts.agentSession ? inboxRecordCommand({
@@ -524,39 +576,35 @@ async function main() {
       ownerName: opts.ownerName,
       promptAppend: agentPromptOptions.append,
       recordCommand: agentSessionRecordCommand,
-      log: (message) => console.log(message),
+      log: agentLog,
     })
     : null;
 
   let tunnel = null;
   let shuttingDown = false;
 
+  const startedAt = Date.now();
+  let newComments = 0;
+  const event = (verb, text, tone) => out.line(formatEvent(verb, text, { style, tone }));
+
   instance.events.on("viewer-count", (count) => {
-    console.log(`Viewers: ${count}`);
+    event("viewers", count ? `${count} connected` : "none connected");
   });
   instance.events.on("comment", (comment) => {
-    console.log(`Comment from ${comment.author}: ${comment.quote.slice(0, 80).replace(/\s+/g, " ")}`);
+    newComments += 1;
+    event("comment", formatCommentEvent(comment, { folder: targetStat.isDirectory() }));
     agentWorker?.wake("comment");
     agentSessionWatcher?.wake("comment");
   });
-  instance.events.on("review-completed", (event) => {
-    console.log(`Review completed #${event.sequence}: ${event.summary.comments} comment${event.summary.comments === 1 ? "" : "s"}`);
+  instance.events.on("review-completed", (completed) => {
+    event("review", `#${completed.sequence} done · ${plural(completed.summary.comments, "comment")}`, "success");
   });
   instance.events.on("document-changed", () => {
-    console.log("Source changed on disk; connected browsers were asked to reload.");
+    event("reload", "source changed; browsers reloading");
   });
 
-  console.log("Tunelito is running");
-  console.log(`Local:   ${instance.localUrl}`);
-  console.log(`Theme:   ${resolvedConfig.theme.value} (${resolvedConfig.theme.source})`);
-  if (opts.editable) console.log("Editing: direct local owner only; public links remain read-only");
-  for (const line of linkPreviewStartupLines(resolvedConfig, opts)) console.log(line);
-  console.log(opts.ephemeral ? "Comments: ephemeral (--ephemeral; lost when this server stops)" : `Comments: ${instance.commentsPath}`);
-  console.log(`Handoff: ${reviewWatchCommand({ url: instance.localUrl })}`);
-  if (opts.ownerName) {
-    console.log(`Owner:   ${opts.ownerName}`);
-  }
   let agentSessionPath = "";
+  let sessionWarning = "";
   try {
     agentSessionPath = writeRuntimeSessionFile({
       targetPath: opts.filePath,
@@ -567,44 +615,58 @@ async function main() {
       opts,
       promptAppend: agentPromptOptions.append,
     });
-    console.log(`Session:  ${agentSessionPath}`);
   } catch (error) {
     if (opts.agentSession) {
       await instance.close();
       throw new Error(`Could not write required agent-session metadata: ${error.message}`);
     }
-    console.warn(`Session:  metadata unavailable (${error.message})`);
+    sessionWarning = error.message;
   }
-  if (agentWorker) {
-    console.log(`Agent:   ${agentWorker.description}`);
-    agentWorker.start();
+
+  for (const line of formatStartup({
+    version: VERSION,
+    targetPath: opts.filePath,
+    isMarkdownTarget: targetStat.isDirectory() || isMarkdownPath(opts.filePath),
+    localUrl: instance.localUrl,
+    commentsPath: instance.commentsPath,
+    ephemeral: opts.ephemeral,
+    auth: opts.auth,
+    editable: opts.editable,
+    ownerName: opts.ownerName,
+    theme: resolvedConfig.theme,
+    linkPreviewRows: linkPreviewStartupRows(resolvedConfig, opts),
+    agent: agentWorker?.description,
+    agentSession: opts.agentSession ? {
+      description: agentSessionWatcher.description,
+      tracker: inboxStatusCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger }),
+      record: agentSessionRecordCommand,
+    } : null,
+    handoff: reviewWatchCommand({ url: instance.localUrl }),
+    sessionPath: agentSessionPath,
+    sessionWarning,
+    verbose: opts.verbose,
+  }, style)) {
+    out.line(line);
   }
-  if (opts.agentSession) {
-    console.log(`Agent session: ${agentSessionWatcher.description}`);
-    console.log(`Agent session: watching comments in this process`);
-    console.log(`Agent session: tracker ${inboxStatusCommand({ targetPath: opts.filePath, commentsPath: instance.commentsPath, statePath: agentStatePath, policy: opts.agentPolicy, trigger: opts.agentTrigger })}`);
-    console.log(`Agent session: record template ${agentSessionRecordCommand}`);
-    console.log(`Agent session: metadata ${agentSessionPath}`);
-    agentSessionWatcher.start();
-  }
-  if (opts.ephemeral) {
-    console.log("Live:    WebRTC peer-to-peer when available; WebSocket relay fallback enabled");
-  }
-  console.log(opts.auth ? "Access:  review key required by the printed URLs" : "Access:  disabled (--no-auth)");
+
+  agentWorker?.start();
+  agentSessionWatcher?.start();
 
   if (opts.open) {
-    openBrowser(instance.localUrl);
+    openBrowser(instance.localUrl, { log: (message) => out.line(message) });
   }
 
+  const publicRow = (value, extra = {}) => formatRows([{ label: STARTUP_LABEL_PUBLIC, value, ...extra }], style, { labelWidth: STARTUP_LABEL_WIDTH })[0];
   if (opts.tunnel) {
-    console.log("Public:  starting Cloudflare Tunnel...");
+    out.status(publicRow("starting Cloudflare Tunnel…", { tone: "muted" }));
     tunnel = startCloudflareTunnel({
       localUrl: instance.originUrl,
       accessKey,
       onUrl(url) {
         const publicUrl = withReviewKey(url, accessKey);
         tryUpdateRuntimeSession(agentSessionPath, () => updateAgentSessionPublicUrl(agentSessionPath, publicUrl));
-        console.log(`Public:  ${publicUrl}`);
+        out.settle(publicRow(publicUrl, { tone: "strong", hint: "share this" }));
+        out.line();
       },
       onFallback(fallbackPackage) {
         tryUpdateRuntimeSession(agentSessionPath, () => updateSessionFile(agentSessionPath, (session) => ({
@@ -612,11 +674,11 @@ async function main() {
           tunnel: { ...session.tunnel, state: "starting", fallbackPackage },
           lastActivityAt: new Date().toISOString(),
         })));
-        console.log(`Public:  cloudflared not found; trying npx ${fallbackPackage}...`);
+        out.status(publicRow(`cloudflared not found; trying npx ${fallbackPackage}…`, { tone: "muted" }));
       },
-      onProgress(event) {
-        if (event?.type === "dns-wait") {
-          console.log(`Public:  waiting for DNS to propagate for ${event.hostname} (${event.code}; up to ~2 minutes)...`);
+      onProgress(progress) {
+        if (progress?.type === "dns-wait") {
+          out.status(publicRow(`waiting for DNS on ${progress.hostname} (${progress.code}; up to ~2 min)…`, { tone: "muted" }));
         }
       },
       onError(error) {
@@ -626,18 +688,29 @@ async function main() {
           tunnel: { ...session.tunnel, state: "unavailable", error: error.message },
           lastActivityAt: new Date().toISOString(),
         })));
-        console.log(`Public:  unavailable (${error.message})`);
-        console.log("         Install cloudflared, allow npm/npx network access, or rerun with --no-tunnel.");
+        out.settle(publicRow(`unavailable: ${error.message}`, { tone: "error" }));
+        out.line(formatRows([{ label: "", value: "Install cloudflared, allow npx network access, or rerun with --no-tunnel." }], style, { labelWidth: STARTUP_LABEL_WIDTH })[0]);
+        out.line();
       },
     });
   } else {
-    console.log("Public:  disabled (--no-tunnel)");
+    out.line(publicRow("off (--no-tunnel); only this machine can open the room", { tone: "muted" }));
+    out.line();
   }
 
   async function shutdown() {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log("\nShutting down Tunelito...");
+    out.settle();
+    // A TTY echoes "^C" without a newline; end that line before the summary.
+    if (out.interactive) out.line();
+    out.line(formatShutdownSummary({
+      elapsedMs: Date.now() - startedAt,
+      newComments,
+      ephemeral: opts.ephemeral,
+      commentsPath: instance.commentsPath,
+      targetPath: opts.filePath,
+    }, style));
     if (tunnel) tunnel.stop();
     await agentWorker?.stop();
     await agentSessionWatcher?.stop();
@@ -656,12 +729,16 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
+// Serve swaps this for a writer-aware logger so warnings do not land inside
+// the pending Public row on a TTY.
+let runtimeSessionWarning = (message) => console.warn(`Session: ${message}`);
+
 function tryUpdateRuntimeSession(sessionPath, update) {
   if (!sessionPath) return;
   try {
     update();
   } catch (error) {
-    console.warn(`Session:  could not update metadata (${error.message})`);
+    runtimeSessionWarning(`could not update metadata (${error.message})`);
   }
 }
 
@@ -764,22 +841,33 @@ export async function runDoctorCommand(args, { stdout = process.stdout, stderr =
   }
 
   const report = await buildDoctorReport(opts, deps);
-  stdout.write(formatDoctorReport(report, opts.format));
+  stdout.write(formatDoctorReport(report, opts.format, createStyle({ stream: stdout })));
   return report.ok ? 0 : 1;
 }
 
-function formatDoctorReport(report, format) {
+const DOCTOR_STATUS_ORDER = { fail: 0, warn: 1, pass: 2 };
+
+// Problems first, then passing checks, so the line that needs action is the
+// first one a person reads.
+export function formatDoctorReport(report, format, style = plainStyle) {
   if (format === "json") return `${JSON.stringify(report, null, 2)}\n`;
+  const { errors, warnings, info } = report.summary;
+  const summary = [
+    errors ? style.red(plural(errors, "error")) : null,
+    warnings ? style.yellow(plural(warnings, "warning")) : null,
+    `${info} passed`,
+  ].filter(Boolean).join(" · ");
   const lines = [
-    "Tunelito doctor",
-    `Status: ${report.ok ? "ok" : "error"}`,
-    `Errors: ${report.summary.errors}`,
-    `Warnings: ${report.summary.warnings}`,
-    `Info: ${report.summary.info}`,
+    `${style.bold("tunelito doctor")} · ${report.ok ? style.green("ok") : style.red("needs attention")}`,
+    summary,
     "",
   ];
-  for (const check of report.checks) {
-    lines.push(`[${check.status}] ${check.id}: ${check.message}`);
+  const checks = [...report.checks].sort((a, b) => (DOCTOR_STATUS_ORDER[a.status] ?? 3) - (DOCTOR_STATUS_ORDER[b.status] ?? 3));
+  const idWidth = Math.max(0, ...checks.map((check) => check.id.length));
+  const tone = { fail: style.red, warn: style.yellow, pass: style.green };
+  for (const check of checks) {
+    const status = (tone[check.status] || String)(check.status.padEnd(4));
+    lines.push(`  ${status}  ${style.dim(check.id.padEnd(idWidth))}  ${check.message}`);
   }
   lines.push("");
   return lines.join("\n");
@@ -1832,16 +1920,88 @@ export function runConfigCommand(args, {
 
 // Startup summary for link previews. Resolver headers are listed by name and source
 // variable only, never by value.
-export function linkPreviewStartupLines(resolvedConfig, opts = {}) {
+export function linkPreviewStartupRows(resolvedConfig, opts = {}) {
   const rules = resolvedConfig.linkPreviewRules || [];
   if (!rules.length) return [];
-  const lines = [
-    `Previews: ${rules.length} link-preview rule${rules.length === 1 ? "" : "s"} (${resolvedConfig.linkPreviews.source}); ${opts.linkPreviewVisitors ? "owner and keyed visitors" : "direct local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`,
-    `Resolvers: ${[...new Set(rules.map((rule) => rule.origin))].join(", ")}`,
+  const rows = [
+    {
+      label: "Previews",
+      value: `${plural(rules.length, "link-preview rule")} for ${opts.linkPreviewVisitors ? "the owner and keyed visitors" : "the local owner only"}${opts.linkPreviewAllowRemote ? "; remote resolvers allowed" : ""}`,
+      hint: `from ${resolvedConfig.linkPreviews.source}`,
+    },
+    { label: "Resolver", value: [...new Set(rules.map((rule) => rule.origin))].join(", ") },
   ];
   const headerLines = rules.filter((rule) => rule.headers?.length).map((rule) => `${rule.origin} <- ${describeLinkPreviewHeaders(rule.headers)}`);
-  if (headerLines.length) lines.push(`Resolver headers (owner only): ${[...new Set(headerLines)].join("; ")}`);
-  return lines;
+  if (headerLines.length) rows.push({ label: "Headers", value: [...new Set(headerLines)].join("; "), hint: "owner only" });
+  return rows;
+}
+
+export function linkPreviewStartupLines(resolvedConfig, opts = {}) {
+  return formatRows(linkPreviewStartupRows(resolvedConfig, opts), plainStyle, { labelWidth: STARTUP_LABEL_WIDTH });
+}
+
+const STARTUP_LABEL_PUBLIC = "Public";
+const STARTUP_LABEL_WIDTH = 8;
+
+// The startup block a person reads once before a call. The share URL is the
+// focal row (printed after this block as the tunnel resolves); everything an
+// agent needs lives in session.json and --verbose.
+export function formatStartup(model, style = plainStyle) {
+  const target = displayPath(model.targetPath) || model.targetPath;
+  const lines = [
+    `${style.bold("tunelito")} ${style.dim(model.version)} · ${target}`,
+    model.auth
+      ? style.dim("Keyed links · Ctrl-C to stop")
+      : `${style.yellow("Open links (--no-auth)")}${style.dim(" · Ctrl-C to stop")}`,
+    "",
+  ];
+
+  const showTheme = model.verbose || (model.isMarkdownTarget && model.theme && model.theme.source !== "default");
+  const rows = [
+    { label: "Local", value: model.localUrl, hint: "you, on this machine" },
+    model.ephemeral
+      ? { label: "Comments", value: "in memory only; lost when Tunelito stops", tone: "warn" }
+      : { label: "Comments", value: displayPath(model.commentsPath) },
+    !model.auth ? { label: "Access", value: "anyone with a link can view and comment", tone: "warn" } : null,
+    model.editable ? { label: "Editing", value: "on for the Local URL only; shared links stay read-only" } : null,
+    model.ownerName ? { label: "Owner", value: model.ownerName } : null,
+    showTheme && model.theme ? { label: "Theme", value: model.theme.value, hint: model.theme.source === "default" ? "default" : `from ${model.theme.source}` } : null,
+    ...(model.linkPreviewRows || []),
+    model.agent ? { label: "Agent", value: model.agent } : null,
+    model.agentSession ? { label: "Agent", value: model.agentSession.description } : null,
+    model.agentSession ? { label: "Tracker", value: model.agentSession.tracker } : null,
+    model.agentSession ? { label: "Record", value: model.agentSession.record } : null,
+    model.verbose && model.ephemeral ? { label: "Sync", value: "WebRTC peer-to-peer when available; WebSocket relay fallback" } : null,
+    (model.verbose || model.agentSession) && model.handoff ? { label: "Handoff", value: model.handoff } : null,
+    (model.verbose || model.agentSession) && model.sessionPath ? { label: "Session", value: displayPath(model.sessionPath) } : null,
+    model.sessionWarning ? { label: "Session", value: `metadata unavailable (${model.sessionWarning})`, tone: "warn" } : null,
+  ];
+  return [...lines, ...formatRows(rows, style, { labelWidth: STARTUP_LABEL_WIDTH })];
+}
+
+export function formatCommentEvent(comment, { folder = false } = {}) {
+  const author = comment.author || "Anonymous";
+  const where = comment.scope === "site" ? " (site)" : folder && comment.pagePath ? ` (${comment.pagePath})` : "";
+  return `${author}${where}: ${truncate(comment.body || comment.quote, 72)}`;
+}
+
+// Agent worker and inbox modules log "Agent:   message" style lines; render
+// single-line ones as runtime events and pass multi-line prompts through.
+export function formatAgentLogLine(message, style = plainStyle, now = new Date()) {
+  const text = String(message);
+  const match = !text.includes("\n") && text.match(/^(Agent inbox|Agent|Inbox):\s+(.*)$/);
+  if (!match) return text;
+  return formatEvent(match[1] === "Inbox" ? "inbox" : "agent", match[2], { style, now });
+}
+
+export function formatShutdownSummary({ elapsedMs, newComments, ephemeral, commentsPath, targetPath }, style = plainStyle) {
+  const duration = formatDuration(elapsedMs);
+  if (ephemeral) {
+    return `Stopped after ${duration} · ${plural(newComments, "comment")} discarded (in-memory session)`;
+  }
+  const lines = [`Stopped after ${duration} · ${plural(newComments, "new comment")} in ${displayPath(commentsPath)}`];
+  if (newComments) lines.push(style.dim(`Next: tunelito inbox status ${shellQuote(displayPath(targetPath))}`));
+  return lines.join("\n");
 }
 
 function describeLinkPreviewHeaders(headers) {
@@ -2082,7 +2242,11 @@ function findProjectRoot(startPath) {
 
 if (isCliEntry(import.meta.url)) {
   main().catch((error) => {
-    console.error(error.stack || error.message);
-    process.exit(1);
+    const style = createStyle({ stream: process.stderr });
+    const usageError = error instanceof UsageError;
+    process.stderr.write(formatCliError(error, { style, helpCommand: usageError ? "tunelito --help" : "" }));
+    if (process.env.TUNELITO_DEBUG && error?.stack) process.stderr.write(`${error.stack}\n`);
+    else if (!usageError) process.stderr.write(style.dim("Set TUNELITO_DEBUG=1 for the stack trace, or run `tunelito doctor` to check your setup.\n"));
+    process.exit(usageError ? 2 : 1);
   });
 }

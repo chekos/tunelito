@@ -35,17 +35,17 @@ preserves the browser draft.
 
 Markdown fences labeled `mermaid` render automatically as diagrams. Ordinary code fences stay as code, and invalid diagrams show their readable source instead of a blank region.
 
-When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public:` URL.
+When `cloudflared` is installed, or when `npx cloudflared@latest` can run, Tunelito prints a `Public` URL.
 
-Tunelito also prints the comments file path:
+Tunelito also prints the comments file path, relative to your working directory:
 
 ```text
-Comments: /path/to/page.comments.md
+  Comments   page.comments.md
 ```
 
 Reviewers select text in the browser, click `Comment`, and Tunelito writes the note to that Markdown file. They can also use `Page note` for unanchored feedback on the current page or `Site note` for feedback that should appear on every page in a folder review.
 
-Each reviewer gets a friendly editable name. Renaming updates earlier comments from the same reviewer identity. Direct `Local:` sessions are owner-authored; public tunnel sessions are visitors. To seed the local owner display name:
+Each reviewer gets a friendly editable name. Renaming updates earlier comments from the same reviewer identity. Direct `Local` sessions are owner-authored; public tunnel sessions are visitors. To seed the local owner display name:
 
 ```bash
 npx --yes tunelito ./page.html --owner "Chekos"
