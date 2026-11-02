@@ -648,17 +648,36 @@ body.tunelito-comments-open .tunelito-document-map {
 }
 .tunelito-fold {
   float: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 24px;
+  min-height: 24px;
   margin: 0.2rem 0 0 10px;
   border: 1px solid var(--tl-border);
   border-radius: 999px;
   background: var(--tl-soft);
   color: var(--tl-text);
   cursor: pointer;
-  font: 700 0.68rem/1 var(--tl-font-body);
-  padding: 5px 8px;
+  font: 700 0.72rem/1 var(--tl-font-body);
+  padding: 4px 7px;
 }
+/* A drawn chevron shows the fold state: down while open, right when folded. */
+.tunelito-fold::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+}
+.tunelito-fold[aria-expanded="false"]::before {
+  transform: translateX(-1px) rotate(-45deg);
+}
+.tunelito-fold:hover { border-color: var(--tl-accent); }
 .tunelito-section-count {
-  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
 }
 .tunelito-section-count[hidden] { display: none; }
 .tunelito-section-index {
