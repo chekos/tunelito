@@ -823,6 +823,20 @@
         button.secondary { background: var(--ui-surface); color: var(--ui-text-2); }
         button.secondary:hover { background: var(--ui-surface-2); }
         button.primary { border-color: var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent); }
+        /* Reduced motion keeps every state change (open, pressed, peer moves)
+           but drops the lift and the interpolation between positions. */
+        @media (prefers-reduced-motion: reduce) {
+          .launcher,
+          .peer-cursor,
+          .laser,
+          .peer-laser {
+            transition: none;
+          }
+          .launcher:hover,
+          .launcher.active {
+            transform: none;
+          }
+        }
         @media (max-width: 640px) {
           .launcher {
             right: max(10px, env(safe-area-inset-right));
@@ -2186,8 +2200,12 @@
     if (!range) return;
     const node = closestElement(range.startContainer);
     revealCollapsedAncestors(node);
-    node?.scrollIntoView({ behavior: "smooth", block: "center" });
+    node?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
     flashRange(range);
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   }
 
   function revealCollapsedAncestors(node) {
@@ -2345,22 +2363,25 @@
   function flashRange(range) {
     const rect = range.getBoundingClientRect();
     if (!rect || rect.width === 0) return;
+    const reduceMotion = prefersReducedMotion();
     const marker = document.createElement("div");
+    // Document coordinates keep the marker on the text while a smooth scroll
+    // is still moving the viewport.
     marker.style.cssText = `
-      position: fixed;
+      position: absolute;
       z-index: 2147483645;
       pointer-events: none;
-      left: ${rect.left - 3}px;
-      top: ${rect.top - 3}px;
+      left: ${rect.left + window.scrollX - 3}px;
+      top: ${rect.top + window.scrollY - 3}px;
       width: ${rect.width + 6}px;
       height: ${rect.height + 6}px;
       border: 2px solid #0f766e;
       border-radius: 5px;
       background: rgba(45, 212, 191, .16);
-      transition: opacity .5s ease;
+      transition: ${reduceMotion ? "none" : "opacity .5s ease"};
     `;
-    document.body.appendChild(marker);
-    setTimeout(() => marker.style.opacity = "0", 700);
+    document.documentElement.appendChild(marker);
+    setTimeout(() => marker.style.opacity = "0", reduceMotion ? 1200 : 700);
     setTimeout(() => marker.remove(), 1300);
   }
 
