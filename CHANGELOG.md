@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Makes the review panel work fully from the keyboard. Each comment's quote is a "Go to selection" button. Escape closes the panel and returns focus to the launcher. Opening the panel from the launcher moves focus into it, and focus survives new comments arriving. The composer's Escape works from any of its controls and returns focus to whatever opened it. The Page/Site toggle exposes `aria-pressed`, the close button is named, inputs have labels, and connection or error status is announced.
+- Gives the review panel a dark tone. It follows the page under review (dark Markdown themes such as the default `bns-pitaya`, or a dark HTML page), or the OS setting when the page has no opaque background. Panel colors now come from tokens.
+- Fixes contrast. Resolved comments keep full-contrast text and recede through tint and a dashed edge instead of opacity. Input borders reach 3:1. The source editor's warning and error text use the theme tone tokens instead of amber that fell to about 2:1 on dark themes.
+- Link hover cards meet WCAG 1.4.13: the pointer can move onto the card, Escape dismisses it, and it flips above the link near the bottom of the viewport. Escape pressed in the editor, composer, or document map no longer also closes the Markdown properties drawer.
+- Section fold buttons show a chevron for their state and are at least 24px. Headings keep their own accessible name instead of "Intro Collapse Intro".
+- On phones, the close, resolved, and scope controls are 40–44px. The composer replaces the panel instead of stacking on top of it, and sheets size with `dvh` and respect the safe area.
+- Honors `prefers-reduced-motion` in the review panel: no launcher lift, no gliding peer cursors, instant jump-to-comment, and no fade on the flash. The flash marker now stays on the text during a smooth scroll.
+- Speeds up selection and comment rendering. One text walk per task replaces repeated full-document walks, `selectionchange` settles for 120ms before capture, and the document map only updates markers that changed.
+- The composer uses the system font instead of falling back to the browser serif, and the Markdown sidebar labels rise to the 11px floor.
+
 ## 1.0.0 - 2026-11-02
 
 Tunelito 1.0 redesigns the command line as a product. Startup centers on the link you share. Errors are one line with a fix. Help fits on one screen. Agents get a `--json` event stream instead of scraping text. This release has breaking changes for scripts that parse startup output and for `--out`, `--live`, and `--owner-name`; see the first entries below.

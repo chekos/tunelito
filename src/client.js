@@ -145,7 +145,73 @@
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
-        :host { all: initial; color-scheme: light; }
+        :host {
+          all: initial;
+          color-scheme: light;
+          --ui-surface: #fff;
+          --ui-surface-2: #f8fafc;
+          --ui-text: #172033;
+          --ui-text-2: #334155;
+          --ui-muted: #5b6678;
+          --ui-divider: #e5e9f0;
+          --ui-border: #d7dde8;
+          --ui-input-border: #8792a2;
+          --ui-accent: #0f766e;
+          --ui-accent-text: #0f766e;
+          --ui-on-accent: #fff;
+          --ui-accent-soft: #f0fdfa;
+          --ui-accent-soft-2: #ccfbf1;
+          --ui-accent-border: #5eead4;
+          --ui-focus: #0f766e;
+          --ui-ok-soft: #f3fcf6;
+          --ui-ok-badge: #dcfce7;
+          --ui-ok-border: #86efac;
+          --ui-ok-text: #166534;
+          --ui-ok-mark: #16a34a;
+          --ui-warn-soft: #fefce8;
+          --ui-warn-badge: #fef9c3;
+          --ui-warn-border: #facc15;
+          --ui-warn-text: #854d0e;
+          --ui-danger-soft: #fff5f5;
+          --ui-danger-badge: #fee2e2;
+          --ui-danger-border: #fca5a5;
+          --ui-danger-text: #991b1b;
+          --ui-shadow: rgba(15, 23, 42, .25);
+        }
+        /* Dark tokens follow the reviewed page (dark Markdown themes, dark
+           HTML pages) or the OS preference; see detectTone(). */
+        :host([data-tone="dark"]) {
+          color-scheme: dark;
+          --ui-surface: #161b26;
+          --ui-surface-2: #1c2230;
+          --ui-text: #e6eaf2;
+          --ui-text-2: #c5ccd8;
+          --ui-muted: #9ba6b8;
+          --ui-divider: #2a3242;
+          --ui-border: #3a4457;
+          --ui-input-border: #6f7b90;
+          --ui-accent: #0f766e;
+          --ui-accent-text: #5eead4;
+          --ui-on-accent: #fff;
+          --ui-accent-soft: rgba(45, 212, 191, .1);
+          --ui-accent-soft-2: rgba(45, 212, 191, .18);
+          --ui-accent-border: rgba(94, 234, 212, .5);
+          --ui-focus: #5eead4;
+          --ui-ok-soft: rgba(34, 197, 94, .08);
+          --ui-ok-badge: rgba(34, 197, 94, .16);
+          --ui-ok-border: rgba(134, 239, 172, .45);
+          --ui-ok-text: #86efac;
+          --ui-ok-mark: #22c55e;
+          --ui-warn-soft: rgba(234, 179, 8, .08);
+          --ui-warn-badge: rgba(234, 179, 8, .16);
+          --ui-warn-border: rgba(250, 204, 21, .5);
+          --ui-warn-text: #fcd34d;
+          --ui-danger-soft: rgba(239, 68, 68, .08);
+          --ui-danger-badge: rgba(239, 68, 68, .16);
+          --ui-danger-border: rgba(252, 165, 165, .45);
+          --ui-danger-text: #fca5a5;
+          --ui-shadow: rgba(0, 0, 0, .55);
+        }
         *, *::before, *::after { box-sizing: border-box; }
         .launcher {
           position: fixed;
@@ -182,6 +248,8 @@
           outline: 2px solid #2dd4bf;
           outline-offset: 3px;
         }
+        /* The launcher floats over arbitrary page content, so it keeps its own
+           dark glass in both tones; the ring stays bright for that reason. */
         .launcher-glyph {
           position: relative;
           display: block;
@@ -225,7 +293,7 @@
           border: 2px solid #fff;
           background: #0f766e;
           color: #fff;
-          font: 800 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font: 800 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 0 4px;
         }
         .count[hidden] {
@@ -241,11 +309,11 @@
           display: none;
           grid-template-rows: auto auto auto 1fr auto;
           overflow: hidden;
-          border: 1px solid rgba(15, 23, 42, .14);
+          border: 1px solid var(--ui-border);
           border-radius: 10px;
-          background: #fff;
-          color: #172033;
-          box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
+          background: var(--ui-surface);
+          color: var(--ui-text);
+          box-shadow: 0 24px 70px var(--ui-shadow);
           font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .panel.open { display: grid; }
@@ -254,7 +322,7 @@
           align-items: center;
           gap: 10px;
           padding: 13px 14px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid var(--ui-divider);
         }
         .title { flex: 1; min-width: 0; }
         .title strong {
@@ -265,25 +333,25 @@
           font-size: 14px;
         }
         .status {
-          color: #64748b;
+          color: var(--ui-muted);
           font-size: 12px;
         }
         .icon-button {
           width: 30px;
           height: 30px;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
-          background: #fff;
-          color: #334155;
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           cursor: pointer;
           font-size: 18px;
           line-height: 1;
         }
         .resolved-toggle {
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 999px;
-          background: #fff;
-          color: #334155;
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           cursor: pointer;
           font: 650 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 10px;
@@ -292,26 +360,26 @@
         .resolved-toggle[hidden] { display: none; }
         .resolution {
           margin: 0 0 8px;
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 13px;
         }
         .resolution[hidden] { display: none; }
         .identity {
           padding: 12px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #f8fafc;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface-2);
         }
         .identity-card {
           display: grid;
           gap: 8px;
           min-width: 0;
-          border: 1px solid #dbe5ef;
+          border: 1px solid var(--ui-divider);
           border-radius: 8px;
-          background: #fff;
+          background: var(--ui-surface);
           padding: 10px;
         }
         .identity-label {
-          color: #64748b;
+          color: var(--ui-muted);
           font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           text-transform: uppercase;
           letter-spacing: 0;
@@ -326,24 +394,20 @@
           flex: 1;
           min-width: 0;
           overflow-wrap: anywhere;
-          color: #172033;
+          color: var(--ui-text);
           font: 800 15px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .identity-edit {
           flex: 0 0 auto;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
-          background: #fff;
-          color: #0f766e;
+          background: var(--ui-surface);
+          color: var(--ui-accent-text);
           cursor: pointer;
           font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
         }
-        .identity-edit:hover { border-color: #99f6e4; background: #f0fdfa; }
-        .identity-edit:focus-visible {
-          outline: 2px solid #2dd4bf;
-          outline-offset: 2px;
-        }
+        .identity-edit:hover { border-color: var(--ui-accent-border); background: var(--ui-accent-soft); }
         .identity-form {
           display: grid;
           gap: 8px;
@@ -358,8 +422,8 @@
           display: flex;
           gap: 8px;
           padding: 10px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #fff;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface);
         }
         .note-actions button {
           flex: 1;
@@ -371,15 +435,15 @@
           display: grid;
           gap: 6px;
           padding: 10px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #fff;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface);
         }
         .handoff-button {
           width: 100%;
         }
         .handoff-status {
           min-height: 16px;
-          color: #64748b;
+          color: var(--ui-muted);
           font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           overflow-wrap: anywhere;
         }
@@ -390,9 +454,9 @@
           gap: 6px;
         }
         .pointer-button[aria-pressed="true"] {
-          border-color: #f87171;
-          background: #fff1f2;
-          color: #991b1b;
+          border-color: var(--ui-danger-border);
+          background: var(--ui-danger-badge);
+          color: var(--ui-danger-text);
         }
         .pointer-dot {
           width: 10px;
@@ -404,10 +468,10 @@
         }
         input, textarea {
           width: 100%;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-input-border);
           border-radius: 7px;
-          background: #fff;
-          color: #172033;
+          background: var(--ui-surface);
+          color: var(--ui-text);
           font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 9px 10px;
         }
@@ -417,38 +481,40 @@
           padding: 10px 10px 14px;
         }
         .empty {
-          color: #64748b;
+          color: var(--ui-muted);
           padding: 22px 12px;
           text-align: center;
           font-size: 13px;
         }
         .comment {
-          border: 1px solid #e2e8f0;
+          border: 1px solid var(--ui-divider);
           border-radius: 8px;
           padding: 10px;
           margin: 0 0 9px;
           cursor: pointer;
         }
-        .comment:hover { border-color: #94a3b8; }
+        .comment:hover { border-color: var(--ui-input-border); }
         .comment.work-active {
-          border-color: #5eead4;
-          background: #f0fdfa;
+          border-color: var(--ui-accent-border);
+          background: var(--ui-accent-soft);
         }
+        /* Done comments recede through tint and a dashed edge, never opacity,
+           so their text keeps full contrast. */
         .comment.work-done {
-          border-color: #86efac;
-          background: #f7fef9;
-          opacity: 0.72;
+          border-color: var(--ui-ok-border);
+          border-style: dashed;
+          background: var(--ui-ok-soft);
         }
         .comment.work-warning {
-          border-color: #facc15;
-          background: #fefce8;
+          border-color: var(--ui-warn-border);
+          background: var(--ui-warn-soft);
         }
         .comment.work-danger {
-          border-color: #fca5a5;
-          background: #fff7f7;
+          border-color: var(--ui-danger-border);
+          background: var(--ui-danger-soft);
         }
         .comment.work-muted {
-          background: #f8fafc;
+          background: var(--ui-surface-2);
         }
         .meta-row {
           display: flex;
@@ -467,28 +533,28 @@
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          border: 1px solid #cbd5e1;
+          border: 1px solid var(--ui-border);
           border-radius: 999px;
-          background: #f8fafc;
-          color: #475569;
+          background: var(--ui-surface-2);
+          color: var(--ui-text-2);
           font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 5px 7px;
         }
-        .work-badge.active { border-color: #2dd4bf; background: #ccfbf1; color: #115e59; }
-        .work-badge.done { border-color: #86efac; background: #dcfce7; color: #166534; }
-        .work-badge.warning { border-color: #fde047; background: #fef9c3; color: #854d0e; }
-        .work-badge.danger { border-color: #fca5a5; background: #fee2e2; color: #991b1b; }
+        .work-badge.active { border-color: var(--ui-accent-border); background: var(--ui-accent-soft-2); color: var(--ui-accent-text); }
+        .work-badge.done { border-color: var(--ui-ok-border); background: var(--ui-ok-badge); color: var(--ui-ok-text); }
+        .work-badge.warning { border-color: var(--ui-warn-border); background: var(--ui-warn-badge); color: var(--ui-warn-text); }
+        .work-badge.danger { border-color: var(--ui-danger-border); background: var(--ui-danger-badge); color: var(--ui-danger-text); }
         .work {
           display: none;
           margin-top: 9px;
-          border-top: 1px solid rgba(148, 163, 184, .28);
+          border-top: 1px solid var(--ui-divider);
           padding-top: 8px;
         }
         .work.visible { display: block; }
         .approval {
           display: none;
           margin-top: 8px;
-          color: #0f766e;
+          color: var(--ui-accent-text);
           font-size: 12px;
           font-weight: 700;
           line-height: 1.35;
@@ -501,19 +567,15 @@
           margin-top: 9px;
         }
         .approve-button {
-          border: 1px solid #99f6e4;
+          border: 1px solid var(--ui-accent-border);
           border-radius: 7px;
-          background: #f0fdfa;
-          color: #0f766e;
+          background: var(--ui-accent-soft);
+          color: var(--ui-accent-text);
           cursor: pointer;
           font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
         }
-        .approve-button:hover { border-color: #2dd4bf; background: #ccfbf1; }
-        .approve-button:focus-visible {
-          outline: 2px solid #2dd4bf;
-          outline-offset: 2px;
-        }
+        .approve-button:hover { background: var(--ui-accent-soft-2); }
         .work-list {
           display: grid;
           gap: 5px;
@@ -526,7 +588,7 @@
           grid-template-columns: 16px 1fr;
           gap: 6px;
           align-items: start;
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 12px;
         }
         .work-task::before {
@@ -534,50 +596,74 @@
           width: 13px;
           height: 13px;
           margin-top: 2px;
-          border: 1px solid #94a3b8;
+          border: 1px solid var(--ui-input-border);
           border-radius: 4px;
-          background: #fff;
+          background: var(--ui-surface);
         }
         .work-task.done {
-          color: #64748b;
+          color: var(--ui-muted);
           text-decoration: line-through;
           text-decoration-thickness: 1px;
         }
         .work-task.done::before {
-          border-color: #16a34a;
-          background: #16a34a;
-          box-shadow: inset 0 0 0 3px #fff;
+          border-color: var(--ui-ok-mark);
+          background: var(--ui-ok-mark);
+          box-shadow: inset 0 0 0 3px var(--ui-surface);
         }
         .quote {
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 12px;
-          border-left: 3px solid #99f6e4;
+          border-left: 3px solid var(--ui-accent-border);
           padding-left: 8px;
           margin-bottom: 8px;
         }
         .quote.note {
-          color: #64748b;
-          border-left-color: #cbd5e1;
+          color: var(--ui-muted);
+          border-left-color: var(--ui-border);
+        }
+        button.quote {
+          display: block;
+          width: 100%;
+          border-top: 0;
+          border-right: 0;
+          border-bottom: 0;
+          background: none;
+          min-height: 24px;
+          padding-top: 4px;
+          padding-bottom: 4px;
+          font: inherit;
+          font-size: 12px;
+          text-align: left;
+          cursor: pointer;
+        }
+        button.quote:hover { text-decoration: underline; text-underline-offset: 2px; }
+        .panel:focus { outline: none; }
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        a:focus-visible {
+          outline: 2px solid var(--ui-focus);
+          outline-offset: 2px;
         }
         .anchor-status {
           display: none;
           margin: -2px 0 8px 11px;
-          color: #92400e;
+          color: var(--ui-warn-text);
           font-size: 11px;
           font-weight: 700;
           line-height: 1.35;
         }
         .anchor-status.visible { display: block; }
-        .comment.anchor-stale .quote { border-left-color: #f59e0b; }
+        .comment.anchor-stale .quote { border-left-color: var(--ui-warn-border); }
         .meta {
-          color: #64748b;
+          color: var(--ui-muted);
           font-size: 12px;
           margin-bottom: 4px;
           overflow-wrap: anywhere;
         }
         .meta-row .meta { margin-bottom: 0; }
         .body {
-          color: #172033;
+          color: var(--ui-text);
           white-space: pre-wrap;
         }
         .footer {
@@ -586,15 +672,18 @@
           align-items: center;
           gap: 10px;
           padding: 10px 14px;
-          border-top: 1px solid #e5e7eb;
-          background: #f8fafc;
+          border-top: 1px solid var(--ui-divider);
+          background: var(--ui-surface-2);
         }
         .link {
-          color: #0f766e;
+          display: inline-block;
+          padding: 5px 0;
+          color: var(--ui-accent-text);
           text-decoration: none;
           font-weight: 600;
           font-size: 12px;
         }
+        .link:hover { text-decoration: underline; text-underline-offset: 2px; }
         .link[hidden] { display: none; }
         .peer-cursor {
           position: fixed;
@@ -631,11 +720,11 @@
           position: fixed;
           z-index: 2147483647;
           display: none;
-          border: 1px solid #0f766e;
+          border: 1px solid var(--ui-accent);
           border-radius: 999px;
-          background: #0f766e;
-          color: #fff;
-          box-shadow: 0 12px 32px rgba(15, 23, 42, .22);
+          background: var(--ui-accent);
+          color: var(--ui-on-accent);
+          box-shadow: 0 12px 32px var(--ui-shadow);
           font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 9px 12px;
           cursor: pointer;
@@ -680,10 +769,14 @@
           width: min(360px, calc(100vw - 24px));
           max-height: calc(100vh - 16px);
           overflow: auto;
-          border: 1px solid rgba(15, 23, 42, .16);
+          border: 1px solid var(--ui-border);
           border-radius: 10px;
-          background: #fff;
-          box-shadow: 0 22px 60px rgba(15, 23, 42, .24);
+          background: var(--ui-surface);
+          color: var(--ui-text);
+          box-shadow: 0 22px 60px var(--ui-shadow);
+          /* :host resets inheritance, so the composer (outside .panel) needs
+             its own family or the quote falls back to the UA serif. */
+          font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 12px;
         }
         .composer.open { display: block; }
@@ -695,28 +788,28 @@
           margin-bottom: 9px;
         }
         .composer-scope {
-          color: #64748b;
+          color: var(--ui-muted);
           font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .scope-toggle {
           display: inline-flex;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
           overflow: hidden;
         }
         .scope-toggle button {
           border: 0;
-          border-right: 1px solid #d7dde8;
-          background: #fff;
-          color: #334155;
+          border-right: 1px solid var(--ui-border);
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
           cursor: pointer;
         }
         .scope-toggle button:last-child { border-right: 0; }
         .scope-toggle button.active {
-          background: #0f766e;
-          color: #fff;
+          background: var(--ui-accent);
+          color: var(--ui-on-accent);
         }
         .composer .actions {
           display: flex;
@@ -725,14 +818,29 @@
           margin-top: 9px;
         }
         button.secondary, button.primary {
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
           padding: 8px 10px;
           font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           cursor: pointer;
         }
-        button.secondary { background: #fff; color: #334155; }
-        button.primary { border-color: #0f766e; background: #0f766e; color: #fff; }
+        button.secondary { background: var(--ui-surface); color: var(--ui-text-2); }
+        button.secondary:hover { background: var(--ui-surface-2); }
+        button.primary { border-color: var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent); }
+        /* Reduced motion keeps every state change (open, pressed, peer moves)
+           but drops the lift and the interpolation between positions. */
+        @media (prefers-reduced-motion: reduce) {
+          .launcher,
+          .peer-cursor,
+          .laser,
+          .peer-laser {
+            transition: none;
+          }
+          .launcher:hover,
+          .launcher.active {
+            transform: none;
+          }
+        }
         @media (max-width: 640px) {
           .launcher {
             right: max(10px, env(safe-area-inset-right));
@@ -756,7 +864,7 @@
             bottom: 0;
             left: 0;
             width: 100vw;
-            max-height: min(78vh, calc(100vh - 18px));
+            max-height: min(78dvh, calc(100dvh - 18px));
             border-right: 0;
             border-bottom: 0;
             border-left: 0;
@@ -774,10 +882,10 @@
           }
           .composer {
             right: 8px;
-            bottom: 8px;
+            bottom: calc(8px + env(safe-area-inset-bottom));
             left: 8px;
             width: auto;
-            max-height: calc(100vh - 16px);
+            max-height: calc(100dvh - 16px);
             border-radius: 12px;
           }
           .composer textarea {
@@ -799,37 +907,59 @@
             min-height: 44px;
             padding: 10px 12px;
           }
+          .icon-button {
+            width: 44px;
+            height: 44px;
+          }
+          .resolved-toggle {
+            min-height: 44px;
+            padding: 10px 14px;
+          }
+          .scope-toggle button {
+            min-height: 40px;
+            padding: 10px 14px;
+          }
+          button.quote {
+            padding-top: 6px;
+            padding-bottom: 6px;
+          }
+          /* The composer takes the bottom of the screen on phones; hide the
+             panel behind it instead of stacking two sheets. It returns when
+             the composer closes. */
+          .composer.open ~ .panel.open {
+            display: none;
+          }
         }
       </style>
-      <button class="launcher" type="button" title="Open Tunelito comments" aria-label="Open Tunelito comments" aria-expanded="false">
+      <button class="launcher" type="button" title="Tunelito comments" aria-label="Tunelito comments" aria-expanded="false" aria-controls="tunelito-panel">
         <span class="launcher-glyph" aria-hidden="true"></span>
         <span class="count" hidden>0</span>
       </button>
-      <button class="selection">Comment</button>
+      <button class="selection" type="button">Comment</button>
       <div class="laser" aria-hidden="true"></div>
       <div class="composer" role="dialog" aria-label="Add comment">
         <div class="composer-meta">
           <span class="composer-scope">Page comment</span>
           <div class="scope-toggle" role="group" aria-label="Comment scope">
-            <button type="button" data-scope="page">Page</button>
-            <button type="button" data-scope="site">Site</button>
+            <button type="button" data-scope="page" aria-pressed="false">Page</button>
+            <button type="button" data-scope="site" aria-pressed="false">Site</button>
           </div>
         </div>
         <div class="quote"></div>
-        <textarea placeholder="Leave a comment on this selection"></textarea>
+        <textarea aria-label="Comment" placeholder="Leave a comment on this selection"></textarea>
         <div class="actions">
-          <button class="secondary" data-action="cancel">Cancel</button>
-          <button class="primary" data-action="save">Add comment</button>
+          <button class="secondary" type="button" data-action="cancel">Cancel</button>
+          <button class="primary" type="button" data-action="save">Add comment</button>
         </div>
       </div>
-      <aside class="panel" aria-label="Tunelito comments">
+      <aside class="panel" id="tunelito-panel" aria-label="Tunelito comments" tabindex="-1">
         <div class="header">
           <div class="title">
             <strong></strong>
-            <div class="status">Connecting...</div>
+            <div class="status" role="status">Connecting...</div>
           </div>
           <button class="resolved-toggle" type="button" hidden>Show resolved</button>
-          <button class="icon-button" title="Close">×</button>
+          <button class="icon-button" type="button" title="Close comments" aria-label="Close comments"><span aria-hidden="true">×</span></button>
         </div>
         <div class="identity">
           <div class="identity-card">
@@ -839,7 +969,7 @@
               <button class="identity-edit" type="button" title="Edit reviewer name" aria-label="Edit reviewer name">Edit</button>
             </div>
             <form class="identity-form" hidden>
-              <input class="name" autocomplete="name" placeholder="Reviewer name" />
+              <input class="name" autocomplete="name" aria-label="Reviewer name" placeholder="Reviewer name" />
               <div class="identity-actions">
                 <button class="secondary" data-action="cancel-name" type="button">Cancel</button>
                 <button class="primary" data-action="save-name" type="submit">Save</button>
@@ -848,8 +978,8 @@
           </div>
         </div>
         <div class="note-actions" aria-label="Add unanchored comment">
-          <button class="secondary" data-action="page-note">Page note</button>
-          <button class="secondary" data-action="site-note">Site note</button>
+          <button class="secondary" type="button" data-action="page-note">Page note</button>
+          <button class="secondary" type="button" data-action="site-note">Site note</button>
           <button class="secondary pointer-button" data-action="laser-pointer" type="button" aria-pressed="false" title="Toggle laser pointer">
             <span class="pointer-dot" aria-hidden="true"></span>
             <span>Pointer</span>
@@ -867,6 +997,9 @@
       </aside>
     `;
     document.documentElement.appendChild(host);
+    applyTone(host);
+    const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+    darkQuery?.addEventListener?.("change", () => applyTone(host));
 
     const panel = shadow.querySelector(".panel");
     const launcher = shadow.querySelector(".launcher");
@@ -893,8 +1026,13 @@
       } catch {}
       renderComments();
     });
-    launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
-    shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
+    launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open"), { moveFocus: true }));
+    shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false, { restoreFocus: true }));
+    panel.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setPanelOpen(false, { restoreFocus: true });
+    });
     identityEdit.addEventListener("click", () => openIdentityEditor());
     identityForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -902,7 +1040,9 @@
     });
     identityForm.querySelector("[data-action='cancel-name']").addEventListener("click", () => closeIdentityEditor({ restoreFocus: true }));
     name.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeIdentityEditor({ restoreFocus: true });
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeIdentityEditor({ restoreFocus: true });
     });
     selection.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -922,7 +1062,14 @@
     composer.querySelector("[data-action='save']").addEventListener("click", submitComment);
     composer.querySelector("textarea").addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitComment();
-      if (event.key === "Escape") closeComposer();
+    });
+    // Escape anywhere in the composer (textarea, scope toggle, buttons) closes it
+    // and is consumed so page-level Escape handlers do not also fire.
+    composer.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeComposer();
     });
 
     return {
@@ -949,17 +1096,76 @@
     };
   }
 
+  // The panel matches the page under review: a dark Markdown theme or a dark
+  // HTML page gets the dark tokens, a light page the light ones, and a page
+  // without an opaque background follows the OS preference.
+  function applyTone(host) {
+    host.dataset.tone = detectTone();
+  }
+
+  function detectTone() {
+    for (const element of [document.body, document.documentElement]) {
+      if (!element) continue;
+      const luminance = backgroundLuminance(getComputedStyle(element).backgroundColor);
+      if (luminance !== null) return luminance < 0.4 ? "dark" : "light";
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function backgroundLuminance(color) {
+    const rgba = toRgba(color);
+    if (!rgba) return null;
+    const [r, g, b, a] = rgba;
+    if (!(a > 0.5)) return null;
+    const channel = (value) => {
+      const c = value / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  }
+
+  // Computed backgrounds can be rgb(), or color()/oklch() from color-mix and
+  // modern themes; a 1px canvas converts any of them to sRGB bytes.
+  function toRgba(color) {
+    const text = String(color || "");
+    const match = text.match(/^rgba?\(([^)]+)\)$/);
+    if (match) {
+      const [r, g, b, a = 1] = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      return [r, g, b, a];
+    }
+    if (!text || text === "transparent") return null;
+    try {
+      const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+      if (!context) return null;
+      context.fillStyle = text;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data;
+      return [r, g, b, alpha / 255];
+    } catch {
+      return null;
+    }
+  }
+
   function withAccessKey(path) {
     const url = new URL(path, location.href);
     if (accessKey) url.searchParams.set("tunelito_key", accessKey);
     return `${url.pathname}${url.search}${url.hash}`;
   }
 
-  function setPanelOpen(open) {
+  function setPanelOpen(open, { moveFocus = false, restoreFocus = false } = {}) {
+    const wasOpen = ui.panel.classList.contains("open");
+    // Pages can change their background after load (hydration, theme
+    // toggles), so re-read the tone whenever the panel opens.
+    if (open && !wasOpen) applyTone(ui.shadow.host);
+    const focusWasInside = ui.panel.contains(ui.shadow.activeElement);
     ui.panel.classList.toggle("open", open);
     ui.launcher.classList.toggle("active", open);
     ui.launcher.setAttribute("aria-expanded", String(open));
     window.dispatchEvent(new CustomEvent("tunelito:comments-panel", { detail: { open } }));
+    // Opening from the launcher moves focus into the panel (on narrow screens
+    // the launcher hides while the panel is open); closing returns it.
+    if (open && !wasOpen && moveFocus) ui.panel.focus({ preventScroll: true });
+    if (!open && wasOpen && (restoreFocus || focusWasInside)) ui.launcher.focus({ preventScroll: true });
   }
 
   function setLaserPointerEnabled(enabled) {
@@ -1223,9 +1429,12 @@
     return event.composedPath().includes(ui.shadow.host);
   }
 
-  function scheduleSelectionCapture() {
+  // selectionchange fires on every caret step of a drag; settle it before
+  // walking the document. mouseup/keyup still show the button right away.
+  function scheduleSelectionCapture(event) {
     clearTimeout(state.selectionTimer);
-    state.selectionTimer = setTimeout(captureCurrentSelection, isMobileViewport() ? 220 : 0);
+    const delay = isMobileViewport() ? 220 : event?.type === "selectionchange" ? 120 : 0;
+    state.selectionTimer = setTimeout(captureCurrentSelection, delay);
   }
 
   function captureCurrentSelection() {
@@ -1254,7 +1463,7 @@
   function captureSelection(range) {
     const quote = range.toString();
     const offsets = rangeTextOffsets(range);
-    const bodyText = readableText(document.body);
+    const bodyText = bodyTextIndex().text;
     let prefix = "";
     let suffix = "";
     if (Number.isFinite(offsets.start)) {
@@ -1284,6 +1493,10 @@
 
   function openComposer() {
     if (!state.pendingSelection) return;
+    // Remember where focus came from so closing the composer can return it.
+    const opener = ui.shadow.activeElement;
+    state.composerOpener = opener && opener !== ui.selection ? opener : null;
+    applyTone(ui.shadow.host);
     hideSelectionButton();
     const rect = state.pendingSelection.rect || (window.getSelection()?.rangeCount ? rectSnapshot(window.getSelection().getRangeAt(0).getBoundingClientRect()) : null);
     state.pendingSelection.scope = normalizeScope(state.pendingSelection.scope);
@@ -1312,8 +1525,18 @@
   }
 
   function closeComposer() {
+    const focusWasInside = ui.composer.contains(ui.shadow.activeElement);
     ui.composer.classList.remove("open");
     state.pendingSelection = null;
+    const opener = state.composerOpener;
+    state.composerOpener = null;
+    if (focusWasInside) {
+      // getClientRects() is empty for anything not rendered, including
+      // controls inside a hidden form or a closed panel.
+      const openerVisible = opener?.isConnected && opener.getClientRects().length > 0;
+      const target = openerVisible ? opener : ui.panel.classList.contains("open") ? ui.panel : ui.launcher;
+      target.focus({ preventScroll: true });
+    }
     flushQueuedReload();
   }
 
@@ -1321,7 +1544,9 @@
     if (!state.pendingSelection) return;
     state.pendingSelection.scope = normalizeScope(scope);
     for (const button of ui.composer.querySelectorAll("[data-scope]")) {
-      button.classList.toggle("active", button.dataset.scope === state.pendingSelection.scope);
+      const selected = button.dataset.scope === state.pendingSelection.scope;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
     }
     ui.composer.querySelector(".composer-scope").textContent = `${scopeLabel(state.pendingSelection.scope)} comment`;
     const textarea = ui.composer.querySelector("textarea");
@@ -1441,10 +1666,18 @@
     ui.resolvedToggle.setAttribute("aria-pressed", String(state.showResolved));
     ui.count.textContent = count > 99 ? "99+" : String(count);
     ui.count.hidden = count === 0;
-    const launcherLabel = count ? `Open Tunelito comments (${count})` : "Open Tunelito comments";
+    // aria-expanded carries open/closed; the label names the control and its count.
+    const launcherLabel = count ? `Tunelito comments (${count})` : "Tunelito comments";
     ui.launcher.setAttribute("aria-label", launcherLabel);
     ui.launcher.title = launcherLabel;
     const visible = state.comments.filter((comment) => state.showResolved || !isResolvedComment(comment));
+    // Re-rendering replaces every card; remember which control had focus so a
+    // keyboard user is not dropped to <body> when a comment or status arrives.
+    const focused = ui.shadow.activeElement;
+    const focusedCard = focused && ui.comments.contains(focused) ? focused.closest(".comment") : null;
+    const restoreFocus = focusedCard
+      ? { id: focusedCard.dataset.commentId, action: focused.dataset.action || "" }
+      : null;
     if (!visible.length) {
       ui.comments.innerHTML = state.comments.length
         ? `<div class="empty">Resolved comments are hidden.</div>`
@@ -1458,13 +1691,14 @@
     for (const comment of visible.slice().reverse()) {
       const item = document.createElement("article");
       item.className = "comment";
+      item.dataset.commentId = comment.id || "";
       item.innerHTML = `
         <div class="meta-row">
           <div class="meta"></div>
           <div class="work-badge" hidden></div>
         </div>
         <div class="quote"></div>
-        <div class="anchor-status" role="status"></div>
+        <div class="anchor-status"></div>
         <div class="body"></div>
         <p class="resolution" hidden></p>
         <div class="approval"></div>
@@ -1476,13 +1710,24 @@
         </div>
       `;
       const scope = normalizeScope(comment.scope);
-      const quote = item.querySelector(".quote");
+      let quote = item.querySelector(".quote");
       const hasQuote = Boolean(String(comment.quote || "").trim());
       item.querySelector(".meta").textContent = `${comment.author}${comment.authorRole === "owner" ? " (owner)" : ""} · ${scope} · ${formatTime(comment.created)}`;
-      quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
-      quote.classList.toggle("note", !hasQuote);
       const expectedOnPage = !comment.pagePath || normalizePagePath(comment.pagePath) === normalizePagePath(state.pagePath);
       const anchorMissing = hasQuote && expectedOnPage && !findRangeForComment(comment);
+      if (hasQuote && expectedOnPage && !anchorMissing) {
+        // The quote is the keyboard path to the commented text; the whole card
+        // stays clickable for pointer users.
+        const jump = document.createElement("button");
+        jump.type = "button";
+        jump.className = "quote jump";
+        jump.dataset.action = "jump";
+        jump.setAttribute("aria-label", `Go to selection: ${compact(comment.quote, 80)}`);
+        quote.replaceWith(jump);
+        quote = jump;
+      }
+      quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
+      quote.classList.toggle("note", !hasQuote);
       if (anchorMissing) {
         item.classList.add("anchor-stale");
         const anchorStatus = item.querySelector(".anchor-status");
@@ -1494,6 +1739,11 @@
       renderCommentWorkStatus(item, comment);
       item.addEventListener("click", () => scrollToComment(comment));
       ui.comments.appendChild(item);
+    }
+    if (restoreFocus?.id) {
+      const card = [...ui.comments.querySelectorAll(".comment")].find((node) => node.dataset.commentId === restoreFocus.id);
+      const target = (restoreFocus.action && card?.querySelector(`[data-action='${restoreFocus.action}']:not([hidden])`)) || card?.querySelector("button:not([hidden])");
+      (target || ui.panel).focus({ preventScroll: true });
     }
     updateHighlights();
     publishSectionCounts();
@@ -1986,8 +2236,12 @@
     if (!range) return;
     const node = closestElement(range.startContainer);
     revealCollapsedAncestors(node);
-    node?.scrollIntoView({ behavior: "smooth", block: "center" });
+    node?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
     flashRange(range);
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   }
 
   function revealCollapsedAncestors(node) {
@@ -2003,8 +2257,7 @@
     const quote = String(comment?.quote || "");
     if (!quote.trim()) return null;
     if (normalizeScope(comment.scope) === "site" && comment.pagePath && normalizePagePath(comment.pagePath) !== normalizePagePath(state.pagePath)) return null;
-    const textNodes = getTextNodes(document.body);
-    const fullText = textNodes.map((entry) => entry.node.textContent).join("");
+    const { nodes: textNodes, text: fullText } = bodyTextIndex();
     const exact = comment.prefix || comment.suffix ? `${comment.prefix}${quote}${comment.suffix}` : null;
     let start = -1;
     if (exact) {
@@ -2145,22 +2398,25 @@
   function flashRange(range) {
     const rect = range.getBoundingClientRect();
     if (!rect || rect.width === 0) return;
+    const reduceMotion = prefersReducedMotion();
     const marker = document.createElement("div");
+    // Document coordinates keep the marker on the text while a smooth scroll
+    // is still moving the viewport.
     marker.style.cssText = `
-      position: fixed;
+      position: absolute;
       z-index: 2147483645;
       pointer-events: none;
-      left: ${rect.left - 3}px;
-      top: ${rect.top - 3}px;
+      left: ${rect.left + window.scrollX - 3}px;
+      top: ${rect.top + window.scrollY - 3}px;
       width: ${rect.width + 6}px;
       height: ${rect.height + 6}px;
       border: 2px solid #0f766e;
       border-radius: 5px;
       background: rgba(45, 212, 191, .16);
-      transition: opacity .5s ease;
+      transition: ${reduceMotion ? "none" : "opacity .5s ease"};
     `;
-    document.body.appendChild(marker);
-    setTimeout(() => marker.style.opacity = "0", 700);
+    document.documentElement.appendChild(marker);
+    setTimeout(() => marker.style.opacity = "0", reduceMotion ? 1200 : 700);
     setTimeout(() => marker.remove(), 1300);
   }
 
@@ -2199,12 +2455,23 @@
     return nodes;
   }
 
-  function readableText(root) {
-    return getTextNodes(root).map((entry) => entry.node.textContent).join("");
+  // One walk of the comment surface serves every lookup in the same task:
+  // a render resolves each comment several times (anchor check, highlights,
+  // section counts), and selection capture needs offsets plus context. The
+  // index is dropped at the next microtask, before any page mutation.
+  let bodyIndexCache = null;
+  function bodyTextIndex() {
+    if (bodyIndexCache) return bodyIndexCache;
+    const nodes = getTextNodes(document.body);
+    bodyIndexCache = { nodes, text: nodes.map((entry) => entry.node.textContent).join("") };
+    queueMicrotask(() => {
+      bodyIndexCache = null;
+    });
+    return bodyIndexCache;
   }
 
   function rangeTextOffsets(range) {
-    const nodes = getTextNodes(document.body);
+    const nodes = bodyTextIndex().nodes;
     const start = offsetForBoundary(nodes, range.startContainer, range.startOffset);
     const end = offsetForBoundary(nodes, range.endContainer, range.endOffset);
     return { start, end };

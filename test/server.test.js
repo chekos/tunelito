@@ -734,7 +734,10 @@ test("directory mode supports page notes and site-wide comments", async () => {
     assert.match(clientScript, /Site note/);
     assert.match(clientScript, /data-scope="site"/);
     assert.match(clientScript, /class="launcher-glyph"/);
-    assert.match(clientScript, /aria-label="Open Tunelito comments"/);
+    assert.match(clientScript, /aria-label="Tunelito comments" aria-expanded="false" aria-controls="tunelito-panel"/);
+    assert.match(clientScript, /aria-label="Close comments"/);
+    assert.match(clientScript, /data-scope="page" aria-pressed="false"/);
+    assert.match(clientScript, /Go to selection: /);
     assert.match(clientScript, /work-badge/);
     assert.match(clientScript, /Agent work status/);
     assert.match(clientScript, /Assigned as/);
