@@ -192,8 +192,8 @@ const THEMES = {
   technical: `
 :root[data-tunelito-theme="technical"] {
   color-scheme: light dark;
-  --tl-font-body: Inter, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
-  --tl-font-display: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  --tl-font-body: "IBM Plex Sans", "Segoe UI Variable Text", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  --tl-font-display: "IBM Plex Sans", "Segoe UI Variable Display", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
   --tl-font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
   --tl-page-bg: #edf2f7;
   --tl-paper-bg: #fdfefe;
@@ -283,8 +283,11 @@ const THEMES = {
   "bns-pitaya": `
 :root[data-tunelito-theme="bns-pitaya"] {
   color-scheme: dark;
-  --tl-font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --tl-font-display: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Installed humanist faces, no network fonts: Seravek (macOS) or Aptos /
+     Segoe UI Variable (Windows) for reading, flared Optima or Candara for
+     headings. */
+  --tl-font-body: Seravek, Aptos, "Segoe UI Variable Text", "Gill Sans Nova", ui-sans-serif, system-ui, sans-serif;
+  --tl-font-display: Optima, Candara, "Segoe UI Variable Display", ui-sans-serif, system-ui, sans-serif;
   --tl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --tl-page-bg: #0c0c10;
   --tl-paper-bg: #121318;

@@ -147,6 +147,11 @@ body {
   letter-spacing: 0.02em;
 }
 .tunelito-markdown p,
+.tunelito-markdown li,
+.tunelito-markdown blockquote {
+  text-wrap: pretty;
+}
+.tunelito-markdown p,
 .tunelito-markdown ul,
 .tunelito-markdown ol,
 .tunelito-markdown blockquote,
@@ -220,14 +225,6 @@ body {
   background: color-mix(in srgb, var(--tl-properties-bg) 92%, transparent);
   backdrop-filter: blur(12px);
 }
-.tunelito-properties-kicker {
-  margin: 0 0 3px;
-  color: var(--tl-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
 .tunelito-properties-title {
   margin: 0;
   color: var(--tl-text);
@@ -241,11 +238,8 @@ body {
 .tunelito-sidebar-section + .tunelito-sidebar-section {
   border-top: 1px solid var(--tl-border);
 }
-.tunelito-sidebar-section-header {
-  margin-bottom: 12px;
-}
 .tunelito-sidebar-section-title {
-  margin: 0;
+  margin: 0 0 12px;
   color: var(--tl-text);
   font-family: var(--tl-font-display);
   font-size: 0.92rem;
@@ -1471,19 +1465,13 @@ function renderSidebar(frontMatter, navigation) {
     "    </button>",
     '    <aside class="tunelito-properties" id="tunelito-properties" aria-label="Tunelito document sidebar" data-tunelito-comment-ignore>',
     '      <header class="tunelito-properties-header">',
-    "        <div>",
-    '          <p class="tunelito-properties-kicker">Tunelito review</p>',
-    '          <h2 class="tunelito-properties-title">Document sidebar</h2>',
-    "        </div>",
+    '        <h2 class="tunelito-properties-title">Tunelito review</h2>',
     '        <button class="tunelito-properties-collapse" type="button" aria-controls="tunelito-properties" aria-expanded="true" aria-label="Collapse document sidebar">←</button>',
     "      </header>",
     navigationContent,
     hasProperties ? [
       '      <section class="tunelito-sidebar-section tunelito-properties-section" aria-labelledby="tunelito-properties-title">',
-      '        <header class="tunelito-sidebar-section-header">',
-      '          <p class="tunelito-properties-kicker">Source metadata</p>',
-      `          <h3 class="tunelito-sidebar-section-title" id="tunelito-properties-title">Properties · ${escapeHtml(countLabel)}</h3>`,
-      "        </header>",
+      `        <h3 class="tunelito-sidebar-section-title" id="tunelito-properties-title">Source properties · ${escapeHtml(countLabel)}</h3>`,
       propertyContent,
       "      </section>",
     ].join("\n") : "",
@@ -1496,11 +1484,8 @@ function renderNavigation(entries) {
     ? `<ul class="tunelito-navigation-list">\n${entries.map(renderNavigationEntry).join("\n")}\n        </ul>`
     : '<p class="tunelito-navigation-empty">No served documents are available.</p>';
   return [
-    '      <nav class="tunelito-sidebar-section tunelito-navigation" aria-labelledby="tunelito-navigation-title">',
-    '        <header class="tunelito-sidebar-section-header">',
-    '          <p class="tunelito-properties-kicker">Tunelito navigation</p>',
-    '          <h3 class="tunelito-sidebar-section-title" id="tunelito-navigation-title">Served documents</h3>',
-    "        </header>",
+    '      <nav class="tunelito-sidebar-section tunelito-navigation" aria-label="Tunelito navigation">',
+    '        <h3 class="tunelito-sidebar-section-title" id="tunelito-navigation-title">Served documents</h3>',
     content,
     "      </nav>",
   ].join("\n");

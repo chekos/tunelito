@@ -65,10 +65,10 @@ test("renderMarkdownDocument keeps injected navigation distinct from source prop
     },
   });
 
-  assert.match(html, /Tunelito navigation/);
+  assert.match(html, /<nav class="tunelito-sidebar-section tunelito-navigation" aria-label="Tunelito navigation">/);
   assert.match(html, /Served documents/);
-  assert.match(html, /Source metadata/);
-  assert.match(html, /Properties · 1/);
+  assert.match(html, /Source properties · 1/);
+  assert.doesNotMatch(html, /tunelito-properties-kicker/, "sidebar headings carry provenance without eyebrow labels");
   assert.match(html, /href="\/Project%20brief\.md" aria-current="page"/);
   assert.match(html, />Current<\/span>/);
   assert.match(html, /<details class="tunelito-navigation-folder">/);
@@ -87,8 +87,8 @@ test("renderMarkdownDocument shows directory navigation without an empty propert
   });
 
   assert.match(html, /class="tunelito-has-sidebar tunelito-properties-open"/);
-  assert.match(html, /Tunelito navigation/);
-  assert.doesNotMatch(html, /Source metadata/);
+  assert.match(html, /aria-label="Tunelito navigation"/);
+  assert.doesNotMatch(html, /Source properties/);
   assert.doesNotMatch(html, /Properties · 0/);
 });
 
