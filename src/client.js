@@ -145,7 +145,73 @@
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
-        :host { all: initial; color-scheme: light; }
+        :host {
+          all: initial;
+          color-scheme: light;
+          --ui-surface: #fff;
+          --ui-surface-2: #f8fafc;
+          --ui-text: #172033;
+          --ui-text-2: #334155;
+          --ui-muted: #5b6678;
+          --ui-divider: #e5e9f0;
+          --ui-border: #d7dde8;
+          --ui-input-border: #8792a2;
+          --ui-accent: #0f766e;
+          --ui-accent-text: #0f766e;
+          --ui-on-accent: #fff;
+          --ui-accent-soft: #f0fdfa;
+          --ui-accent-soft-2: #ccfbf1;
+          --ui-accent-border: #5eead4;
+          --ui-focus: #0f766e;
+          --ui-ok-soft: #f3fcf6;
+          --ui-ok-badge: #dcfce7;
+          --ui-ok-border: #86efac;
+          --ui-ok-text: #166534;
+          --ui-ok-mark: #16a34a;
+          --ui-warn-soft: #fefce8;
+          --ui-warn-badge: #fef9c3;
+          --ui-warn-border: #facc15;
+          --ui-warn-text: #854d0e;
+          --ui-danger-soft: #fff5f5;
+          --ui-danger-badge: #fee2e2;
+          --ui-danger-border: #fca5a5;
+          --ui-danger-text: #991b1b;
+          --ui-shadow: rgba(15, 23, 42, .25);
+        }
+        /* Dark tokens follow the reviewed page (dark Markdown themes, dark
+           HTML pages) or the OS preference; see detectTone(). */
+        :host([data-tone="dark"]) {
+          color-scheme: dark;
+          --ui-surface: #161b26;
+          --ui-surface-2: #1c2230;
+          --ui-text: #e6eaf2;
+          --ui-text-2: #c5ccd8;
+          --ui-muted: #9ba6b8;
+          --ui-divider: #2a3242;
+          --ui-border: #3a4457;
+          --ui-input-border: #6f7b90;
+          --ui-accent: #0f766e;
+          --ui-accent-text: #5eead4;
+          --ui-on-accent: #fff;
+          --ui-accent-soft: rgba(45, 212, 191, .1);
+          --ui-accent-soft-2: rgba(45, 212, 191, .18);
+          --ui-accent-border: rgba(94, 234, 212, .5);
+          --ui-focus: #5eead4;
+          --ui-ok-soft: rgba(34, 197, 94, .08);
+          --ui-ok-badge: rgba(34, 197, 94, .16);
+          --ui-ok-border: rgba(134, 239, 172, .45);
+          --ui-ok-text: #86efac;
+          --ui-ok-mark: #22c55e;
+          --ui-warn-soft: rgba(234, 179, 8, .08);
+          --ui-warn-badge: rgba(234, 179, 8, .16);
+          --ui-warn-border: rgba(250, 204, 21, .5);
+          --ui-warn-text: #fcd34d;
+          --ui-danger-soft: rgba(239, 68, 68, .08);
+          --ui-danger-badge: rgba(239, 68, 68, .16);
+          --ui-danger-border: rgba(252, 165, 165, .45);
+          --ui-danger-text: #fca5a5;
+          --ui-shadow: rgba(0, 0, 0, .55);
+        }
         *, *::before, *::after { box-sizing: border-box; }
         .launcher {
           position: fixed;
@@ -182,6 +248,8 @@
           outline: 2px solid #2dd4bf;
           outline-offset: 3px;
         }
+        /* The launcher floats over arbitrary page content, so it keeps its own
+           dark glass in both tones; the ring stays bright for that reason. */
         .launcher-glyph {
           position: relative;
           display: block;
@@ -225,7 +293,7 @@
           border: 2px solid #fff;
           background: #0f766e;
           color: #fff;
-          font: 800 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font: 800 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 0 4px;
         }
         .count[hidden] {
@@ -241,11 +309,11 @@
           display: none;
           grid-template-rows: auto auto auto 1fr auto;
           overflow: hidden;
-          border: 1px solid rgba(15, 23, 42, .14);
+          border: 1px solid var(--ui-border);
           border-radius: 10px;
-          background: #fff;
-          color: #172033;
-          box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
+          background: var(--ui-surface);
+          color: var(--ui-text);
+          box-shadow: 0 24px 70px var(--ui-shadow);
           font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .panel.open { display: grid; }
@@ -254,7 +322,7 @@
           align-items: center;
           gap: 10px;
           padding: 13px 14px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid var(--ui-divider);
         }
         .title { flex: 1; min-width: 0; }
         .title strong {
@@ -265,25 +333,25 @@
           font-size: 14px;
         }
         .status {
-          color: #64748b;
+          color: var(--ui-muted);
           font-size: 12px;
         }
         .icon-button {
           width: 30px;
           height: 30px;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
-          background: #fff;
-          color: #334155;
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           cursor: pointer;
           font-size: 18px;
           line-height: 1;
         }
         .resolved-toggle {
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 999px;
-          background: #fff;
-          color: #334155;
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           cursor: pointer;
           font: 650 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 10px;
@@ -292,26 +360,26 @@
         .resolved-toggle[hidden] { display: none; }
         .resolution {
           margin: 0 0 8px;
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 13px;
         }
         .resolution[hidden] { display: none; }
         .identity {
           padding: 12px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #f8fafc;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface-2);
         }
         .identity-card {
           display: grid;
           gap: 8px;
           min-width: 0;
-          border: 1px solid #dbe5ef;
+          border: 1px solid var(--ui-divider);
           border-radius: 8px;
-          background: #fff;
+          background: var(--ui-surface);
           padding: 10px;
         }
         .identity-label {
-          color: #64748b;
+          color: var(--ui-muted);
           font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           text-transform: uppercase;
           letter-spacing: 0;
@@ -326,24 +394,20 @@
           flex: 1;
           min-width: 0;
           overflow-wrap: anywhere;
-          color: #172033;
+          color: var(--ui-text);
           font: 800 15px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .identity-edit {
           flex: 0 0 auto;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
-          background: #fff;
-          color: #0f766e;
+          background: var(--ui-surface);
+          color: var(--ui-accent-text);
           cursor: pointer;
           font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
         }
-        .identity-edit:hover { border-color: #99f6e4; background: #f0fdfa; }
-        .identity-edit:focus-visible {
-          outline: 2px solid #2dd4bf;
-          outline-offset: 2px;
-        }
+        .identity-edit:hover { border-color: var(--ui-accent-border); background: var(--ui-accent-soft); }
         .identity-form {
           display: grid;
           gap: 8px;
@@ -358,8 +422,8 @@
           display: flex;
           gap: 8px;
           padding: 10px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #fff;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface);
         }
         .note-actions button {
           flex: 1;
@@ -371,15 +435,15 @@
           display: grid;
           gap: 6px;
           padding: 10px 14px;
-          border-bottom: 1px solid #eef2f7;
-          background: #fff;
+          border-bottom: 1px solid var(--ui-divider);
+          background: var(--ui-surface);
         }
         .handoff-button {
           width: 100%;
         }
         .handoff-status {
           min-height: 16px;
-          color: #64748b;
+          color: var(--ui-muted);
           font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           overflow-wrap: anywhere;
         }
@@ -390,9 +454,9 @@
           gap: 6px;
         }
         .pointer-button[aria-pressed="true"] {
-          border-color: #f87171;
-          background: #fff1f2;
-          color: #991b1b;
+          border-color: var(--ui-danger-border);
+          background: var(--ui-danger-badge);
+          color: var(--ui-danger-text);
         }
         .pointer-dot {
           width: 10px;
@@ -404,10 +468,10 @@
         }
         input, textarea {
           width: 100%;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-input-border);
           border-radius: 7px;
-          background: #fff;
-          color: #172033;
+          background: var(--ui-surface);
+          color: var(--ui-text);
           font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 9px 10px;
         }
@@ -417,38 +481,40 @@
           padding: 10px 10px 14px;
         }
         .empty {
-          color: #64748b;
+          color: var(--ui-muted);
           padding: 22px 12px;
           text-align: center;
           font-size: 13px;
         }
         .comment {
-          border: 1px solid #e2e8f0;
+          border: 1px solid var(--ui-divider);
           border-radius: 8px;
           padding: 10px;
           margin: 0 0 9px;
           cursor: pointer;
         }
-        .comment:hover { border-color: #94a3b8; }
+        .comment:hover { border-color: var(--ui-input-border); }
         .comment.work-active {
-          border-color: #5eead4;
-          background: #f0fdfa;
+          border-color: var(--ui-accent-border);
+          background: var(--ui-accent-soft);
         }
+        /* Done comments recede through tint and a dashed edge, never opacity,
+           so their text keeps full contrast. */
         .comment.work-done {
-          border-color: #86efac;
-          background: #f7fef9;
-          opacity: 0.72;
+          border-color: var(--ui-ok-border);
+          border-style: dashed;
+          background: var(--ui-ok-soft);
         }
         .comment.work-warning {
-          border-color: #facc15;
-          background: #fefce8;
+          border-color: var(--ui-warn-border);
+          background: var(--ui-warn-soft);
         }
         .comment.work-danger {
-          border-color: #fca5a5;
-          background: #fff7f7;
+          border-color: var(--ui-danger-border);
+          background: var(--ui-danger-soft);
         }
         .comment.work-muted {
-          background: #f8fafc;
+          background: var(--ui-surface-2);
         }
         .meta-row {
           display: flex;
@@ -467,28 +533,28 @@
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          border: 1px solid #cbd5e1;
+          border: 1px solid var(--ui-border);
           border-radius: 999px;
-          background: #f8fafc;
-          color: #475569;
+          background: var(--ui-surface-2);
+          color: var(--ui-text-2);
           font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 5px 7px;
         }
-        .work-badge.active { border-color: #2dd4bf; background: #ccfbf1; color: #115e59; }
-        .work-badge.done { border-color: #86efac; background: #dcfce7; color: #166534; }
-        .work-badge.warning { border-color: #fde047; background: #fef9c3; color: #854d0e; }
-        .work-badge.danger { border-color: #fca5a5; background: #fee2e2; color: #991b1b; }
+        .work-badge.active { border-color: var(--ui-accent-border); background: var(--ui-accent-soft-2); color: var(--ui-accent-text); }
+        .work-badge.done { border-color: var(--ui-ok-border); background: var(--ui-ok-badge); color: var(--ui-ok-text); }
+        .work-badge.warning { border-color: var(--ui-warn-border); background: var(--ui-warn-badge); color: var(--ui-warn-text); }
+        .work-badge.danger { border-color: var(--ui-danger-border); background: var(--ui-danger-badge); color: var(--ui-danger-text); }
         .work {
           display: none;
           margin-top: 9px;
-          border-top: 1px solid rgba(148, 163, 184, .28);
+          border-top: 1px solid var(--ui-divider);
           padding-top: 8px;
         }
         .work.visible { display: block; }
         .approval {
           display: none;
           margin-top: 8px;
-          color: #0f766e;
+          color: var(--ui-accent-text);
           font-size: 12px;
           font-weight: 700;
           line-height: 1.35;
@@ -501,19 +567,15 @@
           margin-top: 9px;
         }
         .approve-button {
-          border: 1px solid #99f6e4;
+          border: 1px solid var(--ui-accent-border);
           border-radius: 7px;
-          background: #f0fdfa;
-          color: #0f766e;
+          background: var(--ui-accent-soft);
+          color: var(--ui-accent-text);
           cursor: pointer;
           font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
         }
-        .approve-button:hover { border-color: #2dd4bf; background: #ccfbf1; }
-        .approve-button:focus-visible {
-          outline: 2px solid #2dd4bf;
-          outline-offset: 2px;
-        }
+        .approve-button:hover { background: var(--ui-accent-soft-2); }
         .work-list {
           display: grid;
           gap: 5px;
@@ -526,7 +588,7 @@
           grid-template-columns: 16px 1fr;
           gap: 6px;
           align-items: start;
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 12px;
         }
         .work-task::before {
@@ -534,30 +596,30 @@
           width: 13px;
           height: 13px;
           margin-top: 2px;
-          border: 1px solid #94a3b8;
+          border: 1px solid var(--ui-input-border);
           border-radius: 4px;
-          background: #fff;
+          background: var(--ui-surface);
         }
         .work-task.done {
-          color: #64748b;
+          color: var(--ui-muted);
           text-decoration: line-through;
           text-decoration-thickness: 1px;
         }
         .work-task.done::before {
-          border-color: #16a34a;
-          background: #16a34a;
-          box-shadow: inset 0 0 0 3px #fff;
+          border-color: var(--ui-ok-mark);
+          background: var(--ui-ok-mark);
+          box-shadow: inset 0 0 0 3px var(--ui-surface);
         }
         .quote {
-          color: #334155;
+          color: var(--ui-text-2);
           font-size: 12px;
-          border-left: 3px solid #99f6e4;
+          border-left: 3px solid var(--ui-accent-border);
           padding-left: 8px;
           margin-bottom: 8px;
         }
         .quote.note {
-          color: #64748b;
-          border-left-color: #cbd5e1;
+          color: var(--ui-muted);
+          border-left-color: var(--ui-border);
         }
         button.quote {
           display: block;
@@ -579,28 +641,28 @@
         input:focus-visible,
         textarea:focus-visible,
         a:focus-visible {
-          outline: 2px solid #0f766e;
+          outline: 2px solid var(--ui-focus);
           outline-offset: 2px;
         }
         .anchor-status {
           display: none;
           margin: -2px 0 8px 11px;
-          color: #92400e;
+          color: var(--ui-warn-text);
           font-size: 11px;
           font-weight: 700;
           line-height: 1.35;
         }
         .anchor-status.visible { display: block; }
-        .comment.anchor-stale .quote { border-left-color: #f59e0b; }
+        .comment.anchor-stale .quote { border-left-color: var(--ui-warn-border); }
         .meta {
-          color: #64748b;
+          color: var(--ui-muted);
           font-size: 12px;
           margin-bottom: 4px;
           overflow-wrap: anywhere;
         }
         .meta-row .meta { margin-bottom: 0; }
         .body {
-          color: #172033;
+          color: var(--ui-text);
           white-space: pre-wrap;
         }
         .footer {
@@ -609,11 +671,11 @@
           align-items: center;
           gap: 10px;
           padding: 10px 14px;
-          border-top: 1px solid #e5e7eb;
-          background: #f8fafc;
+          border-top: 1px solid var(--ui-divider);
+          background: var(--ui-surface-2);
         }
         .link {
-          color: #0f766e;
+          color: var(--ui-accent-text);
           text-decoration: none;
           font-weight: 600;
           font-size: 12px;
@@ -654,11 +716,11 @@
           position: fixed;
           z-index: 2147483647;
           display: none;
-          border: 1px solid #0f766e;
+          border: 1px solid var(--ui-accent);
           border-radius: 999px;
-          background: #0f766e;
-          color: #fff;
-          box-shadow: 0 12px 32px rgba(15, 23, 42, .22);
+          background: var(--ui-accent);
+          color: var(--ui-on-accent);
+          box-shadow: 0 12px 32px var(--ui-shadow);
           font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 9px 12px;
           cursor: pointer;
@@ -703,10 +765,11 @@
           width: min(360px, calc(100vw - 24px));
           max-height: calc(100vh - 16px);
           overflow: auto;
-          border: 1px solid rgba(15, 23, 42, .16);
+          border: 1px solid var(--ui-border);
           border-radius: 10px;
-          background: #fff;
-          box-shadow: 0 22px 60px rgba(15, 23, 42, .24);
+          background: var(--ui-surface);
+          color: var(--ui-text);
+          box-shadow: 0 22px 60px var(--ui-shadow);
           padding: 12px;
         }
         .composer.open { display: block; }
@@ -718,28 +781,28 @@
           margin-bottom: 9px;
         }
         .composer-scope {
-          color: #64748b;
+          color: var(--ui-muted);
           font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .scope-toggle {
           display: inline-flex;
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
           overflow: hidden;
         }
         .scope-toggle button {
           border: 0;
-          border-right: 1px solid #d7dde8;
-          background: #fff;
-          color: #334155;
+          border-right: 1px solid var(--ui-border);
+          background: var(--ui-surface);
+          color: var(--ui-text-2);
           font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 7px 9px;
           cursor: pointer;
         }
         .scope-toggle button:last-child { border-right: 0; }
         .scope-toggle button.active {
-          background: #0f766e;
-          color: #fff;
+          background: var(--ui-accent);
+          color: var(--ui-on-accent);
         }
         .composer .actions {
           display: flex;
@@ -748,14 +811,15 @@
           margin-top: 9px;
         }
         button.secondary, button.primary {
-          border: 1px solid #d7dde8;
+          border: 1px solid var(--ui-border);
           border-radius: 7px;
           padding: 8px 10px;
           font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           cursor: pointer;
         }
-        button.secondary { background: #fff; color: #334155; }
-        button.primary { border-color: #0f766e; background: #0f766e; color: #fff; }
+        button.secondary { background: var(--ui-surface); color: var(--ui-text-2); }
+        button.secondary:hover { background: var(--ui-surface-2); }
+        button.primary { border-color: var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent); }
         @media (max-width: 640px) {
           .launcher {
             right: max(10px, env(safe-area-inset-right));
@@ -890,6 +954,9 @@
       </aside>
     `;
     document.documentElement.appendChild(host);
+    applyTone(host);
+    const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+    darkQuery?.addEventListener?.("change", () => applyTone(host));
 
     const panel = shadow.querySelector(".panel");
     const launcher = shadow.querySelector(".launcher");
@@ -984,6 +1051,34 @@
       handoffButton,
       handoffStatus: shadow.querySelector(".handoff-status"),
     };
+  }
+
+  // The panel matches the page under review: a dark Markdown theme or a dark
+  // HTML page gets the dark tokens, a light page the light ones, and a page
+  // without an opaque background follows the OS preference.
+  function applyTone(host) {
+    host.dataset.tone = detectTone();
+  }
+
+  function detectTone() {
+    for (const element of [document.body, document.documentElement]) {
+      if (!element) continue;
+      const luminance = backgroundLuminance(getComputedStyle(element).backgroundColor);
+      if (luminance !== null) return luminance < 0.4 ? "dark" : "light";
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function backgroundLuminance(color) {
+    const match = String(color).match(/rgba?\(([^)]+)\)/);
+    if (!match) return null;
+    const [r, g, b, a = 1] = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if (!(a > 0.5)) return null;
+    const channel = (value) => {
+      const c = value / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
   }
 
   function withAccessKey(path) {

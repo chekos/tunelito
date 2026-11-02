@@ -99,7 +99,7 @@
       .tunelito-source-editor button[data-action="save"] { border-color: var(--tl-accent); background: var(--tl-accent); color: var(--tl-paper-bg); }
       .tunelito-source-editor button[data-action="save"]:hover { background: var(--tl-accent-strong); color: var(--tl-paper-bg); }
       .tunelito-source-editor button[data-action="discard"],
-      .tunelito-source-editor button[data-action="reload"] { border-color: #b45309; color: #92400e; }
+      .tunelito-source-editor button[data-action="reload"] { border-color: var(--tl-tone-warning); color: var(--tl-tone-warning); }
       .tunelito-source-editor button:disabled { cursor: wait; opacity: 0.58; }
       .tunelito-source-editor-workspace {
         min-height: 0;
@@ -128,7 +128,7 @@
         font: 650 0.74rem/1.4 var(--tl-font-body);
         overflow-wrap: anywhere;
       }
-      .tunelito-source-editor-status[data-tone="error"] { color: #b45309; }
+      .tunelito-source-editor-status[data-tone="error"] { color: var(--tl-tone-danger); }
       .tunelito-source-editor-stats { flex: 0 0 auto; color: var(--tl-muted); font: 600 0.7rem/1 var(--tl-font-mono); }
       body.tunelito-source-editor-open { overflow: hidden; }
       body.tunelito-source-editor-open #tunelito-root { visibility: hidden; }
