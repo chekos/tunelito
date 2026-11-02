@@ -628,8 +628,9 @@
           border-right: 0;
           border-bottom: 0;
           background: none;
-          padding-top: 0;
-          padding-bottom: 0;
+          min-height: 24px;
+          padding-top: 4px;
+          padding-bottom: 4px;
           font: inherit;
           font-size: 12px;
           text-align: left;
