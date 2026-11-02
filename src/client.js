@@ -559,6 +559,29 @@
           color: #64748b;
           border-left-color: #cbd5e1;
         }
+        button.quote {
+          display: block;
+          width: 100%;
+          border-top: 0;
+          border-right: 0;
+          border-bottom: 0;
+          background: none;
+          padding-top: 0;
+          padding-bottom: 0;
+          font: inherit;
+          font-size: 12px;
+          text-align: left;
+          cursor: pointer;
+        }
+        button.quote:hover { text-decoration: underline; text-underline-offset: 2px; }
+        .panel:focus { outline: none; }
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        a:focus-visible {
+          outline: 2px solid #0f766e;
+          outline-offset: 2px;
+        }
         .anchor-status {
           display: none;
           margin: -2px 0 8px 11px;
@@ -801,35 +824,35 @@
           }
         }
       </style>
-      <button class="launcher" type="button" title="Open Tunelito comments" aria-label="Open Tunelito comments" aria-expanded="false">
+      <button class="launcher" type="button" title="Tunelito comments" aria-label="Tunelito comments" aria-expanded="false" aria-controls="tunelito-panel">
         <span class="launcher-glyph" aria-hidden="true"></span>
         <span class="count" hidden>0</span>
       </button>
-      <button class="selection">Comment</button>
+      <button class="selection" type="button">Comment</button>
       <div class="laser" aria-hidden="true"></div>
       <div class="composer" role="dialog" aria-label="Add comment">
         <div class="composer-meta">
           <span class="composer-scope">Page comment</span>
           <div class="scope-toggle" role="group" aria-label="Comment scope">
-            <button type="button" data-scope="page">Page</button>
-            <button type="button" data-scope="site">Site</button>
+            <button type="button" data-scope="page" aria-pressed="false">Page</button>
+            <button type="button" data-scope="site" aria-pressed="false">Site</button>
           </div>
         </div>
         <div class="quote"></div>
-        <textarea placeholder="Leave a comment on this selection"></textarea>
+        <textarea aria-label="Comment" placeholder="Leave a comment on this selection"></textarea>
         <div class="actions">
-          <button class="secondary" data-action="cancel">Cancel</button>
-          <button class="primary" data-action="save">Add comment</button>
+          <button class="secondary" type="button" data-action="cancel">Cancel</button>
+          <button class="primary" type="button" data-action="save">Add comment</button>
         </div>
       </div>
-      <aside class="panel" aria-label="Tunelito comments">
+      <aside class="panel" id="tunelito-panel" aria-label="Tunelito comments" tabindex="-1">
         <div class="header">
           <div class="title">
             <strong></strong>
-            <div class="status">Connecting...</div>
+            <div class="status" role="status">Connecting...</div>
           </div>
           <button class="resolved-toggle" type="button" hidden>Show resolved</button>
-          <button class="icon-button" title="Close">×</button>
+          <button class="icon-button" type="button" title="Close comments" aria-label="Close comments"><span aria-hidden="true">×</span></button>
         </div>
         <div class="identity">
           <div class="identity-card">
@@ -839,7 +862,7 @@
               <button class="identity-edit" type="button" title="Edit reviewer name" aria-label="Edit reviewer name">Edit</button>
             </div>
             <form class="identity-form" hidden>
-              <input class="name" autocomplete="name" placeholder="Reviewer name" />
+              <input class="name" autocomplete="name" aria-label="Reviewer name" placeholder="Reviewer name" />
               <div class="identity-actions">
                 <button class="secondary" data-action="cancel-name" type="button">Cancel</button>
                 <button class="primary" data-action="save-name" type="submit">Save</button>
@@ -848,8 +871,8 @@
           </div>
         </div>
         <div class="note-actions" aria-label="Add unanchored comment">
-          <button class="secondary" data-action="page-note">Page note</button>
-          <button class="secondary" data-action="site-note">Site note</button>
+          <button class="secondary" type="button" data-action="page-note">Page note</button>
+          <button class="secondary" type="button" data-action="site-note">Site note</button>
           <button class="secondary pointer-button" data-action="laser-pointer" type="button" aria-pressed="false" title="Toggle laser pointer">
             <span class="pointer-dot" aria-hidden="true"></span>
             <span>Pointer</span>
@@ -893,8 +916,13 @@
       } catch {}
       renderComments();
     });
-    launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
-    shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false));
+    launcher.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open"), { moveFocus: true }));
+    shadow.querySelector(".icon-button").addEventListener("click", () => setPanelOpen(false, { restoreFocus: true }));
+    panel.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setPanelOpen(false, { restoreFocus: true });
+    });
     identityEdit.addEventListener("click", () => openIdentityEditor());
     identityForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -902,7 +930,9 @@
     });
     identityForm.querySelector("[data-action='cancel-name']").addEventListener("click", () => closeIdentityEditor({ restoreFocus: true }));
     name.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeIdentityEditor({ restoreFocus: true });
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeIdentityEditor({ restoreFocus: true });
     });
     selection.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -922,7 +952,14 @@
     composer.querySelector("[data-action='save']").addEventListener("click", submitComment);
     composer.querySelector("textarea").addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitComment();
-      if (event.key === "Escape") closeComposer();
+    });
+    // Escape anywhere in the composer (textarea, scope toggle, buttons) closes it
+    // and is consumed so page-level Escape handlers do not also fire.
+    composer.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeComposer();
     });
 
     return {
@@ -955,11 +992,17 @@
     return `${url.pathname}${url.search}${url.hash}`;
   }
 
-  function setPanelOpen(open) {
+  function setPanelOpen(open, { moveFocus = false, restoreFocus = false } = {}) {
+    const wasOpen = ui.panel.classList.contains("open");
+    const focusWasInside = ui.panel.contains(ui.shadow.activeElement);
     ui.panel.classList.toggle("open", open);
     ui.launcher.classList.toggle("active", open);
     ui.launcher.setAttribute("aria-expanded", String(open));
     window.dispatchEvent(new CustomEvent("tunelito:comments-panel", { detail: { open } }));
+    // Opening from the launcher moves focus into the panel (on narrow screens
+    // the launcher hides while the panel is open); closing returns it.
+    if (open && !wasOpen && moveFocus) ui.panel.focus({ preventScroll: true });
+    if (!open && wasOpen && (restoreFocus || focusWasInside)) ui.launcher.focus({ preventScroll: true });
   }
 
   function setLaserPointerEnabled(enabled) {
@@ -1284,6 +1327,9 @@
 
   function openComposer() {
     if (!state.pendingSelection) return;
+    // Remember where focus came from so closing the composer can return it.
+    const opener = ui.shadow.activeElement;
+    state.composerOpener = opener && opener !== ui.selection ? opener : null;
     hideSelectionButton();
     const rect = state.pendingSelection.rect || (window.getSelection()?.rangeCount ? rectSnapshot(window.getSelection().getRangeAt(0).getBoundingClientRect()) : null);
     state.pendingSelection.scope = normalizeScope(state.pendingSelection.scope);
@@ -1312,8 +1358,15 @@
   }
 
   function closeComposer() {
+    const focusWasInside = ui.composer.contains(ui.shadow.activeElement);
     ui.composer.classList.remove("open");
     state.pendingSelection = null;
+    const opener = state.composerOpener;
+    state.composerOpener = null;
+    if (focusWasInside) {
+      const target = opener?.isConnected && !opener.hidden ? opener : ui.panel.classList.contains("open") ? ui.panel : ui.launcher;
+      target.focus({ preventScroll: true });
+    }
     flushQueuedReload();
   }
 
@@ -1321,7 +1374,9 @@
     if (!state.pendingSelection) return;
     state.pendingSelection.scope = normalizeScope(scope);
     for (const button of ui.composer.querySelectorAll("[data-scope]")) {
-      button.classList.toggle("active", button.dataset.scope === state.pendingSelection.scope);
+      const selected = button.dataset.scope === state.pendingSelection.scope;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
     }
     ui.composer.querySelector(".composer-scope").textContent = `${scopeLabel(state.pendingSelection.scope)} comment`;
     const textarea = ui.composer.querySelector("textarea");
@@ -1441,10 +1496,18 @@
     ui.resolvedToggle.setAttribute("aria-pressed", String(state.showResolved));
     ui.count.textContent = count > 99 ? "99+" : String(count);
     ui.count.hidden = count === 0;
-    const launcherLabel = count ? `Open Tunelito comments (${count})` : "Open Tunelito comments";
+    // aria-expanded carries open/closed; the label names the control and its count.
+    const launcherLabel = count ? `Tunelito comments (${count})` : "Tunelito comments";
     ui.launcher.setAttribute("aria-label", launcherLabel);
     ui.launcher.title = launcherLabel;
     const visible = state.comments.filter((comment) => state.showResolved || !isResolvedComment(comment));
+    // Re-rendering replaces every card; remember which control had focus so a
+    // keyboard user is not dropped to <body> when a comment or status arrives.
+    const focused = ui.shadow.activeElement;
+    const focusedCard = focused && ui.comments.contains(focused) ? focused.closest(".comment") : null;
+    const restoreFocus = focusedCard
+      ? { id: focusedCard.dataset.commentId, action: focused.dataset.action || "" }
+      : null;
     if (!visible.length) {
       ui.comments.innerHTML = state.comments.length
         ? `<div class="empty">Resolved comments are hidden.</div>`
@@ -1458,13 +1521,14 @@
     for (const comment of visible.slice().reverse()) {
       const item = document.createElement("article");
       item.className = "comment";
+      item.dataset.commentId = comment.id || "";
       item.innerHTML = `
         <div class="meta-row">
           <div class="meta"></div>
           <div class="work-badge" hidden></div>
         </div>
         <div class="quote"></div>
-        <div class="anchor-status" role="status"></div>
+        <div class="anchor-status"></div>
         <div class="body"></div>
         <p class="resolution" hidden></p>
         <div class="approval"></div>
@@ -1476,13 +1540,24 @@
         </div>
       `;
       const scope = normalizeScope(comment.scope);
-      const quote = item.querySelector(".quote");
+      let quote = item.querySelector(".quote");
       const hasQuote = Boolean(String(comment.quote || "").trim());
       item.querySelector(".meta").textContent = `${comment.author}${comment.authorRole === "owner" ? " (owner)" : ""} · ${scope} · ${formatTime(comment.created)}`;
-      quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
-      quote.classList.toggle("note", !hasQuote);
       const expectedOnPage = !comment.pagePath || normalizePagePath(comment.pagePath) === normalizePagePath(state.pagePath);
       const anchorMissing = hasQuote && expectedOnPage && !findRangeForComment(comment);
+      if (hasQuote && expectedOnPage && !anchorMissing) {
+        // The quote is the keyboard path to the commented text; the whole card
+        // stays clickable for pointer users.
+        const jump = document.createElement("button");
+        jump.type = "button";
+        jump.className = "quote jump";
+        jump.dataset.action = "jump";
+        jump.setAttribute("aria-label", `Go to selection: ${compact(comment.quote, 80)}`);
+        quote.replaceWith(jump);
+        quote = jump;
+      }
+      quote.textContent = hasQuote ? compact(comment.quote, 220) : `${scopeLabel(scope)} note`;
+      quote.classList.toggle("note", !hasQuote);
       if (anchorMissing) {
         item.classList.add("anchor-stale");
         const anchorStatus = item.querySelector(".anchor-status");
@@ -1494,6 +1569,11 @@
       renderCommentWorkStatus(item, comment);
       item.addEventListener("click", () => scrollToComment(comment));
       ui.comments.appendChild(item);
+    }
+    if (restoreFocus?.id) {
+      const card = [...ui.comments.querySelectorAll(".comment")].find((node) => node.dataset.commentId === restoreFocus.id);
+      const target = (restoreFocus.action && card?.querySelector(`[data-action='${restoreFocus.action}']:not([hidden])`)) || card?.querySelector("button:not([hidden])");
+      (target || ui.panel).focus({ preventScroll: true });
     }
     updateHighlights();
     publishSectionCounts();

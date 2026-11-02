@@ -704,7 +704,6 @@ body.tunelito-comments-open .tunelito-document-map {
   color: var(--tl-text);
   box-shadow: 0 8px 28px var(--tl-properties-shadow);
   font: 650 0.78rem/1.35 var(--tl-font-body);
-  pointer-events: none;
 }
 .tunelito-link-card p { margin: 0; }
 .tunelito-link-card .meta { color: var(--tl-quote); }

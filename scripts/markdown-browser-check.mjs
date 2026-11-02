@@ -1159,6 +1159,14 @@ async function verifyLinkTargetsAndTitles() {
       const rect = anchor.getBoundingClientRect();
       return anchor.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
     }), true, "injected UI must not cover a titled link");
+    // WCAG 1.4.13: the pointer can move onto the card without it closing, and Escape dismisses it.
+    await page.locator(".tunelito-link-card").hover();
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".tunelito-link-card").isHidden(), false, "moving onto the hover card must keep it open");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await tracker.getAttribute("title"), trackerTitle, "Escape must restore the native title");
+    await page.mouse.move(2, 2);
 
     await link("external report").evaluate((anchor) => {
       const range = document.createRange();

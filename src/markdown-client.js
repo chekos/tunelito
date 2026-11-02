@@ -396,9 +396,12 @@
     collapse.addEventListener("click", () => setOpen(false));
     tab.addEventListener("click", () => setOpen(true, { restoreFocus: true }));
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && document.body.classList.contains("tunelito-properties-open")) {
-        setOpen(false, { restoreFocus: true });
-      }
+      // Editors, the composer, and the document map consume their own Escape
+      // (preventDefault); only an unclaimed Escape closes the drawer.
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!document.body.classList.contains("tunelito-properties-open")) return;
+      if (document.querySelector(".tunelito-source-editor:not([hidden])")) return;
+      setOpen(false, { restoreFocus: true });
     });
     document.addEventListener("pointerdown", (event) => {
       if (!narrow() || !document.body.classList.contains("tunelito-properties-open")) return;
@@ -750,6 +753,11 @@
       count.hidden = true;
       button.append(count);
       heading.append(button);
+      // The fold button lives inside the heading for layout; keep the heading's
+      // accessible name to its own text instead of "Intro Collapse Intro".
+      if (!heading.hasAttribute("aria-label") && !heading.hasAttribute("aria-labelledby")) {
+        heading.setAttribute("aria-label", button.dataset.label);
+      }
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -909,13 +917,35 @@
     const linkSelector = root.dataset.tunelitoLinkPreviews === "on" ? "a[title], a[data-tunelito-title], a[href]" : "a[title], a[data-tunelito-title]";
     let activeLink = null;
     let pendingLink = null;
-    markdown.addEventListener("pointerover", (event) => showLinkCard(event.target));
+    let hideTimer = 0;
+    // WCAG 1.4.13: the card stays while the pointer moves from the link onto it,
+    // hides shortly after the pointer leaves both, and Escape dismisses it.
+    const scheduleHide = () => {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideLinkCard, 180);
+    };
+    const cancelHide = () => clearTimeout(hideTimer);
+    markdown.addEventListener("pointerover", (event) => {
+      if (previewLink(event.target)) cancelHide();
+      showLinkCard(event.target);
+    });
     markdown.addEventListener("pointerout", (event) => {
       const link = previewLink(event.target);
-      if (link && !link.contains(event.relatedTarget) && !link.matches(":focus-visible")) hideLinkCard();
+      if (!link || link.contains(event.relatedTarget) || card.contains(event.relatedTarget)) return;
+      if (!link.matches(":focus-visible")) scheduleHide();
+    });
+    card.addEventListener("pointerenter", cancelHide);
+    card.addEventListener("pointerleave", (event) => {
+      if (activeLink?.contains(event.relatedTarget) || pendingLink?.contains(event.relatedTarget)) return;
+      scheduleHide();
     });
     markdown.addEventListener("focusin", (event) => showLinkCard(event.target));
     markdown.addEventListener("focusout", hideLinkCard);
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || card.hidden || event.defaultPrevented) return;
+      event.preventDefault();
+      hideLinkCard();
+    });
 
     function previewLink(target) {
       return target?.closest?.(linkSelector);
@@ -940,6 +970,7 @@
     }
 
     function hideLinkCard() {
+      clearTimeout(hideTimer);
       pendingLink = null;
       card.hidden = true;
       const link = activeLink;
@@ -983,8 +1014,11 @@
       const rect = link.getBoundingClientRect();
       card.hidden = false;
       const width = card.offsetWidth;
+      const height = card.offsetHeight;
       card.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
-      card.style.top = `${rect.bottom + 6}px`;
+      // Flip above the link when the card would run past the bottom edge.
+      const below = rect.bottom + 6;
+      card.style.top = `${below + height > window.innerHeight - 8 && rect.top - height - 6 >= 8 ? rect.top - height - 6 : below}px`;
     }
   }
 
