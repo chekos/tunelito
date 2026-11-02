@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "test/markdown.test.js"
+        ],
+        "createdAt": "2026-10-28T18:38:37.918Z",
+        "reason": "Claude: test fixtures use <img src=x> as XSS-escaping inputs, not rendered UI"
+      }
+    ]
+  }
+}
