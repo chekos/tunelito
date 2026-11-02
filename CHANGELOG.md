@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-11-02
 
+Tunelito 1.0 redesigns the command line as a product. Startup centers on the link you share. Errors are one line with a fix. Help fits on one screen. Agents get a `--json` event stream instead of scraping text. This release has breaking changes for scripts that parse startup output and for `--out`, `--live`, and `--owner-name`; see the first entries below.
+
+- Updates the bundled Tunelito agent skill for the 1.0 CLI: the new startup rows, `--json` for background launches, `--comments` in place of `--out`, and the removed flags.
 - **Breaking: removes `--out`, `--live`, and `--owner-name`.** Use `--comments <path>` (serve, `doctor`, `inbox`, `comments inspect`, and the inbox commands Tunelito prints), `--ephemeral`, and `--owner`. A removed flag exits 2 with `--out was removed in Tunelito 1.0` / `Use --comments instead.` Serve also rejects single-letter arguments such as `-x` as unknown options (pass `./-x` for a file with that name), and `--flag=value` explains that values follow a space.
 - Adds `--json` to serve. Stdout becomes one JSON object per line: `started` (URLs, paths, mode, theme, and the handoff/tracker/record commands), `tunnel` (`starting`, `fallback`, `dns-wait`, `ready` with `publicUrl`, `unavailable`, `disabled`), `viewers`, `comment`, `reload`, `review`, `agent`, `prompt` (agent-session claim prompts), `warning`, and `stopped`. Scripts and agents can now read the share link without scraping text. `tunelito help json` documents the stream. `inbox` commands also accept `--json` as shorthand for `--format json`.
 - Layers the help. `tunelito --help` fits on one screen: usage, the agent workflow pointer, four examples, the core options, and the commands. `tunelito help <topic>` prints `agent`, `markdown`, `link-preview`, `network`, `json`, or `all`, and `tunelito help <command>` prints a command's options. An unknown topic suggests the closest one.
