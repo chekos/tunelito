@@ -675,11 +675,14 @@
           background: var(--ui-surface-2);
         }
         .link {
+          display: inline-block;
+          padding: 5px 0;
           color: var(--ui-accent-text);
           text-decoration: none;
           font-weight: 600;
           font-size: 12px;
         }
+        .link:hover { text-decoration: underline; text-underline-offset: 2px; }
         .link[hidden] { display: none; }
         .peer-cursor {
           position: fixed;
@@ -843,7 +846,7 @@
             bottom: 0;
             left: 0;
             width: 100vw;
-            max-height: min(78vh, calc(100vh - 18px));
+            max-height: min(78dvh, calc(100dvh - 18px));
             border-right: 0;
             border-bottom: 0;
             border-left: 0;
@@ -861,10 +864,10 @@
           }
           .composer {
             right: 8px;
-            bottom: 8px;
+            bottom: calc(8px + env(safe-area-inset-bottom));
             left: 8px;
             width: auto;
-            max-height: calc(100vh - 16px);
+            max-height: calc(100dvh - 16px);
             border-radius: 12px;
           }
           .composer textarea {
@@ -885,6 +888,28 @@
           .approve-button {
             min-height: 44px;
             padding: 10px 12px;
+          }
+          .icon-button {
+            width: 44px;
+            height: 44px;
+          }
+          .resolved-toggle {
+            min-height: 44px;
+            padding: 10px 14px;
+          }
+          .scope-toggle button {
+            min-height: 40px;
+            padding: 10px 14px;
+          }
+          button.quote {
+            padding-top: 6px;
+            padding-bottom: 6px;
+          }
+          /* The composer takes the bottom of the screen on phones; hide the
+             panel behind it instead of stacking two sheets. It returns when
+             the composer closes. */
+          .composer.open ~ .panel.open {
+            display: none;
           }
         }
       </style>
