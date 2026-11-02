@@ -697,11 +697,17 @@
       selectedIndex = Math.max(0, Math.min(blocks.length - 1, current));
       const currentHeadingIndex = blocks.reduce((found, block, index) => index <= selectedIndex && /^H[1-6]$/.test(block.tagName) ? index : found, -1);
 
+      // Runs every scroll frame: only touch markers whose state changed so
+      // unchanged attributes do not trigger style recalculation.
       markers.forEach((marker, index) => {
-        marker.dataset.state = index === selectedIndex ? "current" : index < selectedIndex ? "consumed" : "unread";
+        const state = index === selectedIndex ? "current" : index < selectedIndex ? "consumed" : "unread";
+        if (marker.dataset.state !== state) marker.dataset.state = state;
         if (marker.tagName === "A") {
-          if (index === currentHeadingIndex) marker.setAttribute("aria-current", "location");
-          else marker.removeAttribute("aria-current");
+          const isCurrent = index === currentHeadingIndex;
+          if (isCurrent !== marker.hasAttribute("aria-current")) {
+            if (isCurrent) marker.setAttribute("aria-current", "location");
+            else marker.removeAttribute("aria-current");
+          }
         }
       });
       const block = blocks[selectedIndex];

@@ -1400,9 +1400,12 @@
     return event.composedPath().includes(ui.shadow.host);
   }
 
-  function scheduleSelectionCapture() {
+  // selectionchange fires on every caret step of a drag; settle it before
+  // walking the document. mouseup/keyup still show the button right away.
+  function scheduleSelectionCapture(event) {
     clearTimeout(state.selectionTimer);
-    state.selectionTimer = setTimeout(captureCurrentSelection, isMobileViewport() ? 220 : 0);
+    const delay = isMobileViewport() ? 220 : event?.type === "selectionchange" ? 120 : 0;
+    state.selectionTimer = setTimeout(captureCurrentSelection, delay);
   }
 
   function captureCurrentSelection() {
@@ -1431,7 +1434,7 @@
   function captureSelection(range) {
     const quote = range.toString();
     const offsets = rangeTextOffsets(range);
-    const bodyText = readableText(document.body);
+    const bodyText = bodyTextIndex().text;
     let prefix = "";
     let suffix = "";
     if (Number.isFinite(offsets.start)) {
@@ -2221,8 +2224,7 @@
     const quote = String(comment?.quote || "");
     if (!quote.trim()) return null;
     if (normalizeScope(comment.scope) === "site" && comment.pagePath && normalizePagePath(comment.pagePath) !== normalizePagePath(state.pagePath)) return null;
-    const textNodes = getTextNodes(document.body);
-    const fullText = textNodes.map((entry) => entry.node.textContent).join("");
+    const { nodes: textNodes, text: fullText } = bodyTextIndex();
     const exact = comment.prefix || comment.suffix ? `${comment.prefix}${quote}${comment.suffix}` : null;
     let start = -1;
     if (exact) {
@@ -2420,12 +2422,23 @@
     return nodes;
   }
 
-  function readableText(root) {
-    return getTextNodes(root).map((entry) => entry.node.textContent).join("");
+  // One walk of the comment surface serves every lookup in the same task:
+  // a render resolves each comment several times (anchor check, highlights,
+  // section counts), and selection capture needs offsets plus context. The
+  // index is dropped at the next microtask, before any page mutation.
+  let bodyIndexCache = null;
+  function bodyTextIndex() {
+    if (bodyIndexCache) return bodyIndexCache;
+    const nodes = getTextNodes(document.body);
+    bodyIndexCache = { nodes, text: nodes.map((entry) => entry.node.textContent).join("") };
+    queueMicrotask(() => {
+      bodyIndexCache = null;
+    });
+    return bodyIndexCache;
   }
 
   function rangeTextOffsets(range) {
-    const nodes = getTextNodes(document.body);
+    const nodes = bodyTextIndex().nodes;
     const start = offsetForBoundary(nodes, range.startContainer, range.startOffset);
     const end = offsetForBoundary(nodes, range.endContainer, range.endOffset);
     return { start, end };
