@@ -202,8 +202,8 @@ async function verifyVault() {
     assert.match(await page.locator("code").first().innerText(), /\[\[Project brief\]\]/, "inline-code wiki syntax must stay literal");
     assert.equal(await page.locator(".tunelito-navigation").getAttribute("data-tunelito-comment-ignore"), null, "the shared sidebar ignore boundary should own navigation");
     assert.equal(await page.locator("#tunelito-properties").getAttribute("data-tunelito-comment-ignore"), "", "the injected tree must stay outside comment anchoring");
-    assert.equal(await page.locator(".tunelito-navigation").getByText("Tunelito navigation").count(), 1, "navigation must identify its injected provenance");
-    assert.equal(await page.locator(".tunelito-properties-section").getByText("Source metadata").count(), 1, "properties must remain a separate source-derived section");
+    assert.equal(await page.getByRole("navigation", { name: "Tunelito navigation" }).count(), 1, "navigation must identify its injected provenance");
+    assert.equal(await page.locator(".tunelito-properties-section").getByRole("heading", { name: /^Source properties · \d+$/ }).count(), 1, "properties must remain a separate source-derived section");
     await page.locator("#tunelito-navigation-title").evaluate((title) => {
       const range = document.createRange();
       range.selectNodeContents(title);

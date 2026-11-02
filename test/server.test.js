@@ -1112,9 +1112,9 @@ test("directory Markdown pages receive a collapsed, filtered navigation tree", a
   try {
     const plainHtml = await fetch(new URL("/No%20front%20matter.md", instance.localUrl)).then((res) => res.text());
     assert.match(plainHtml, /data-tunelito-theme="bns-pitaya"/);
-    assert.match(plainHtml, /Tunelito navigation/);
+    assert.match(plainHtml, /aria-label="Tunelito navigation"/);
     assert.match(plainHtml, /Served documents/);
-    assert.doesNotMatch(plainHtml, /Source metadata/);
+    assert.doesNotMatch(plainHtml, /Source properties/);
     assert.match(plainHtml, /href="\/No%20front%20matter\.md" aria-current="page"/);
     assert.match(plainHtml, /href="\/Projects%20%26%20caf%C3%A9\/"/);
     assert.match(plainHtml, /<details class="tunelito-navigation-folder">/);
@@ -1126,8 +1126,7 @@ test("directory Markdown pages receive a collapsed, filtered navigation tree", a
 
     const homeHtml = await fetch(new URL("/index.md", instance.localUrl)).then((res) => res.text());
     assert.match(homeHtml, /Tunelito navigation/);
-    assert.match(homeHtml, /Source metadata/);
-    assert.match(homeHtml, /Properties · 1/);
+    assert.match(homeHtml, /Source properties · 1/);
 
     const deepHtml = await fetch(new URL("/Projects%20%26%20caf%C3%A9/Deep%20plans/Now.md", instance.localUrl)).then((res) => res.text());
     assert.match(deepHtml, /href="\/Projects%20%26%20caf%C3%A9\/Deep%20plans\/Now\.md" aria-current="page"/);

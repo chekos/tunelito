@@ -11,6 +11,8 @@
 - Honors `prefers-reduced-motion` in the review panel: no launcher lift, no gliding peer cursors, instant jump-to-comment, and no fade on the flash. The flash marker now stays on the text during a smooth scroll.
 - Speeds up selection and comment rendering. One text walk per task replaces repeated full-document walks, `selectionchange` settles for 120ms before capture, and the document map only updates markers that changed.
 - The composer uses the system font instead of falling back to the browser serif, and the Markdown sidebar labels rise to the 11px floor.
+- Removes the small uppercase labels above the Markdown sidebar headings. The headings now carry the provenance themselves: **Tunelito review**, **Served documents** (a nav named `Tunelito navigation` for assistive tech), and **Source properties · N**.
+- Replaces the overused faces in two Markdown themes. Fonts are still installed system faces only, with no network fonts. `bns-pitaya` moves from Plus Jakarta Sans and Geist to Seravek for reading (with Aptos or Segoe UI Variable on Windows) and Optima for headings (Candara on Windows). `technical` drops Inter for IBM Plex Sans, falling back to Segoe UI Variable or Helvetica Neue. Markdown paragraphs, list items, and quotes use `text-wrap: pretty` to avoid a lone word on the last line. The theme reference screenshots are regenerated.
 
 ## 1.0.0 - 2026-11-02
 
