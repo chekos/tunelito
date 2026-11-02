@@ -27,10 +27,10 @@ site/
 site.comments.md
 ```
 
-Use `--out` to choose a different path:
+Use `--comments` to choose a different path:
 
 ```bash
-tunelito ./page.html --out ./review-notes.md
+tunelito ./page.html --comments ./review-notes.md
 ```
 
 ## Comment scopes
@@ -92,7 +92,7 @@ Agents and tools can inspect the Markdown inbox as a versioned JSON index:
 
 ```bash
 tunelito comments inspect ./site --json
-tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site --comments ./custom.comments.md --json
 tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```

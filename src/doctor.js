@@ -43,7 +43,7 @@ export async function buildDoctorReport(options = {}, deps = {}) {
       id: "target.missing",
       severity: "warning",
       status: "warn",
-      message: "--out was provided without a target; only the comments path can be inspected.",
+      message: "--comments was provided without a target; only the comments path can be inspected.",
     });
   } else {
     addCheck(checks, {

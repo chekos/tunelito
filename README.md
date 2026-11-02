@@ -167,7 +167,7 @@ tunelito ./page.html --ephemeral
 - Source edits happen in your normal editor unless you explicitly enable the direct-local Markdown editor with `--editable`.
 - Browser saves use optimistic conflict protection: they require the source revision that was opened, recheck it immediately before replacement, and atomically replace the file only when that observed revision is still current.
 - Saved HTML or Markdown changes trigger a live reload in connected browsers; dirty comment and source drafts defer that reload.
-- Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--out`.
+- Comments persist to `<page-or-folder>.comments.md` unless you choose another path with `--comments`.
 - `--ephemeral` keeps comments in memory only; the session disappears when the local server exits.
 
 ## Markdown Review Surfaces
@@ -242,101 +242,43 @@ The public [configuration guide](docs-site/configuration.mdx) documents the stab
 
 ## CLI
 
-```text
-Tunelito 0.27.1
+`tunelito --help` fits on one screen: usage, examples, the options most reviews
+need, and the command list. Deeper options live in topics:
 
-Usage: tunelito <page.html|notes.md|folder> [options]
-       tunelito doctor [page.html|notes.md|folder] [options]
-       tunelito mcp
-       tunelito comments inspect <page.html|notes.md|folder|comments.md> [options]
-       tunelito review watch [page.html|notes.md|folder] [options]
-       tunelito inbox <next|watch|status|record> <page.html|notes.md|folder> [options]
-       tunelito session status [page.html|notes.md|folder] [options]
-       tunelito config show [page.html|notes.md|folder] [options]
-       tunelito skill <show|setup|install>
-
-Coding agents:
-  Before serving a review room, load the bundled workflow:
-    tunelito skill show
-  Installation guidance:
-    tunelito skill setup
-
-Session model:
-  Default               Persistent Markdown comments plus browser hot reload
-  Real-time sync        WebSocket in every session; WebRTC peers with --ephemeral
-  --ephemeral           In-memory comments that are lost when the server stops
-  --agent-session       Current coding-agent conversation watches persistent feedback
-  --agent               Spawn a separate local coding-agent worker
-  Tunnel exposure       Enabled by default; --no-tunnel keeps the room local
-
-Options:
-  --port <number>       Port to listen on (default: first free from 4317)
-  --host <host>         Host to bind locally (default: 127.0.0.1)
-  --out <path>          Markdown comments file (default: <page-or-folder>.comments.md)
-  --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
-  --markdown-css <href> Add a stylesheet link to rendered Markdown pages
-  --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
-                        them (--code-wrap restores the wrapping default)
-  --editable            Let the direct local owner edit safely served Markdown
-  --section-index       Show a sticky Markdown section index on wide viewports
-  --link-preview <regex> <url-template>
-                        Show a Markdown hover card for links matching regex, filled from
-                        resolver JSON fetched by the Tunelito server (repeatable)
-  --link-preview-fields <title=path,status=path,priority=path>
-                        JSON paths for the preceding --link-preview rule
-  --link-preview-header '<Name>: <value>'
-                        Add a request header to the preceding --link-preview rule; read secrets
-                        with ${env:NAME} (single-quote it; repeatable, owner-only)
-  --link-preview-env <NAME>
-                        Allow resolver headers to read this environment variable; required
-                        for any resolver header, CLI only (repeatable)
-  --link-preview-allow-remote
-                        Allow https resolvers on non-loopback hosts (default: loopback only)
-  --link-preview-visitors
-                        Also resolve previews for keyed public visitors (default: owner only)
-  --owner <name>        Seed the editable owner name for the direct local viewer
-  --ephemeral           Keep comments in memory only; all feedback is lost on restart
-  --live                Deprecated alias for --ephemeral
-  --agent <codex|claude|custom>
-                        Run a local coding-agent worker for persistent comments
-  --agent-command <cmd> Custom shell command for --agent custom; prompt is sent on stdin
-  --agent-interval <s>  Agent fallback polling interval in seconds (default: 120)
-  --agent-policy <mode> Which comments are actionable: all|mention|owner|owner-or-mention (default: all)
-  --agent-trigger <txt> Marker for mention policies, or "all" (default: all)
-  --agent-instructions <txt>
-                        Append host instructions to the built-in agent prompt
-  --agent-instructions-file <path>
-                        Append host instructions from a file
-  --agent-prompt <txt>  Replace the built-in agent behavior prompt
-  --agent-prompt-file <path>
-                        Replace the built-in agent behavior prompt from a file
-  --agent-max-attempts <n>
-                        Stop retrying a comment after n attempts (default: 2)
-  --agent-max-passes <n>
-                        Stop continuing a multi-pass comment after n agent passes (default: 3)
-  --agent-state <path>  Agent resolution ledger (default: <target>/.tunelito/agent/state.json)
-  --agent-session       Watch comments for the current agent session; do not spawn a worker
-  --no-tunnel           Only print the local URL; do not start Cloudflare Tunnel
-  --no-auth             Disable the generated review-key URL gate
-  --open                Open the local URL in your default browser
-  -v, --version         Show version
-  -h, --help            Show this help
-
-Commands:
-  doctor                Run read-only local setup and safety diagnostics
-  mcp                   Start a stdio MCP server for comments and inbox tools
-  comments inspect      Print a structured JSON index for a Tunelito comments inbox
-  review watch          Wait for a browser Done Reviewing handoff event
-  inbox next            Claim the next pending comment and print an agent prompt
-  inbox watch           Wait for the next pending comment, then print an agent prompt
-  inbox status          Print a live to-do tracker from the comments inbox and ledger
-  inbox record          Record the active agent's result for one comment
-  session status        Inspect and recover the last session for a target
-  config show           Print resolved Markdown configuration and its source layers
-  skill show            Print the distributable Tunelito agent skill (SKILL.md)
-  skill setup           Print no-write setup guidance for common coding agents
-  skill install         Install the skill for Codex or Claude at user or project scope
+```bash
+tunelito help agent          # agent worker and agent-session options
+tunelito help markdown       # themes, CSS, code wrap, section index, editing
+tunelito help link-preview   # resolver-backed Markdown link previews
+tunelito help network        # port, host, tunnel, and access
+tunelito help json           # the --json event stream
+tunelito help all            # every option
+tunelito <command> --help    # options for one command
 ```
+
+The full reference is in [docs-site/cli.mdx](docs-site/cli.mdx).
+
+Errors print one line for the problem and one for the fix, never the whole help.
+Typos get a suggestion (`--no-tunel` → `Did you mean --no-tunnel?`). Usage errors
+exit with code 2 and runtime errors with 1.
+
+For scripts and agents, `--json` replaces the human startup block with one JSON
+object per line on stdout: `started`, `tunnel` (with `state` `ready` and
+`publicUrl` once the share link is verified), `viewers`, `comment`, `reload`,
+`review`, `agent`, `prompt`, and `stopped`:
+
+```bash
+tunelito ./site --json | jq -r 'select(.type=="tunnel" and .state=="ready") | .publicUrl'
+```
+
+### Removed in 1.0
+
+| Removed | Use instead |
+| --- | --- |
+| `--out <path>` | `--comments <path>` (serve, `doctor`, `inbox`, `comments inspect`) |
+| `--live` | `--ephemeral` |
+| `--owner-name <name>` | `--owner <name>` |
+
+Removed flags fail with a pointer to the replacement.
 
 ## Agent Skill
 
@@ -467,7 +409,7 @@ Agents and tools can read a structured JSON view of the same Markdown inbox:
 
 ```bash
 tunelito comments inspect ./site --json
-tunelito comments inspect ./site --out ./custom.comments.md --json
+tunelito comments inspect ./site --comments ./custom.comments.md --json
 tunelito comments inspect ./site.comments.md --agent-state ./site/.tunelito/agent/state.json --json
 tunelito comments inspect ./site.comments.md --json
 ```

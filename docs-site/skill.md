@@ -97,9 +97,15 @@ Keyed links · Ctrl-C to stop
 ```
 
 Paths print relative to the working directory. Do not scrape these rows for
-state: `tunelito session status <target> --json` reports the same local URL,
-verified public URL, comments path, and tunnel state from
-`.tunelito/session.json`.
+state. When you launch Tunelito in the background, add `--json`: stdout becomes
+one JSON object per line, and the share link arrives as
+`{"type":"tunnel","state":"ready","publicUrl":"..."}` (`tunelito help json`
+lists every event). From a second shell, `tunelito session status <target>
+--json` reports the same local URL, verified public URL, comments path, and
+tunnel state from `.tunelito/session.json`.
+
+Removed in 1.0: `--out` (use `--comments`), `--live` (use `--ephemeral`), and
+`--owner-name` (use `--owner`). They now fail with a pointer to the replacement.
 
 A fresh Quick Tunnel can take up to about two minutes to route while DNS
 propagates. `Public     waiting for DNS on <host> (...)…` is progress, not
@@ -124,7 +130,7 @@ restarting Tunelito and minting a new key.
 Defaults that matter: binds `127.0.0.1`, picks the first free port from `4317`,
 writes `<page-or-folder>.comments.md` beside the source. Useful tweaks (all
 optional): `--port <n>` if 4317 is taken, `--host <host>` to change the bind,
-`--out <path>` to redirect the inbox, `--markdown-css <href>` to add team styling
+`--comments <path>` to redirect the inbox, `--markdown-css <href>` to add team styling
 to rendered Markdown pages, `--open` to launch the Local URL,
 `--owner <name>` to seed the direct local owner's display name, and `--editable`
 to let that owner edit safely served Markdown source in the browser. Comments made
@@ -139,7 +145,7 @@ the resolved layers before serving:
 tunelito config show ./notes.md
 ```
 
-With nothing configured it reports `Theme:        bns-pitaya (default)`.
+With nothing configured it reports `Theme   bns-pitaya   default`.
 Startup prints a `Theme` row only when a CLI, project, or global setting picks
 the theme (or with `--verbose`).
 

@@ -19,7 +19,7 @@ From the repo root, with dependencies already installed (`npm install`):
 node .cursor/skills/verify-tunelito/scripts/verify-tunelito.mjs launch examples/simple-review.html
 ```
 
-The helper copies the fixture into `.cursor/skills/verify-tunelito/runs/<id>/workspace/`, starts `node bin/tunelito.js <copy> --no-tunnel --port 0 --out <run>/comments.md`, and waits until stdout contains `Local:`. Ready means `doctor` prints `"ok": true`.
+The helper copies the fixture into `.cursor/skills/verify-tunelito/runs/<id>/workspace/`, starts `node bin/tunelito.js <copy> --no-tunnel --port 0 --comments <run>/comments.md`, and waits until stdout contains the `Local` row. Ready means `doctor` prints `"ok": true`.
 
 Pass another repo-relative fixture when the feature file names one, such as `examples/markdown/minimal-text.md` or `examples/markdown`.
 

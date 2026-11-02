@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
 import { agentWorkspaceRoot } from "./agent-worker.js";
+import { displayPath, formatRows, plainStyle, toneValue } from "./cli-output.js";
 import { SESSION_STATUS_ROUTE } from "./inject.js";
 
 export const SESSION_FORMAT = "tunelito-session";
@@ -153,28 +154,32 @@ export async function inspectSession(targetPath, {
   };
 }
 
-export function formatSessionStatus(report) {
-  const lines = [
-    "Tunelito session",
-    `Status:        ${report.status}`,
-    `Session:       ${report.session.id} (Tunelito ${report.session.tunelitoVersion || "unknown"})`,
-    `Target:        ${report.session.targetPath}`,
-    `Source root:   ${report.session.sourceRoot}`,
-    `Local:         ${report.urls.local || "(unavailable)"}`,
-    `Public:        ${report.urls.public || "(not connected)"}`,
-    `Access key:    ${report.urls.keyPresent ? (report.urls.redacted ? "present (redacted)" : "present") : "not used"}`,
-    `Comments:      ${report.comments.persistence}${report.comments.path ? ` (${report.comments.path})` : " (memory only)"}`,
-    `Agent:         ${formatAgent(report.agent)}`,
-    `Process:       ${report.process.pid || "(unknown)"} (${report.process.listenerHealthy ? "listener verified" : report.process.pidAlive ? "PID alive, listener not verified" : "not running"})`,
-    `Tunnel:        ${report.tunnel.enabled ? report.tunnel.state : "disabled"}`,
-    `Viewers:       ${report.process.viewerCount ?? "(unavailable)"}`,
-    `Started:       ${report.session.startedAt || "(unknown)"}`,
-    `Last activity: ${report.session.lastActivityAt || "(unknown)"}`,
-    `Metadata:      ${report.sessionPath}`,
-    `Next:          ${report.recovery.suggestion}`,
-  ];
-  if (report.recovery.stopCommand) lines.push(`Stop:          ${report.recovery.stopCommand}`);
-  return `${lines.join("\n")}\n`;
+const SESSION_STATUS_TONE = { running: "success", degraded: "warn", stopped: "muted" };
+
+// Same shape as the serve startup block: a header with the state, aligned
+// rows, and the next action last.
+export function formatSessionStatus(report, style = plainStyle) {
+  const status = toneValue(report.status, SESSION_STATUS_TONE[report.status] || "error", style);
+  const header = `${style.bold("tunelito session")} · ${status}`;
+  const rows = formatRows([
+    { label: "Public", value: report.urls.public || "not connected", tone: report.urls.public ? "strong" : "muted" },
+    { label: "Local", value: report.urls.local || "unavailable" },
+    { label: "Comments", value: report.comments.path ? displayPath(report.comments.path) : "memory only", hint: report.comments.persistence },
+    { label: "Access key", value: report.urls.keyPresent ? (report.urls.redacted ? "present (redacted)" : "present") : "not used" },
+    { label: "Agent", value: formatAgent(report.agent) },
+    { label: "Tunnel", value: report.tunnel.enabled ? report.tunnel.state : "disabled" },
+    { label: "Viewers", value: String(report.process.viewerCount ?? "unavailable") },
+    { label: "Process", value: String(report.process.pid || "unknown"), hint: report.process.listenerHealthy ? "listener verified" : report.process.pidAlive ? "PID alive, listener not verified" : "not running" },
+    { label: "Target", value: displayPath(report.session.targetPath) },
+    { label: "Source root", value: displayPath(report.session.sourceRoot) },
+    { label: "Session", value: report.session.id, hint: `Tunelito ${report.session.tunelitoVersion || "unknown"}` },
+    { label: "Started", value: report.session.startedAt || "unknown" },
+    { label: "Last activity", value: report.session.lastActivityAt || "unknown" },
+    { label: "Metadata", value: displayPath(report.sessionPath) },
+    { label: "Next", value: report.recovery.suggestion, tone: "strong" },
+    report.recovery.stopCommand ? { label: "Stop", value: report.recovery.stopCommand } : null,
+  ], style);
+  return `${[header, "", ...rows].join("\n")}\n`;
 }
 
 function formatAgent(agent) {
