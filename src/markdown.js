@@ -223,9 +223,9 @@ body {
 .tunelito-properties-kicker {
   margin: 0 0 3px;
   color: var(--tl-muted);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .tunelito-properties-title {
@@ -315,9 +315,9 @@ body {
   flex: 0 0 auto;
   margin-left: auto;
   color: var(--tl-muted);
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   font-weight: 750;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .tunelito-navigation-folder {

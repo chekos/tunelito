@@ -773,6 +773,9 @@
           background: var(--ui-surface);
           color: var(--ui-text);
           box-shadow: 0 22px 60px var(--ui-shadow);
+          /* :host resets inheritance, so the composer (outside .panel) needs
+             its own family or the quote falls back to the UA serif. */
+          font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 12px;
         }
         .composer.open { display: block; }
