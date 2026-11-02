@@ -58,6 +58,16 @@ tunelito --version
 
 Use the exact released version for the global install command. This keeps the maintainer's local `tunelito` binary current after every release. If either install path fails, fix it before telling the user the release is ready.
 
+## Plugin Skill Sync
+
+A second copy of the agent skill ships in the `writing` plugin of `chekos/bns-marketplace` (`writing/skills/tunelito/SKILL.md`). After a release that changes `docs-site/skill.md`, sync it there:
+
+1. Copy `docs-site/skill.md` byte for byte to `writing/skills/tunelito/SKILL.md`, leaving the `__TUNELITO_VERSION__` placeholder in place.
+2. Bump the `writing` patch version in both `writing/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+3. Open and merge a PR titled `Sync Tunelito skill for <version>`.
+4. Run `claude plugin marketplace update bns-marketplace` and then `claude plugin update writing@bns-marketplace`.
+5. Confirm the installed `~/.claude/plugins/cache/bns-marketplace/writing/<version>/skills/tunelito/SKILL.md` matches `docs-site/skill.md`.
+
 ## npm Publishing
 
 Use trusted publishing through GitHub Actions. Do not introduce long-lived npm tokens unless there is a documented reason.
