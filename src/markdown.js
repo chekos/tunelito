@@ -37,7 +37,12 @@ const DEFAULT_MARKDOWN_CSS = `
   --tl-strong: var(--tl-heading-3);
   --tl-emphasis: var(--tl-muted);
   --tl-list-marker: var(--tl-muted);
-  --tl-focus-ring: var(--tl-selection);
+  --tl-focus-ring: var(--tl-accent);
+  --tl-section-rhythm: 2.5rem;
+  --tl-tone-active: light-dark(#0f766e, #5eead4);
+  --tl-tone-done: light-dark(#15803d, #86efac);
+  --tl-tone-warning: light-dark(#a16207, #facc15);
+  --tl-tone-danger: light-dark(#b91c1c, #fca5a5);
   --tl-ruler-unread: var(--tl-faint);
   --tl-ruler-consumed: var(--tl-border);
   --tl-ruler-current: var(--tl-accent);
@@ -56,6 +61,8 @@ const DEFAULT_MARKDOWN_CSS = `
   line-height: var(--tl-line-height);
   background: var(--tl-page-bg);
   color: var(--tl-text);
+  caret-color: var(--tl-accent);
+  scrollbar-color: var(--tl-border) transparent;
 }
 body {
   margin: 0;
@@ -83,6 +90,7 @@ body {
   background: var(--tl-paper-bg);
   color: var(--tl-text);
   font-family: var(--tl-font-body);
+  overflow-wrap: break-word;
 }
 .tunelito-markdown > :first-child {
   margin-top: 0;
@@ -99,6 +107,7 @@ body {
   font-family: var(--tl-font-display);
   line-height: var(--tl-heading-line-height);
   letter-spacing: 0;
+  text-wrap: balance;
 }
 .tunelito-markdown h1 { color: var(--tl-heading-1); }
 .tunelito-markdown h2 { color: var(--tl-heading-2); }
@@ -142,8 +151,25 @@ body {
 .tunelito-markdown ol,
 .tunelito-markdown blockquote,
 .tunelito-markdown pre,
-.tunelito-markdown table {
+.tunelito-markdown table,
+.tunelito-markdown details {
   margin: 0 0 var(--tl-paragraph-rhythm);
+}
+.tunelito-markdown summary {
+  cursor: pointer;
+}
+.tunelito-markdown summary:hover {
+  color: var(--tl-accent);
+}
+.tunelito-markdown details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+.tunelito-markdown li:has(> input[type="checkbox"]:first-child) {
+  list-style: none;
+}
+.tunelito-markdown li > input[type="checkbox"]:first-child {
+  margin: 0 0.45em 0 -1.3em;
+  vertical-align: -0.1em;
 }
 .tunelito-markdown a {
   color: var(--tl-link);
@@ -265,7 +291,7 @@ body {
 .tunelito-navigation-link:focus-visible,
 .tunelito-navigation-folder-link:focus-visible,
 .tunelito-navigation-summary:focus-visible {
-  outline: 3px solid var(--tl-selection);
+  outline: 2px solid var(--tl-focus-ring);
   outline-offset: 2px;
 }
 .tunelito-navigation-link[aria-current="page"] {
@@ -353,7 +379,7 @@ body {
 }
 .tunelito-properties-collapse:focus-visible,
 .tunelito-properties-tab:focus-visible {
-  outline: 3px solid var(--tl-selection);
+  outline: 2px solid var(--tl-focus-ring);
   outline-offset: 3px;
 }
 .tunelito-properties-list {
@@ -427,7 +453,7 @@ body {
   min-height: 42px;
   border-left: 0;
   border-radius: 0 999px 999px 0;
-  box-shadow: 6px 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 6px 8px 22px var(--tl-properties-shadow);
   padding: 0 14px 0 11px;
 }
 .tunelito-properties-collapsed .tunelito-properties {
@@ -527,7 +553,7 @@ body {
   color: var(--ruler-accent);
 }
 .tunelito-ruler-marker:focus-visible {
-  outline: 2px solid var(--tl-selection);
+  outline: 2px solid var(--tl-focus-ring);
   outline-offset: 2px;
 }
 .tunelito-ruler-scrubber {
@@ -563,6 +589,10 @@ body.tunelito-comments-open .tunelito-document-map {
     width: min(320px, calc(100vw - 28px));
     box-shadow: 18px 0 50px rgba(15, 23, 42, 0.2);
   }
+  /* Clears the fixed properties tab (top 32px + 42px tall) so it never covers the first heading. */
+  .tunelito-has-sidebar .tunelito-markdown {
+    padding-top: 92px;
+  }
 }
 @media (max-width: 760px) {
   .tunelito-document-map {
@@ -570,6 +600,12 @@ body.tunelito-comments-open .tunelito-document-map {
   }
   .tunelito-markdown {
     padding: 34px 20px 64px;
+  }
+  /* Wide tables scroll inside the article instead of widening the whole page. */
+  .tunelito-markdown table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -596,10 +632,20 @@ body.tunelito-comments-open .tunelito-document-map {
   letter-spacing: 0.02em;
   vertical-align: 0.08em;
 }
-.tunelito-badge[data-tone="active"] { border-color: #5eead4; }
-.tunelito-badge[data-tone="done"] { border-color: #86efac; }
-.tunelito-badge[data-tone="warning"] { border-color: #facc15; }
-.tunelito-badge[data-tone="danger"] { border-color: #fca5a5; }
+.tunelito-badge[data-tone="active"] { --tl-tone: var(--tl-tone-active); }
+.tunelito-badge[data-tone="done"] { --tl-tone: var(--tl-tone-done); }
+.tunelito-badge[data-tone="warning"] { --tl-tone: var(--tl-tone-warning); }
+.tunelito-badge[data-tone="danger"] { --tl-tone: var(--tl-tone-danger); }
+.tunelito-badge[data-tone="active"],
+.tunelito-badge[data-tone="done"],
+.tunelito-badge[data-tone="warning"],
+.tunelito-badge[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--tl-tone) 70%, transparent);
+  background: color-mix(in srgb, var(--tl-tone) 12%, var(--tl-paper-bg));
+}
+.tunelito-badge[data-tone="muted"] {
+  color: var(--tl-muted);
+}
 .tunelito-fold {
   float: right;
   margin: 0.2rem 0 0 10px;
@@ -889,7 +935,7 @@ body.tunelito-comments-open .tunelito-document-map {
 .tunelito-markdown [data-footnote-ref]:target,
 .tunelito-markdown [data-footnotes] li:target {
   border-radius: 3px;
-  outline: 3px solid var(--tl-focus-ring);
+  outline: 3px solid var(--tl-selection);
   outline-offset: 3px;
 }
 .tunelito-footnotes-label {
@@ -912,6 +958,7 @@ body.tunelito-comments-open .tunelito-document-map {
   border: 1px solid var(--tl-border);
   padding: 0.5rem 0.65rem;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 .tunelito-markdown th {
   background: var(--tl-soft);
@@ -939,7 +986,7 @@ body.tunelito-comments-open .tunelito-document-map {
   border-top: 1px solid var(--tl-border);
 }
 .tunelito-markdown :focus-visible {
-  outline: 3px solid var(--tl-focus-ring);
+  outline: 2px solid var(--tl-focus-ring);
   outline-offset: 3px;
 }
 `;
@@ -1274,7 +1321,7 @@ export function renderFolderLandingDocument({
 }
 .tunelito-folder-parent:focus-visible,
 .tunelito-folder-card:focus-visible {
-  outline: 3px solid var(--tl-selection);
+  outline: 2px solid var(--tl-focus-ring);
   outline-offset: 3px;
 }
 .tunelito-folder-grid {
