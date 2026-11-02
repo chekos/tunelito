@@ -401,6 +401,8 @@
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (!document.body.classList.contains("tunelito-properties-open")) return;
       if (document.querySelector(".tunelito-source-editor:not([hidden])")) return;
+      // An open link card claims Escape (its own listener runs after this one).
+      if (document.querySelector(".tunelito-link-card:not([hidden])")) return;
       setOpen(false, { restoreFocus: true });
     });
     document.addEventListener("pointerdown", (event) => {
@@ -945,7 +947,10 @@
       if (activeLink?.contains(event.relatedTarget) || pendingLink?.contains(event.relatedTarget)) return;
       scheduleHide();
     });
-    markdown.addEventListener("focusin", (event) => showLinkCard(event.target));
+    markdown.addEventListener("focusin", (event) => {
+      cancelHide();
+      showLinkCard(event.target);
+    });
     markdown.addEventListener("focusout", hideLinkCard);
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || card.hidden || event.defaultPrevented) return;

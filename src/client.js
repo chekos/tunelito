@@ -1113,15 +1113,37 @@
   }
 
   function backgroundLuminance(color) {
-    const match = String(color).match(/rgba?\(([^)]+)\)/);
-    if (!match) return null;
-    const [r, g, b, a = 1] = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    const rgba = toRgba(color);
+    if (!rgba) return null;
+    const [r, g, b, a] = rgba;
     if (!(a > 0.5)) return null;
     const channel = (value) => {
       const c = value / 255;
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
     };
     return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  }
+
+  // Computed backgrounds can be rgb(), or color()/oklch() from color-mix and
+  // modern themes; a 1px canvas converts any of them to sRGB bytes.
+  function toRgba(color) {
+    const text = String(color || "");
+    const match = text.match(/^rgba?\(([^)]+)\)$/);
+    if (match) {
+      const [r, g, b, a = 1] = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      return [r, g, b, a];
+    }
+    if (!text || text === "transparent") return null;
+    try {
+      const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+      if (!context) return null;
+      context.fillStyle = text;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data;
+      return [r, g, b, alpha / 255];
+    } catch {
+      return null;
+    }
   }
 
   function withAccessKey(path) {
@@ -1132,6 +1154,9 @@
 
   function setPanelOpen(open, { moveFocus = false, restoreFocus = false } = {}) {
     const wasOpen = ui.panel.classList.contains("open");
+    // Pages can change their background after load (hydration, theme
+    // toggles), so re-read the tone whenever the panel opens.
+    if (open && !wasOpen) applyTone(ui.shadow.host);
     const focusWasInside = ui.panel.contains(ui.shadow.activeElement);
     ui.panel.classList.toggle("open", open);
     ui.launcher.classList.toggle("active", open);
@@ -1471,6 +1496,7 @@
     // Remember where focus came from so closing the composer can return it.
     const opener = ui.shadow.activeElement;
     state.composerOpener = opener && opener !== ui.selection ? opener : null;
+    applyTone(ui.shadow.host);
     hideSelectionButton();
     const rect = state.pendingSelection.rect || (window.getSelection()?.rangeCount ? rectSnapshot(window.getSelection().getRangeAt(0).getBoundingClientRect()) : null);
     state.pendingSelection.scope = normalizeScope(state.pendingSelection.scope);
@@ -1505,7 +1531,10 @@
     const opener = state.composerOpener;
     state.composerOpener = null;
     if (focusWasInside) {
-      const target = opener?.isConnected && !opener.hidden ? opener : ui.panel.classList.contains("open") ? ui.panel : ui.launcher;
+      // getClientRects() is empty for anything not rendered, including
+      // controls inside a hidden form or a closed panel.
+      const openerVisible = opener?.isConnected && opener.getClientRects().length > 0;
+      const target = openerVisible ? opener : ui.panel.classList.contains("open") ? ui.panel : ui.launcher;
       target.focus({ preventScroll: true });
     }
     flushQueuedReload();

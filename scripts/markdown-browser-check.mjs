@@ -1163,8 +1163,10 @@ async function verifyLinkTargetsAndTitles() {
     await page.locator(".tunelito-link-card").hover();
     await page.waitForTimeout(300);
     assert.equal(await page.locator(".tunelito-link-card").isHidden(), false, "moving onto the hover card must keep it open");
+    const sidebarBefore = await page.evaluate(() => document.body.classList.contains("tunelito-properties-open"));
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => document.querySelector(".tunelito-link-card")?.hidden);
+    assert.equal(await page.evaluate(() => document.body.classList.contains("tunelito-properties-open")), sidebarBefore, "Escape on the link card must not also toggle the sidebar");
     assert.equal(await tracker.getAttribute("title"), trackerTitle, "Escape must restore the native title");
     await page.mouse.move(2, 2);
 
