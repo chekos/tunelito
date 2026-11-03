@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-11-02
+
+Tunelito 1.1 makes the review panel usable from the keyboard and readable on dark pages. It also sets the default `bns-pitaya` theme in the BNS faces and bundles Paper Mono for code. There are no breaking changes.
 
 - Makes the review panel work fully from the keyboard. Each comment's quote is a "Go to selection" button. Escape closes the panel and returns focus to the launcher. Opening the panel from the launcher moves focus into it, and focus survives new comments arriving. The composer's Escape works from any of its controls and returns focus to whatever opened it. The Page/Site toggle exposes `aria-pressed`, the close button is named, inputs have labels, and connection or error status is announced.
 - Gives the review panel a dark tone. It follows the page under review (dark Markdown themes such as the default `bns-pitaya`, or a dark HTML page), or the OS setting when the page has no opaque background. Panel colors now come from tokens.
