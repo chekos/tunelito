@@ -9,7 +9,7 @@ import { buildAgentStatusSnapshot, defaultAgentLogPath, fingerprintComment, load
 import { defaultCommentsPath, createCommentStore, createMemoryCommentStore, isSiteComment, normalizeReviewerId, renderCommentsMarkdown } from "./comments.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, COMMENTS_ROUTE, REVIEW_EVENTS_ROUTE, SESSION_STATUS_ROUTE, SOURCE_ROUTE, TUNELITO_RESPONSE_HEADER, WS_ROUTE, injectTunelitoClient } from "./inject.js";
 import { LINK_PREVIEW_REQUEST_HEADER, LINK_PREVIEW_ROUTE, createLinkPreviewResolver } from "./link-preview.js";
-import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
+import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, PAPER_MONO_ROUTE, isMarkdownPath, normalizeMarkdownCssHref, renderFolderLandingDocument, renderMarkdownDocument } from "./markdown.js";
 import { contentTypeFor } from "./mime.js";
 import { SourceEditError, readBoundedUtf8Body, readMarkdownSourceSnapshot, writeMarkdownSourceSnapshot } from "./source-edit.js";
 import { DEFAULT_THEME_NAME } from "./themes.js";
@@ -19,6 +19,7 @@ const CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "client.js"
 const MARKDOWN_CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "markdown-client.js");
 const MERMAID_CLIENT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "mermaid-client.js");
 const MERMAID_LIBRARY_PATH = join(dirname(createRequire(import.meta.url).resolve("mermaid")), "mermaid.min.js");
+const PAPER_MONO_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "fonts", "PaperMono-Variable.woff2");
 export const ACCESS_KEY_PARAM = "tunelito_key";
 export const PAGE_PARAM = "tunelito_page";
 const REVIEWER_ID_PARAM = "tunelito_reviewer_id";
@@ -461,6 +462,12 @@ function handleRequest({ req, res, filePath, targetPath, rootDir, rootRealDir, d
 
   if (pathname === MERMAID_CLIENT_ROUTE) {
     sendFile(res, MERMAID_CLIENT_PATH, "text/javascript; charset=utf-8", req.method, responseHeaders);
+    return;
+  }
+
+  if (pathname === PAPER_MONO_ROUTE) {
+    // Immutable packaged asset: cache it for the session instead of no-store.
+    sendFile(res, PAPER_MONO_PATH, "font/woff2", req.method, { ...responseHeaders, "cache-control": "private, max-age=86400" });
     return;
   }
 
