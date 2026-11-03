@@ -43,7 +43,7 @@ test("resolveTunelitoConfig reports stable defaults and available themes", () =>
     source: "default",
     configPath: null,
     details: {
-      description: "A dark reading theme adapted from BNS Obsidian Pitaya without bundled or network fonts.",
+      description: "A dark reading theme adapted from BNS Obsidian Pitaya: Timeless Serif and Sans when installed, bundled Paper Mono for code, and no network fonts.",
       colorModes: ["dark"],
     },
   });

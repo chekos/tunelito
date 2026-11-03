@@ -196,7 +196,7 @@ When a folder URL has no authored `index.html` or `index.md`, Tunelito serves an
 
 Tunelito ships four dependency-free themes:
 
-- `bns-pitaya` (default): a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), using local font names with system fallbacks and no copied stylesheet, bundled fonts, or network assets
+- `bns-pitaya` (default): a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), set in Timeless Serif (headings) and Timeless Sans (text) when they are installed on the viewer's machine, with Optima/Seravek-style system fallbacks, and code in Paper Mono, which ships with Tunelito under the SIL Open Font License and is served from the review server; no copied stylesheet and no network assets. Timeless is never bundled: its license forbids redistribution, so install it from [timeless.co](https://timeless.co) to see it
 - `default`: the original neutral, system-sans review surface
 - `editorial`: a spacious serif-led layout for essays and long-form drafts
 - `technical`: a wider, denser sans/mono layout for code, tables, diagrams, and documentation

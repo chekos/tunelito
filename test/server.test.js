@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTunelitoServer, isIgnoredWatchFilename, isLocalOwnerRequest } from "../src/server.js";
 import { AGENT_STATUS_ROUTE, CLIENT_ROUTE, REVIEW_EVENTS_ROUTE, SOURCE_ROUTE } from "../src/inject.js";
-import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE } from "../src/markdown.js";
+import { MARKDOWN_CLIENT_ROUTE, MERMAID_CLIENT_ROUTE, MERMAID_LIBRARY_ROUTE, PAPER_MONO_ROUTE } from "../src/markdown.js";
 import { renderCommentsMarkdown } from "../src/comments.js";
 import { MAX_EDITABLE_SOURCE_BYTES } from "../src/source-edit.js";
 
@@ -159,6 +159,14 @@ test("server renders a Markdown file as an injected commentable page", async () 
     assert.match(markdownClientSource, /navigator\.clipboard\?\.writeText/);
     assert.match(markdownClientSource, /document\.execCommand\("copy"\)/);
     assert.match(markdownClientSource, /\[data-tunelito-mermaid\], \[data-tunelito-comment-ignore\]/);
+
+    // The bundled Paper Mono face is declared once and served same-origin.
+    assert.match(html, /@font-face \{\s*font-family: "Paper Mono";\s*src: local\("Paper Mono"\), url\("\/__tunelito\/fonts\/paper-mono\.woff2"\) format\("woff2"\)/);
+    assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic|https?:\/\/[^"')]*\.woff2/, "no network font sources");
+    const paperMono = await fetch(new URL(PAPER_MONO_ROUTE, instance.localUrl));
+    assert.equal(paperMono.status, 200);
+    assert.equal(paperMono.headers.get("content-type"), "font/woff2");
+    assert.equal(Buffer.from(await paperMono.arrayBuffer()).subarray(0, 4).toString("latin1"), "wOF2");
 
     const mermaidLibrary = await fetch(new URL(MERMAID_LIBRARY_ROUTE, instance.localUrl));
     assert.equal(mermaidLibrary.headers.get("content-type"), "text/javascript; charset=utf-8");

@@ -21,7 +21,7 @@ export const THEME_DETAILS = Object.freeze({
     colorModes: ["light", "dark"],
   },
   "bns-pitaya": {
-    description: "A dark reading theme adapted from BNS Obsidian Pitaya without bundled or network fonts.",
+    description: "A dark reading theme adapted from BNS Obsidian Pitaya: Timeless Serif and Sans when installed, bundled Paper Mono for code, and no network fonts.",
     colorModes: ["dark"],
   },
 });
@@ -283,12 +283,13 @@ const THEMES = {
   "bns-pitaya": `
 :root[data-tunelito-theme="bns-pitaya"] {
   color-scheme: dark;
-  /* Installed humanist faces, no network fonts: Seravek (macOS) or Aptos /
-     Segoe UI Variable (Windows) for reading, flared Optima or Candara for
-     headings. */
-  --tl-font-body: Seravek, Aptos, "Segoe UI Variable Text", "Gill Sans Nova", ui-sans-serif, system-ui, sans-serif;
-  --tl-font-display: Optima, Candara, "Segoe UI Variable Display", ui-sans-serif, system-ui, sans-serif;
-  --tl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* BNS type: Timeless Serif headings and Timeless Sans text when installed.
+     Timeless's license forbids bundling it, so viewers without it get
+     installed humanist faces (Optima/Candara, Seravek/Aptos/Segoe UI).
+     Paper Mono (OFL) is bundled and served same-origin for every viewer. */
+  --tl-font-body: "Timeless Sans", Seravek, Aptos, "Segoe UI Variable Text", "Gill Sans Nova", ui-sans-serif, system-ui, sans-serif;
+  --tl-font-display: "Timeless Serif", "Timeless Serif Text", Optima, Candara, "Segoe UI Variable Display", ui-serif, serif;
+  --tl-font-mono: "Paper Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --tl-page-bg: #0c0c10;
   --tl-paper-bg: #121318;
   --tl-text: #dcdcdc;

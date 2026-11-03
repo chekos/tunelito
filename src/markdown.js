@@ -6,8 +6,18 @@ import { DEFAULT_THEME_NAME, normalizeThemeName, themeCss } from "./themes.js";
 export const MERMAID_LIBRARY_ROUTE = "/__tunelito/mermaid.js";
 export const MERMAID_CLIENT_ROUTE = "/__tunelito/mermaid-client.js";
 export const MARKDOWN_CLIENT_ROUTE = "/__tunelito/markdown-client.js";
+// Paper Mono (SIL OFL 1.1, license beside the file in src/fonts) is the one
+// bundled face: served same-origin from the package, never from a network CDN.
+export const PAPER_MONO_ROUTE = "/__tunelito/fonts/paper-mono.woff2";
 
 const DEFAULT_MARKDOWN_CSS = `
+@font-face {
+  font-family: "Paper Mono";
+  src: local("Paper Mono"), url("${PAPER_MONO_ROUTE}") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
   color-scheme: light dark;
   --tl-heading-line-height: 1.2;
