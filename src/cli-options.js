@@ -75,9 +75,11 @@ export function inspectGlobals(argv, options = GLOBAL_OPTIONS) {
 export function normalizeArguments(argv, options, commands = []) {
   const tokens = scan(argv, options);
   const globals = inspectGlobals(argv, options);
+  const positionals = tokens.flatMap((token) => token.literal ? token.values
+    : token.raw !== undefined && !token.raw.startsWith("--") && !/^-[a-z]$/i.test(token.raw) ? [token.raw] : []);
   // Help and version are discovery operations even when ordinary values are
   // missing, conflicting, or unknown. Anything following -- is literal.
-  if (globals.help || globals.version) return { args: [], globals, positions: {} };
+  if (globals.help || globals.version) return { args: [], globals, positions: {}, positionals };
   const seen = new Set();
   const args = [];
   const positions = {};
@@ -108,7 +110,7 @@ export function normalizeArguments(argv, options, commands = []) {
   }
   if (seen.has("--code-wrap") && seen.has("--no-code-wrap")) throw new UsageError("Use either --code-wrap or --no-code-wrap, not both");
   if (seen.has("--json") && seen.has("--format")) throw new UsageError("Use either --json or --format, not both");
-  return { args, globals, positions };
+  return { args, globals, positions, positionals };
 }
 
 export function routeCommand(argv, options, commandNames) {

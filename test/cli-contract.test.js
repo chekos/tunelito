@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -13,11 +13,11 @@ import { colorEnabled, createStyle, createTerminalWriter, formatRows, presentati
 const bin = resolve("bin/tunelito.js");
 const cleanEnv = { ...process.env };
 for (const name of ["NO_COLOR", "FORCE_COLOR", "CI", "TERM", "TUNELITO_PLAIN", "TUNELITO_DEBUG"]) delete cleanEnv[name];
-function cli(args, { env = {}, tty = false } = {}) {
+function cli(args, { env = {}, tty = false, cwd } = {}) {
   // Exercise the real entry point with independent stdout/stderr, including
   // the isTTY capabilities a PTY exposes without merging its two streams.
   const launch = tty ? ["--input-type=module", "-e", `process.stdout.isTTY=${typeof tty === "object" ? tty.stdout : true};process.stderr.isTTY=${typeof tty === "object" ? tty.stderr : true};process.argv=[process.execPath,${JSON.stringify(bin)},...process.argv.slice(1)];await import(${JSON.stringify(bin)});`, "--", ...args] : [bin, ...args];
-  return spawnSync(process.execPath, launch, { encoding: "utf8", env: { ...cleanEnv, ...env }, timeout: 5000 });
+  return spawnSync(process.execPath, launch, { encoding: "utf8", env: { ...cleanEnv, ...env }, timeout: 5000, ...(cwd ? { cwd } : {}) });
 }
 function collect(extra = {}) {
   let text = "";
@@ -169,6 +169,43 @@ test("format flags route consistently before nested commands and do not change h
   assert.match(commandMetadata("serve").options.find((option) => option.name === "--agent").syntax, /^--agent </);
   assert.ok(commandMetadata("inbox record").options.some((option) => option.name === "--id"));
   assert.ok(!commandMetadata("inbox next").options.some((option) => option.name === "--id"));
+});
+
+test("skill install preserves literal option-like values and dry-run across its command boundary", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-skill-literal-"));
+  try {
+    for (const value of ["--help", "--json", "--format", "install"]) {
+      const result = cli(["skill", "install", "--agent=codex", "--scope=project", `--project-root=${value}`, "--dry-run"], { cwd: dir });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stderr, "");
+      assert.match(result.stdout, /Agent:\s+codex/);
+      assert.match(result.stdout, /Scope:\s+project/);
+      assert.match(result.stdout, /Action:\s+would-create/);
+      assert.ok(result.stdout.includes(join(dir, value, ".agents", "skills", "tunelito", "SKILL.md")));
+      assert.equal(existsSync(join(dir, value)), false, "dry-run must not create its destination tree");
+      assert.equal(existsSync(join(dir, ".claude")), false, "literal help cannot turn into a default Claude install");
+      assert.equal(existsSync(join(dir, ".agents")), false);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("explicit help paths exclude format values at every depth", () => {
+  for (const path of [[], ["inbox"], ["inbox", "record"], ["doctor"], ["skill", "install"]]) {
+    const json = cli(["help", ...path, "--json"]);
+    for (const args of [["help", ...path, "--format=json"], ["--format", "json", "help", ...path]]) {
+      const result = cli(args);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stderr, "");
+      assert.deepEqual(JSON.parse(result.stdout), JSON.parse(json.stdout));
+    }
+    for (const format of ["plain", "text"]) {
+      const result = cli(["help", ...path, `--format=${format}`]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stderr, "");
+      assert.ok(result.stdout.includes("Usage:"));
+      assert.doesNotMatch(result.stdout, /\x1b/);
+    }
+  }
 });
 
 test("color and redraw capabilities are independent, labels readable and values intact at 40/80/120 columns", () => {

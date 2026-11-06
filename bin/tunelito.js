@@ -670,8 +670,9 @@ async function main() {
   };
 
   if (routed.command === "help") {
-    const { args, globals } = normalizeArguments(argv, allOptionMetadata());
-    const path = args.filter((arg) => typeof arg === "string" && !arg.startsWith("-"));
+    const { args, globals, positionals: path, positions } = normalizeArguments(argv, allOptionMetadata());
+    const formatIndex = positions["--format"];
+    if (formatIndex !== undefined && !["text", "json", "plain"].includes(args[formatIndex + 1])) throw new UsageError("--format must be text, json, or plain");
     if (path.length === 1 && HELP_TOPICS[path[0]]) {
       const text = helpTopic(path[0]);
       process.stdout.write(globals.json ? `${JSON.stringify({ format: "tunelito-help", schemaVersion: 2, topic: path[0], options: optionMetadata(text), text })}\n` : text);
@@ -2535,9 +2536,11 @@ function runSkill(args, { stdout = process.stdout, stderr = process.stderr, read
   if (sub === "install") {
     let opts;
     try {
-      opts = parseSkillInstallArgs(args.slice(1));
+      // commandRunner has already normalized these tokens. Re-lexing would
+      // mistake an option-like literal value for a global help/JSON flag.
+      opts = parseSkillInstallOptions(args.slice(1));
     } catch (error) {
-    return writeUsageFailure(stderr, error, "tunelito skill --help", args);
+      return writeUsageFailure(stderr, error, "tunelito skill --help", args);
     }
     let content;
     try {
