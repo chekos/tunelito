@@ -61,12 +61,12 @@ test("startCloudflareTunnel uses the pinned package for npx fallback", () => {
     {
       command: "cloudflared",
       args: ["tunnel", "--url", "http://127.0.0.1:4317/"],
-      options: { stdio: ["ignore", "pipe", "pipe"] },
+      options: { detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] },
     },
     {
       command: "npx",
       args: ["--yes", "cloudflared@2026.5.0", "tunnel", "--url", "http://127.0.0.1:4317/"],
-      options: { stdio: ["ignore", "pipe", "pipe"] },
+      options: { detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] },
     },
   ]);
   tunnel.stop();
@@ -526,6 +526,9 @@ function fakeChild() {
   child.killed = false;
   child.kill = () => {
     child.killed = true;
+    child.signalCode = "SIGTERM";
+    child.emit("exit", null, "SIGTERM");
+    child.emit("close", null, "SIGTERM");
   };
   return child;
 }

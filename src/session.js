@@ -158,11 +158,11 @@ const SESSION_STATUS_TONE = { running: "success", degraded: "warn", stopped: "mu
 
 // Same shape as the serve startup block: a header with the state, aligned
 // rows, and the next action last.
-export function formatSessionStatus(report, style = plainStyle) {
+export function formatSessionStatus(report, style = plainStyle, { columns } = {}) {
   const status = toneValue(report.status, SESSION_STATUS_TONE[report.status] || "error", style);
   const header = `${style.bold("tunelito session")} · ${status}`;
   const rows = formatRows([
-    { label: "Public", value: report.urls.public || "not connected", tone: report.urls.public ? "strong" : "muted" },
+    { label: "Public", value: report.urls.public || "not connected", tone: report.urls.public ? "strong" : undefined },
     { label: "Local", value: report.urls.local || "unavailable" },
     { label: "Comments", value: report.comments.path ? displayPath(report.comments.path) : "memory only", hint: report.comments.persistence },
     { label: "Access key", value: report.urls.keyPresent ? (report.urls.redacted ? "present (redacted)" : "present") : "not used" },
@@ -178,7 +178,7 @@ export function formatSessionStatus(report, style = plainStyle) {
     { label: "Metadata", value: displayPath(report.sessionPath) },
     { label: "Next", value: report.recovery.suggestion, tone: "strong" },
     report.recovery.stopCommand ? { label: "Stop", value: report.recovery.stopCommand } : null,
-  ], style);
+  ], style, { columns });
   return `${[header, "", ...rows].join("\n")}\n`;
 }
 

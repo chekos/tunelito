@@ -44,7 +44,12 @@ export class WebSocketHub extends EventEmitter {
   }
 
   close() {
-    for (const client of this.clients) client.close();
+    for (const client of this.clients) {
+      client.close();
+      // Only our upgraded sockets are owned here. destroySoon flushes the
+      // close frame then closes without waiting for a peer's half-close.
+      client.socket.destroySoon();
+    }
     this.clients.clear();
   }
 

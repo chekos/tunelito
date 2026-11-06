@@ -14,18 +14,40 @@ const ANSI = {
   yellow: ["\u001b[33m", "\u001b[39m"],
 };
 
-export function colorEnabled({ stream = process.stdout, env = process.env } = {}) {
+// Escape rather than delete controls so forged terminal instructions remain
+// inspectable. Records and JSON are never passed through this renderer.
+export function terminalText(value, { multiline = false } = {}) {
+  return String(value ?? "").replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, (char) => {
+    if (char === "\n" && multiline) return char;
+    if (char === "\n") return "\\n";
+    if (char === "\t") return "\\t";
+    if (char === "\r") return "\\r";
+    const code = char.codePointAt(0);
+    return code <= 0xff ? `\\x${code.toString(16).padStart(2, "0")}` : `\\u{${code.toString(16)}}`;
+  });
+}
+
+export function colorEnabled({ stream = process.stdout, env = process.env, noColor = false } = {}) {
+  if (noColor) return false;
   if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
-  if (env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== "" && env.FORCE_COLOR !== "0" && env.FORCE_COLOR !== "false") return true;
+  if (env.FORCE_COLOR !== undefined) return !["0", "false"].includes(env.FORCE_COLOR);
   if (!stream?.isTTY) return false;
   if (env.TERM === "dumb") return false;
   if (env.CI !== undefined && env.CI !== "" && env.CI !== "0" && env.CI !== "false") return false;
   return true;
 }
 
+export function presentationEnabled({ stream = process.stderr, env = process.env, plain = false, accessible = false } = {}) {
+  return Boolean(stream?.isTTY && !plain && !accessible && env.TERM !== "dumb"
+    && !env.CI && !env.TUNELITO_PLAIN);
+}
+
 export function createStyle(options = {}) {
   const enabled = typeof options === "boolean" ? options : colorEnabled(options);
-  const wrap = ([open, close]) => (text) => (enabled ? `${open}${text}${close}` : String(text));
+  const wrap = ([open, close]) => (text) => {
+    const safe = terminalText(text, { multiline: true });
+    return enabled ? `${open}${safe}${close}` : safe;
+  };
   return {
     enabled,
     bold: wrap(ANSI.bold),
@@ -63,18 +85,23 @@ export function displayPath(path, { cwd = process.cwd(), home = homedir() } = {}
 
 // Aligned label/value rows. Each row: { label, value, hint?, tone? }.
 // tone colors the value: "strong" | "warn" | "error" | "muted".
-export function formatRows(rows, style = plainStyle, { indent = "  ", gap = 3, labelWidth } = {}) {
+export function formatRows(rows, style = plainStyle, { indent = "  ", gap = 3, labelWidth, columns = 0 } = {}) {
   const visible = rows.filter(Boolean);
   const width = Math.max(labelWidth || 0, ...visible.map((row) => row.label.length));
   return visible.map((row) => {
-    const label = style.dim(row.label.padEnd(width + gap));
-    const value = toneValue(row.value, row.tone, style);
-    const hint = row.hint ? `   ${style.dim(row.hint)}` : "";
-    return `${indent}${label}${value}${hint}`;
+    const label = terminalText(row.label).padEnd(width + gap);
+    const value = toneValue(terminalText(row.value), row.tone, style);
+    const hint = row.hint ? `   ${terminalText(row.hint)}` : "";
+    const line = `${indent}${label}${value}${hint}`;
+    if (!columns || displayWidth(stripAnsi(line)) < columns) return line;
+    // Stack rows at narrow widths. Keep URLs, paths and runnable commands
+    // intact: terminals may wrap them, but the only copy is never truncated.
+    return `${indent}${terminalText(row.label)}\n${indent}  ${value}${hint ? `\n${indent}  ${terminalText(row.hint)}` : ""}`;
   });
 }
 
 export function toneValue(value, tone, style = plainStyle) {
+  value = terminalText(value);
   if (tone === "strong") return style.bold(value);
   if (tone === "warn") return style.yellow(value);
   if (tone === "error") return style.red(value);
@@ -91,8 +118,16 @@ export function formatClock(date = new Date()) {
 
 // One runtime event per line: "14:03  comment  Ana: the hero copy…"
 export function formatEvent(verb, text, { style = plainStyle, now = new Date(), tone } = {}) {
-  const coloredVerb = toneValue(verb.padEnd(EVENT_VERB_WIDTH), tone, style);
-  return `${style.dim(formatClock(now))}  ${coloredVerb} ${text}`;
+  const coloredVerb = toneValue(terminalText(verb).padEnd(EVENT_VERB_WIDTH), tone, style);
+  return `${style.dim(formatClock(now))}  ${coloredVerb} ${terminalText(text)}`;
+}
+
+export function displayWidth(value) {
+  return Array.from(String(value)).reduce((width, char) => {
+    if (/\p{Mark}/u.test(char)) return width;
+    const n = char.codePointAt(0);
+    return width + ((n >= 0x1100 && (n <= 0x115f || n >= 0x2e80)) ? 2 : 1);
+  }, 0);
 }
 
 export function truncate(text, max) {
@@ -112,7 +147,7 @@ export function formatDuration(ms) {
 }
 
 export function plural(count, singular, pluralForm = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
+  return `${terminalText(count)} ${count === 1 ? singular : pluralForm}`;
 }
 
 // Optimal string alignment distance: a swapped pair ("--opne") costs one edit,
@@ -179,16 +214,16 @@ export class UsageError extends Error {
 // pointer to help; never a full help dump.
 export function formatCliError(error, { style = plainStyle, helpCommand = "tunelito --help" } = {}) {
   const message = error?.message || String(error);
-  const lines = [`${style.red("tunelito:")} ${message}`];
-  if (error?.hint) lines.push(error.hint);
-  if (helpCommand) lines.push(style.dim(`Run \`${helpCommand}\` for usage.`));
+  const lines = [`${style.red("tunelito:")} ${terminalText(message)}`];
+  if (error?.hint) lines.push(terminalText(error.hint));
+  if (helpCommand) lines.push(`Run \`${terminalText(helpCommand)}\` for usage.`);
   return `${lines.join("\n")}\n`;
 }
 
 // Writes lines to a stream while keeping one "sticky" status line (the
 // pending tunnel row) at the bottom on a TTY. On a non-TTY every update is
 // simply appended, so logs and pipes stay linear.
-export function createTerminalWriter({ stream = process.stdout, interactive = Boolean(stream?.isTTY) } = {}) {
+export function createTerminalWriter({ stream = process.stdout, env = process.env, plain = false, accessible = false, interactive = presentationEnabled({ stream, env, plain, accessible }) } = {}) {
   let sticky = "";
 
   function clearSticky() {
@@ -212,11 +247,16 @@ export function createTerminalWriter({ stream = process.stdout, interactive = Bo
         return;
       }
       clearSticky();
-      // A wrapped sticky line cannot be erased with a single-line clear, so
-      // fall back to plain truncated text when it would overflow.
+      // A wrapped sticky line cannot be erased with a single-line clear.
+      // Append it intact instead of hiding the only copy of a value.
       const columns = stream.columns || 0;
       const plain = stripAnsi(text);
-      sticky = columns && plain.length >= columns ? `${plain.slice(0, columns - 2)}…` : text;
+      if (columns && (displayWidth(plain) >= columns || plain.includes("\n"))) {
+        sticky = "";
+        stream.write(`${text}\n`);
+        return;
+      }
+      sticky = text;
       drawSticky();
     },
     settle(text) {

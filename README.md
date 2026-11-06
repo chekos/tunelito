@@ -83,7 +83,7 @@ npm link
 tunelito ./examples/simple-review.html
 ```
 
-Tunelito prints:
+Tunelito 2.0 prints human serve output on stderr:
 
 ```text
 tunelito <version> · examples/simple-review.html
@@ -101,7 +101,10 @@ tunnel starts; paths print relative to your working directory. Comments, viewer
 changes, reloads, and review handoffs stream below as one timestamped line
 each, and Ctrl-C prints a one-line summary of the session. Add `--verbose` to
 also print the resolved theme, session metadata path, and handoff command.
-Color appears only on a TTY and honors `NO_COLOR` and `FORCE_COLOR`.
+Color follows `--no-color` / `--plain`, then nonempty `NO_COLOR`, then
+`FORCE_COLOR` (`0` disables), then each output stream's capabilities. Redraws
+are disabled in CI, `TERM=dumb`, pipes, and `--plain` accessible presentation.
+At narrow widths rows stack; URLs, paths, and commands remain complete.
 
 Tunelito prints the `Public` URL only after the randomized Quick Tunnel hostname has
 been verified against the running Tunelito server. A brand-new hostname can take
@@ -242,7 +245,7 @@ The public [configuration guide](docs-site/configuration.mdx) documents the stab
 
 ## CLI
 
-`tunelito --help` fits on one screen: usage, examples, the options most reviews
+`tunelito --help` leads with usage, examples, the options most reviews
 need, and the command list. Deeper options live in topics:
 
 ```bash
@@ -253,6 +256,7 @@ tunelito help network        # port, host, tunnel, and access
 tunelito help json           # the --json event stream
 tunelito help all            # every option
 tunelito <command> --help    # options for one command
+tunelito help inbox record --json  # structured command/option metadata
 ```
 
 The full reference is in [docs-site/cli.mdx](docs-site/cli.mdx).
@@ -260,6 +264,51 @@ The full reference is in [docs-site/cli.mdx](docs-site/cli.mdx).
 Errors print one line for the problem and one for the fix, never the whole help.
 Typos get a suggestion (`--no-tunel` → `Did you mean --no-tunnel?`). Usage errors
 exit with code 2 and runtime errors with 1.
+
+Options accept `--port 4317` and `--port=4317`. Use `--` before a literal path
+that looks like an option, for example `tunelito -- --draft.html`. Global
+`--help`, `--version`, `--json`, `--format`, `--no-color`, and `--plain` work
+before or after command paths. Recognized help/version bypass ordinary
+validation and configuration; flags after `--` remain literal. Repeated
+non-repeatable options and conflicting selections fail instead of silently
+overriding earlier values.
+
+### Migrating from 1.x to CLI contract v2 (2.0.0)
+
+Human serve output now belongs to **stderr**, including comment and agent-session
+events. One-shot requested reports, inbox results/prompts, help, version, and
+skill content remain on **stdout**; MCP retains its JSON-RPC protocol. Scripts
+that scraped serve stdout should select `--json` (or `--format=json`). Scripts
+that consume human logs should capture stderr. Pin `tunelito@1` while adapting
+an existing integration; the 2.0 contract has no implicit legacy mode.
+
+In machine mode every command failure writes exactly one error object to
+stderr, even for parse failures or with `TUNELITO_DEBUG=1`:
+
+```json
+{"type":"error","format":"tunelito-error","schemaVersion":2,"code":"USAGE_ERROR","message":"Unknown option --bogus","exitCode":2,"recovery":[{"command":"tunelito doctor --help"}]}
+```
+
+`code` is `USAGE_ERROR`, `RUNTIME_ERROR`, `CANCELLED`, `CLEANUP_FAILED`, or
+`SHUTDOWN_TIMEOUT`. `message` explains the failure; `recovery` contains
+executable command suggestions. Optional `hint` gives additional guidance and
+`cause` names a system error code. Requested diagnostic reports can still be
+returned on stdout when checks fail. Parse stdout and stderr independently;
+never merge stderr into a JSON/JSONL consumer. `--format=plain` / `--plain`
+select accessible human output; JSON remains machine output even on a TTY.
+
+SIGINT, SIGTERM, and SIGHUP now exit **130, 143, and 129**, respectively (1.x
+returned 0). Supervisors should recognize those intentional cancellation codes.
+Cleanup stops local workers, watchers, sockets, and tunnel processes in parallel,
+escalates owned local processes after one second, and has a five-second total
+deadline including output drain. A second signal forces immediate local exit.
+Completed cleanup preserves the final `stopped` event and comment summary;
+forced exit can omit output or session-metadata updates. A provider may already
+have submitted remote work; cancellation does not confirm that it stopped.
+
+Human output renders terminal controls and invisible format characters as
+visible escapes. Newlines/tabs are escaped in single-line fields. Stored
+comments and machine JSON retain their values.
 
 For scripts and agents, `--json` replaces the human startup block with one JSON
 object per line on stdout: `started`, `tunnel` (with `state` `ready` and

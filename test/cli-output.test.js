@@ -258,11 +258,8 @@ test("muted reporters drop shutdown noise so stopped is the last event", () => {
   assert.equal(human.text(), "Stopped after 1s · 0 new comments in a.comments.md\n");
 });
 
-test("--flag=value explains the space-separated form", () => {
-  assert.throws(
-    () => parseArgs(["page.html", "--comments=x.md"]),
-    (error) => error.message === '--comments takes its value after a space, not "="' && error.hint === "Use --comments <value>.",
-  );
+test("--flag=value matches the space-separated form", () => {
+  assert.deepEqual(parseArgs(["page.html", "--comments=x.md"]), parseArgs(["page.html", "--comments", "x.md"]));
 });
 
 test("JSON started event hides the comments path for ephemeral rooms", () => {
@@ -291,7 +288,7 @@ test("human reporter renders the same events as terminal lines", () => {
 test("terminal writer keeps a sticky status line on a TTY and appends otherwise", () => {
   const chunks = [];
   const stream = { isTTY: true, columns: 80, write: (chunk) => chunks.push(chunk) };
-  const out = createTerminalWriter({ stream });
+  const out = createTerminalWriter({ stream, env: {} });
   out.status("  Public   starting…");
   out.line("09:00  viewers  1 connected");
   out.settle("  Public   https://x");

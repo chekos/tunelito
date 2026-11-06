@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { OWNED_PROCESS_OPTIONS, ownChild, stopOwnedChild } from "./process-lifecycle.js";
 import { Resolver } from "node:dns";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
@@ -111,7 +112,7 @@ export function startCloudflareTunnel({
     quickTunnelReady = false;
     tunnelConnectionReady = false;
     scheduleDiscoveryTimeout();
-    const launchedChild = spawnFn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const launchedChild = ownChild(spawnFn(command, args, { ...OWNED_PROCESS_OPTIONS, stdio: ["ignore", "pipe", "pipe"] }));
     child = launchedChild;
     const flushStreams = [
       inspectStream(launchedChild.stdout, inspectLine),
@@ -162,7 +163,7 @@ export function startCloudflareTunnel({
     if (startupError || stopped) return;
     startupError = error;
     clearDiscoveryTimer();
-    if (child && !child.killed) child.kill("SIGTERM");
+    void stopOwnedChild(child).catch(() => {});
     onError?.(error);
   }
 
@@ -172,11 +173,11 @@ export function startCloudflareTunnel({
     get process() {
       return child;
     },
-    stop() {
+    async stop() {
       stopped = true;
       clearDiscoveryTimer();
       verificationController?.abort();
-      if (child && !child.killed) child.kill("SIGTERM");
+      await stopOwnedChild(child);
     },
   };
 }

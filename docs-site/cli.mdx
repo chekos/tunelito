@@ -3,13 +3,13 @@ title: "CLI reference"
 description: "Tunelito command-line options and examples."
 ---
 
-`tunelito --help` shows a one-screen summary. `tunelito help <topic>` prints one
+`tunelito --help` leads with the review task. `tunelito help <topic>` prints one
 section below (`agent`, `markdown`, `link-preview`, `network`, `json`), and
 `tunelito <command> --help` prints a command's options. This page is
 `tunelito help all`:
 
 ```text
-Tunelito 1.1.0
+Tunelito 2.0.0
 
 Usage:
   tunelito <page.html|notes.md|folder> [options]
@@ -25,6 +25,10 @@ Core:
   --agent-session       Let the current coding-agent conversation handle comments
   --json                Print startup and runtime events as JSON lines (for scripts and agents)
   --verbose             Also print theme, session metadata, and handoff rows at startup
+  --format <text|json|plain>
+                        Select human text, machine JSONL, or accessible plain output
+  --no-color            Disable color, including FORCE_COLOR
+  --plain               Disable color and terminal redraws (accessible presentation)
   -v, --version         Show version
   -h, --help            Show this help
 
@@ -39,6 +43,7 @@ Markdown presentation:
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
                         them (--code-wrap restores the wrapping default)
+  --code-wrap           Wrap long Markdown code lines (default)
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
   --owner <name>        Seed the editable owner name for the direct local viewer
@@ -64,6 +69,8 @@ Link previews (Markdown):
                         Also resolve previews for keyed public visitors (default: owner only)
 
 Agents:
+  Before serving from a coding agent, load the bundled workflow: tunelito skill show
+  Installation guidance: tunelito skill setup
   --agent-session       Watch comments for the current agent session; do not spawn a worker
   --agent <codex|claude|custom>
                         Run a local coding-agent worker for persistent comments
@@ -127,8 +134,8 @@ Run `tunelito --help` for usage.
 ```
 
 Usage errors (unknown or removed flags, missing targets) exit with `2`. Runtime
-errors exit with `1`. Set `TUNELITO_DEBUG=1` to print the stack trace for an
-unexpected failure.
+errors exit with `1`. Set `TUNELITO_DEBUG=1` to print a stack trace for an
+unexpected failure in human mode. In machine mode errors remain JSON only.
 
 Flags removed in 1.0 fail with their replacement: `--out` → `--comments`,
 `--live` → `--ephemeral`, `--owner-name` → `--owner`.
@@ -141,6 +148,54 @@ tunelito ./site --json | jq -r 'select(.type=="tunnel" and .state=="ready") | .p
 
 `inbox`, `doctor`, `session status`, `comments inspect`, `config show`, and
 `review watch` also accept `--json` for a single machine-readable report.
+
+## CLI contract v2 migration (2.0.0)
+
+Human serve startup, progress, warnings, comment/agent events, and shutdown are
+written to **stderr**. Requested reports, inbox results/prompts, skill content,
+help, and version remain on **stdout**; MCP continues to use JSON-RPC. Serve
+`--json` / `--format=json` preserves typed timestamped JSONL on stdout rather
+than buffering the session into one document.
+
+Every machine-mode failure writes one error object on stderr, including parse
+failures regardless of flag order and failures on a TTY:
+
+```json
+{"type":"error","format":"tunelito-error","schemaVersion":2,"code":"USAGE_ERROR","message":"Unknown option --bogus","exitCode":2,"recovery":[{"command":"tunelito doctor --help"}]}
+```
+
+Stable codes are `USAGE_ERROR`, `RUNTIME_ERROR`, `CANCELLED`, `CLEANUP_FAILED`,
+and `SHUTDOWN_TIMEOUT`. Optional `hint` gives recovery guidance; `cause` is a
+system error code. Failed diagnostic reports may also appear on stdout. Read
+the two streams independently; do not redirect `2>&1` into a JSON consumer.
+Use `--json` for an older startup-text parser, or capture stderr for human
+logs. Pin `tunelito@1` while migrating; v2 has no implicit legacy mode.
+
+SIGINT, SIGTERM, and SIGHUP exit `130`, `143`, and `129` instead of `0`. Local
+cleanup runs concurrently, escalates owned provider/tunnel process groups
+after one second, and has a five-second deadline including output drain.
+Normal cleanup ends with a `stopped` event (`signal`, `exitCode`, `cleanup`)
+and the retained/discarded-comment summary. A second signal forces immediate
+exit and can omit the final output or metadata update. Remote provider work
+is never reported as confirmed stopped by local cancellation.
+
+## Parsing, help, and presentation
+
+`--port 4317` and `--port=4317` are equivalent. `--` ends option parsing; for
+example, `tunelito -- --draft.html` serves that literal filename. Global
+`--help`, `--version`, `--json`, `--format`, `--no-color`, and `--plain` work
+before or after command paths. Help/version bypass ordinary validation and
+configuration; `--help` after `--` remains literal. Repeated non-repeatable
+flags and conflicting options are rejected. `tunelito help inbox record`
+and `tunelito inbox record --help` agree; append `--json` for command metadata.
+
+Color precedence is `--no-color` / `--plain`, nonempty `NO_COLOR`, `FORCE_COLOR`
+(including `0`), then stream capabilities. Redraws independently stop in CI,
+`TERM=dumb`, pipes, and `--plain` / `--format=plain` accessible presentation.
+Required labels, context, and recovery stay at normal contrast. Narrow rows
+stack without truncating the only copy of a URL, path, identifier, or command.
+Human output escapes C0/C1 controls and invisible format characters; JSON
+values and stored reviewer records remain unchanged.
 
 ## Common examples
 
