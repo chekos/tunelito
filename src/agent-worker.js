@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { OWNED_PROCESS_OPTIONS, ownChild, stopOwnedChild } from "./process-lifecycle.js";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
@@ -132,7 +133,7 @@ export function createAgentWorker({
         clearTimeout(timer);
         timer = null;
       }
-      if (currentChild && !currentChild.killed) currentChild.kill("SIGTERM");
+      await stopOwnedChild(currentChild);
     },
   };
 }
@@ -1094,7 +1095,7 @@ export async function runAgentCommand({ provider, command, workspaceRoot, commen
         "-o",
         outputFile,
         "-",
-      ], { cwd: workspaceRoot, env, stdio: ["pipe", "pipe", "pipe"] });
+      ], { cwd: workspaceRoot, env, ...OWNED_PROCESS_OPTIONS, stdio: ["pipe", "pipe", "pipe"] });
     } else if (provider === "claude") {
       child = spawnFn("claude", [
         "-p",
@@ -1106,11 +1107,12 @@ export async function runAgentCommand({ provider, command, workspaceRoot, commen
         "Read,Write,Edit,MultiEdit,LS,Grep,Glob",
         "--add-dir",
         workspaceRoot,
-      ], { cwd: workspaceRoot, env, stdio: ["pipe", "pipe", "pipe"] });
+      ], { cwd: workspaceRoot, env, ...OWNED_PROCESS_OPTIONS, stdio: ["pipe", "pipe", "pipe"] });
     } else {
-      child = spawnFn(command, { cwd: workspaceRoot, env, shell: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawnFn(command, { cwd: workspaceRoot, env, ...OWNED_PROCESS_OPTIONS, shell: true, stdio: ["pipe", "pipe", "pipe"] });
     }
 
+    ownChild(child);
     const result = await collectChildResult(child, prompt);
     const fileOutput = outputFile && existsSync(outputFile) ? readFileSync(outputFile, "utf8") : "";
     const output = fileOutput.trim() ? fileOutput : result.stdout;

@@ -17,6 +17,7 @@ import {
   waitForAgentInboxComments,
 } from "./agent-worker.js";
 import { buildCommentsIndex } from "./comment-index.js";
+import { terminalText } from "./cli-output.js";
 import { defaultCommentsPath, loadCommentsFromMarkdown } from "./comments.js";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
@@ -46,7 +47,7 @@ export function createMcpServer({ stdin = process.stdin, stdout = process.stdout
         const response = await handleMcpRequest(item.message, { now });
         if (response) writeMcpMessage(stdout, response);
       } catch (error) {
-        stderr.write(`Tunelito MCP: ${error.stack || error.message}\n`);
+        stderr.write(`Tunelito MCP: ${terminalText(error.stack || error.message, { multiline: true })}\n`);
         writeMcpMessage(stdout, jsonRpcError(item.message?.id ?? null, -32603, error.message));
       }
     }

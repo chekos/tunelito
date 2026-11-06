@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0 - Unreleased
+
+- **Breaking CLI contract v2 (#163, #166).** Human serve startup, progress, comments, warnings, prompts, and shutdown move from stdout to stderr. Requested reports, prompts from inbox commands, help, version, skill content, and MCP JSON-RPC retain stdout. Serve `--json` / `--format=json` keeps typed timestamped JSONL on stdout. Every machine-mode command failure writes one `tunelito-error` schemaVersion `2` object on stderr, including parse failures regardless of flag order. Update scripts to parse stderr JSON separately, or pin Tunelito 1.x during migration; do not merge stderr into JSONL stdout. Structured diagnostic reports can still appear on stdout when they describe a failing check.
+- **Breaking signal status (#166).** SIGINT, SIGTERM, and SIGHUP now exit `130`, `143`, and `129`, rather than `0`. Update supervisors and test harnesses to recognize intentional cancellation. Normal cleanup drains the final `stopped` JSONL event and retained/discarded-comment summary. A five-second deadline and a second signal force local exit; owned agent/tunnel process groups receive SIGTERM followed by SIGKILL if needed. Cancellation never confirms that remote provider work stopped.
+- Escapes C0/C1 controls, terminal CSI/OSC introducers, bidirectional controls, and zero-width format characters only in human output (#162). Stored reviewer content and machine JSON values are preserved; newline/tab characters become visible in single-line fields.
+- Shares option metadata and global discovery across command depths (#164). Accepts `--option=value`, honors literal arguments after `--`, rejects repeated non-repeatable and conflicting options, and runs recognized help/version before ordinary validation or configuration. `help <path>` and `<path> --help` also support `--json` machine metadata. Root help leads with the review task; agent setup remains under `help agent` and `skill setup`.
+- Adds `--format text|json|plain`, `--plain`, and `--no-color` (#165). Color precedence is explicit no-color, nonempty NO_COLOR, FORCE_COLOR (including `0`), then stream capabilities. Redraws are disabled independently in CI, dumb terminals, pipes, and plain presentation. Required labels and recovery use normal contrast; narrow rows stack without truncating URLs, paths, identifiers, or commands.
+
 ## 1.1.0 - 2026-11-02
 
 Tunelito 1.1 makes the review panel usable from the keyboard and readable on dark pages. It also sets the default `bns-pitaya` theme in the BNS faces and bundles Paper Mono for code. There are no breaking changes.

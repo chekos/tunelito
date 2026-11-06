@@ -2,6 +2,20 @@
 
 Tunelito is published to npm as a public package. Prefer trusted publishing from GitHub Actions so releases do not depend on long-lived npm tokens.
 
+## CLI contract v2 (2.0.0)
+
+The 2.0.0 package metadata includes breaking CLI changes: human serve output
+moves to stderr, machine failures use `tunelito-error` schemaVersion `2` JSON
+on stderr, and SIGINT/SIGTERM/SIGHUP exit `130`/`143`/`129`. Serve stdout remains
+typed timestamped JSONL in machine mode. The README's migration section is the
+consumer contract; include these changes in release notes and preserve the
+1.x npm version for integrations that need time to migrate.
+
+Merging the version PR does not publish the package. Publish only through the
+release workflow below. The bundled skill changes with this contract, so the
+release also requires the byte-for-byte BNS Marketplace sync and writing plugin
+version bump described in `docs/agents/RELEASE_PLAYBOOK.md`.
+
 ## One-Time npm Setup
 
 1. Claim or create the `tunelito` package on npm.

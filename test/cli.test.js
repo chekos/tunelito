@@ -23,15 +23,13 @@ test("CLI version matches package metadata", () => {
   assert.equal(VERSION, pkg.version);
 });
 
-test("top-level help directs coding agents to the bundled workflow", () => {
+test("top-level help leads with the review task and routes agents to focused help", () => {
   const help = usage();
-  const codingAgentsIndex = help.indexOf("Coding agents:");
-  const optionsIndex = help.indexOf("Options:");
-
-  assert.ok(codingAgentsIndex > 0);
-  assert.ok(codingAgentsIndex < optionsIndex);
-  assert.match(help, /Before serving a review room[\s\S]*tunelito skill show/);
-  assert.match(help, /Installation guidance:[\s\S]*tunelito skill setup/);
+  assert.match(help, /^Usage:/);
+  assert.doesNotMatch(help, /Coding agents:/);
+  assert.match(help, /tunelito help agent/);
+  assert.match(helpTopic("agent"), /Before serving[\s\S]*tunelito skill show/);
+  assert.match(helpTopic("agent"), /Installation guidance: tunelito skill setup/);
 });
 
 test("verified public URLs are persisted for agent-session recovery", () => {
