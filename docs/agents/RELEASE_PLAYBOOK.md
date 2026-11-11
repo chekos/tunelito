@@ -72,7 +72,9 @@ A second copy of the agent skill ships in the `writing` plugin of `chekos/bns-ma
 
 Use trusted publishing through GitHub Actions. Do not introduce long-lived npm tokens unless there is a documented reason.
 
-Publishing is triggered by publishing a GitHub Release, not by pushing a tag manually. Draft releases can be created with:
+Agents release by merging a version PR: a push to `main` whose `package.json` version is unpublished and whose CHANGELOG heading is dated makes `Publish Package` create the GitHub Release and publish to npm (`scripts/release-plan.mjs`). Agents should not need `gh workflow run`, `gh release edit`, or the user's machine. After merge, confirm the run, smoke the npm install, and do the Plugin Skill Sync above.
+
+Publishing a GitHub Release by hand also works. Draft releases can be created with:
 
 ```bash
 gh workflow run "Draft Release" -f version=0.1.2

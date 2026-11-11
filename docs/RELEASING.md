@@ -27,7 +27,20 @@ version bump described in `docs/agents/RELEASE_PLAYBOOK.md`.
 
 3. Require two-factor authentication and disallow legacy automation tokens after trusted publishing succeeds.
 
-## npm Release
+## Automatic release on merge (default)
+
+Merging a version PR is the release. On every push to `main`, the `Publish Package` workflow runs `scripts/release-plan.mjs`. When `package.json` names a version that is not on npm yet and its `CHANGELOG.md` heading is dated (`## 2.0.1 - 2026-11-12`, not `Unreleased`), the workflow runs `npm run ci`, creates the `vX.Y.Z` GitHub Release with generated notes, and publishes to npm through trusted publishing. Any other push is a no-op. No manual dispatch, draft review, or "Publish release" click is needed, so an agent can ship a release by merging a PR.
+
+To release:
+
+1. In a PR, set the version in `package.json` and `package-lock.json`, and date its `CHANGELOG.md` heading. Keep the heading `Unreleased` while work is still accumulating; an undated heading never releases.
+2. Run `npm run release:check -- <version>` and `npm run ci`.
+3. Merge the PR. Watch the `Publish Package` run on the merge commit.
+4. Smoke the install (below), then sync the skill to BNS Marketplace (`docs/agents/RELEASE_PLAYBOOK.md`).
+
+The manual path below still works: publishing a GitHub Release by hand also triggers `Publish Package`, which skips npm when that version already exists.
+
+## Manual npm Release
 
 All code and version changes must land through a pull request before a release is created.
 

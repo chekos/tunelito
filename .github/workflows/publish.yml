@@ -1,12 +1,27 @@
 name: Publish Package
 
+# Two ways in, one npm trusted publisher (this file):
+# - push to main: if package.json names a dated, unpublished version
+#   (see scripts/release-plan.mjs), run CI, create the vX.Y.Z GitHub
+#   Release with generated notes, and publish to npm. Merging a version PR
+#   is the whole release; no manual step.
+# - a GitHub Release published by hand still publishes, as before.
+# Releases created here use GITHUB_TOKEN, which does not re-trigger this
+# workflow, and the npm "already published" guard makes reruns safe.
+
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
+
+concurrency:
+  group: publish-package
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -15,18 +30,35 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run ci
+      - id: plan
+        if: github.event_name == 'push'
+        run: node scripts/release-plan.mjs
+      - id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "release" ] || [ "${{ steps.plan.outputs.release }}" = "true" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.go == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.go == 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.gate.outputs.go == 'true'
+        run: npm run ci
       - id: release
-        run: node scripts/npm-release-tag.mjs "${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+        if: steps.gate.outputs.go == 'true'
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'release' && github.event.release.tag_name || steps.plan.outputs.version }}
+        run: node scripts/npm-release-tag.mjs "$RELEASE_INPUT" >> "$GITHUB_OUTPUT"
       - id: package
+        if: steps.gate.outputs.go == 'true'
         run: |
           node <<'NODE' >> "$GITHUB_OUTPUT"
           const pkg = require("./package.json");
@@ -34,17 +66,38 @@ jobs:
           console.log(`version=${pkg.version}`);
           NODE
       - name: Validate release metadata
+        if: steps.gate.outputs.go == 'true'
         run: |
           if [ "${{ steps.package.outputs.version }}" != "${{ steps.release.outputs.version }}" ]; then
-            echo "Release tag ${{ github.event.release.tag_name }} resolves to ${{ steps.release.outputs.version }}, but package.json is ${{ steps.package.outputs.version }}." >&2
+            echo "Release ${{ steps.release.outputs.version }} does not match package.json ${{ steps.package.outputs.version }}." >&2
             exit 1
           fi
 
-          if [ "${{ github.event.release.prerelease }}" != "${{ steps.release.outputs.is_prerelease }}" ]; then
+          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.prerelease }}" != "${{ steps.release.outputs.is_prerelease }}" ]; then
             echo "GitHub prerelease flag (${{ github.event.release.prerelease }}) does not match semver prerelease state (${{ steps.release.outputs.is_prerelease }})." >&2
             exit 1
           fi
+      - name: Create GitHub release
+        if: steps.gate.outputs.go == 'true' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "${tag} already exists; leaving it as is."
+            exit 0
+          fi
+          flags=(--target "${GITHUB_SHA}" --title "${tag}" --generate-notes)
+          if [ "${IS_PRERELEASE}" = "true" ]; then
+            flags+=(--prerelease --latest=false)
+          else
+            flags+=(--latest)
+          fi
+          gh release create "${tag}" "${flags[@]}"
       - id: published
+        if: steps.gate.outputs.go == 'true'
         run: |
           if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -52,5 +105,5 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-      - if: steps.published.outputs.exists != 'true'
+      - if: steps.gate.outputs.go == 'true' && steps.published.outputs.exists != 'true'
         run: npm publish --provenance --tag "${{ steps.release.outputs.npm_tag }}"
