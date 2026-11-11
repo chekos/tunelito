@@ -86,7 +86,14 @@ jobs:
         run: |
           tag="v${VERSION}"
           if gh release view "${tag}" >/dev/null 2>&1; then
-            echo "${tag} already exists; leaving it as is."
+            # A rerun after a failed npm publish may only continue from the
+            # same commit; never publish newer code under an older tag.
+            tagged="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag}" --jq .sha)"
+            if [ "${tagged}" != "${GITHUB_SHA}" ]; then
+              echo "${tag} already points at ${tagged}, not ${GITHUB_SHA}. Bump the version instead of republishing under ${tag}." >&2
+              exit 1
+            fi
+            echo "${tag} already exists at this commit; continuing to npm."
             exit 0
           fi
           flags=(--target "${GITHUB_SHA}" --title "${tag}" --generate-notes)
