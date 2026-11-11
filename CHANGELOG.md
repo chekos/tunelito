@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.0.0 - Unreleased
+## 2.0.0 - 2026-11-11
+
+Tunelito 2.0 defines CLI contract v2: human output moves to stderr, machine failures share one JSON error shape, and signals exit with conventional status codes. Scripts that parse startup output or exit codes need the migration notes in the README; pin 1.x if you need more time. It also adds the `screenplay` Markdown theme.
 
 - **Breaking CLI contract v2 (#163, #166).** Human serve startup, progress, comments, warnings, prompts, and shutdown move from stdout to stderr. Requested reports, prompts from inbox commands, help, version, skill content, and MCP JSON-RPC retain stdout. Serve `--json` / `--format=json` keeps typed timestamped JSONL on stdout. Every machine-mode command failure writes one `tunelito-error` schemaVersion `2` object on stderr, including parse failures regardless of flag order. Update scripts to parse stderr JSON separately, or pin Tunelito 1.x during migration; do not merge stderr into JSONL stdout. Structured diagnostic reports can still appear on stdout when they describe a failing check.
 - **Breaking signal status (#166).** SIGINT, SIGTERM, and SIGHUP now exit `130`, `143`, and `129`, rather than `0`. Update supervisors and test harnesses to recognize intentional cancellation. Normal cleanup drains the final `stopped` JSONL event and retained/discarded-comment summary. A five-second deadline and a second signal force local exit; owned agent/tunnel process groups receive SIGTERM followed by SIGKILL if needed. Cancellation never confirms that remote provider work stopped.
