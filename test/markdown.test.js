@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   MARKDOWN_CLIENT_ROUTE,
   MERMAID_CLIENT_ROUTE,
@@ -210,7 +211,7 @@ test("renderMarkdownDocument adds a desktop document-map shell with theme and re
 });
 
 test("renderMarkdownDocument selects each bundled theme and keeps custom CSS last", () => {
-  for (const themeName of ["default", "editorial", "technical", "bns-pitaya"]) {
+  for (const themeName of ["default", "editorial", "technical", "bns-pitaya", "screenplay"]) {
     const html = renderMarkdownDocument({
       markdownSource: "# Themed",
       themeName,
@@ -226,7 +227,7 @@ test("renderMarkdownDocument selects each bundled theme and keeps custom CSS las
 });
 
 test("every bundled theme defines each --tl-* token the Markdown and folder shells reference", () => {
-  for (const themeName of ["default", "editorial", "technical", "bns-pitaya"]) {
+  for (const themeName of ["default", "editorial", "technical", "bns-pitaya", "screenplay"]) {
     for (const html of [
       renderMarkdownDocument({ markdownSource: "# Tokens", themeName }),
       renderFolderLandingDocument({ folderName: "Tokens", themeName }),
@@ -540,4 +541,101 @@ test("renderMarkdownDocument stamps anchors, review pills, link titles, and the 
   }));
   assert.match(nested, /<li id="child">Child<\/li>/);
   assert.match(nested, /<li>Parent<ul>\n<li id="child">Child<\/li>/);
+});
+
+const SCREENPLAY_FIXTURE = readFileSync(new URL("../examples/markdown/screenplay.md", import.meta.url), "utf8");
+
+function screenplayTurns(html) {
+  return [...renderedMarkdownBody(html).matchAll(/<blockquote class="tunelito-screenplay-dialogue">\n([\s\S]*?)<\/blockquote>/g)].map((match) =>
+    [...match[1].matchAll(/<p(?: class="tunelito-screenplay-(cue|parenthetical)")?>([\s\S]*?)<\/p>/g)].map(([, role = "dialogue", inner]) => ({ role, inner })),
+  );
+}
+
+test("screenplay theme classifies screenplay-markdown-v1 dialogue turns", () => {
+  const html = renderMarkdownDocument({ markdownSource: SCREENPLAY_FIXTURE, themeName: "screenplay" });
+  const turns = screenplayTurns(html);
+  const cues = turns.map((turn) => turn[0]);
+  assert.ok(cues.every(({ role }) => role === "cue"), "every classified turn starts with its cue");
+  assert.deepEqual(cues.map(({ inner }) => inner), [
+    "<strong>LALO</strong>",
+    "<strong>MARIBEL</strong>",
+    "<strong>INÉS (V.O.)</strong>",
+    "<strong>MARIBEL (O.S.)</strong>",
+    "<strong>LALO</strong>",
+    "<strong>LALO (CONT&#39;D)</strong>",
+    "<strong>LALO</strong>",
+    "<strong>CLIENTE</strong>",
+    "<strong>DOÑA MARÍA GUADALUPE DE LOS ÁNGELES HERNÁNDEZ-QUINTANILLA</strong>",
+  ]);
+
+  const voiceOver = turns[2];
+  assert.deepEqual(voiceOver.map(({ role }) => role), ["cue", "parenthetical", "dialogue", "parenthetical", "dialogue"]);
+  assert.equal(voiceOver[1].inner, "<em>(en voz baja)</em>");
+  assert.equal(turns[6][1].inner, "Primera línea del letrero,<br>segunda línea del letrero.", "intentional hard breaks stay inside one dialogue paragraph");
+  assert.deepEqual(turns[8].map(({ role }) => role), ["cue", "dialogue", "dialogue"], "multiple dialogue paragraphs stay in one turn");
+  assert.equal(turns[4][1].inner, turns[1][1].inner, "repeated dialogue under different cues renders as separate turns");
+
+  const body = renderedMarkdownBody(html);
+  assert.match(body, /<h2[^>]*>INT\. RESTAURANTE LOS LAURELES — DÍA<\/h2>/);
+  assert.match(body, /<h3[^>]*>MINUTOS DESPUÉS<\/h3>/);
+  assert.match(body, /<h4[^>]*>CORTE A TÍTULOS\.<\/h4>/);
+  assert.match(body, /<p>PANEO por el comedor vacío\. Un DIABLITO/, "uppercase action stays an ordinary paragraph");
+  assert.doesNotMatch(body, /Author note/, "HTML comments stay hidden");
+  assert.match(html, /data-tunelito-theme-css="screenplay"/);
+  assert.match(html, /"Paper Mono", "Courier Prime", Courier/);
+});
+
+test("screenplay theme leaves nonmatching quotes, nested quotes, and fenced examples ordinary", () => {
+  const body = renderedMarkdownBody(renderMarkdownDocument({ markdownSource: SCREENPLAY_FIXTURE, themeName: "screenplay" }));
+  assert.match(body, /<blockquote>\n<p>LALO<\/p>\n<p>This quote has an unbolded cue/);
+  assert.match(body, /<blockquote>\n<p><strong>CLIENTE<\/strong><\/p>\n<\/blockquote>/, "a cue without dialogue stays an ordinary quote");
+  assert.match(body, /<blockquote>\n<p><strong>CLIENTE<\/strong> mixed text in the cue paragraph<\/p>/);
+  assert.match(body, /<code class="language-markdown">&gt; \*\*LALO\*\*/, "fenced examples stay literal");
+
+  const edge = renderedMarkdownBody(renderMarkdownDocument({
+    themeName: "screenplay",
+    markdownSource: [
+      "> **INÉS**",
+      "> soft newline only",
+      "",
+      "> **INÉS**",
+      ">",
+      "> *(sólo acotación)*",
+      "",
+      "> **INÉS**",
+      ">",
+      "> - a list",
+      "",
+      "> **INÉS**",
+      ">",
+      "> > nested",
+      "",
+      "- item",
+      "",
+      "  > **NESTED**",
+      "  >",
+      "  > Inside a list.",
+      "",
+      "> ****",
+      ">",
+      "> Empty cue.",
+      "",
+      "> ***INÉS***",
+      ">",
+      "> Emphasis inside the cue.",
+      "",
+    ].join("\n"),
+  }));
+  assert.doesNotMatch(edge, /tunelito-screenplay/, "only the documented top-level dialogue shape is classified");
+  assert.match(edge, /soft newline only/);
+  assert.match(edge, /sólo acotación/);
+  assert.match(edge, /Inside a list\./);
+});
+
+test("other themes render screenplay Markdown as ordinary blockquotes", () => {
+  for (const themeName of ["default", "editorial", "technical", "bns-pitaya"]) {
+    const html = renderMarkdownDocument({ markdownSource: SCREENPLAY_FIXTURE, themeName });
+    assert.doesNotMatch(renderedMarkdownBody(html), /tunelito-screenplay/, `${themeName} must not classify dialogue`);
+    assert.match(renderedMarkdownBody(html), /<blockquote>\n<p><strong>LALO<\/strong><\/p>\n<p>¿Y cuánto rato/);
+  }
 });

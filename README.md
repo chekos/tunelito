@@ -144,7 +144,7 @@ To use a named Markdown theme:
 tunelito ./notes.md --theme editorial
 ```
 
-Tunelito uses dark-only `bns-pitaya` when no theme is configured. It also includes the named `default`, `editorial`, and `technical` themes. See [Markdown themes and configuration](#markdown-themes-and-configuration) for persistent project and global settings.
+Tunelito uses dark-only `bns-pitaya` when no theme is configured. It also includes the named `default`, `editorial`, `technical`, and `screenplay` themes. See [Markdown themes and configuration](#markdown-themes-and-configuration) for persistent project and global settings.
 
 For in-meeting collaboration without writing comments to disk:
 
@@ -197,12 +197,13 @@ When a folder URL has no authored `index.html` or `index.md`, Tunelito serves an
 
 ## Markdown Themes and Configuration
 
-Tunelito ships four dependency-free themes:
+Tunelito ships five dependency-free themes:
 
 - `bns-pitaya` (default): a dark reading theme adapted from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme), set in Timeless Serif (headings) and Timeless Sans (text) when they are installed on the viewer's machine, with Optima/Seravek-style system fallbacks, and code in Paper Mono, which ships with Tunelito under the SIL Open Font License and is served from the review server; no copied stylesheet and no network assets. Timeless is never bundled: its license forbids redistribution, so install it from [timeless.co](https://timeless.co) to see it
 - `default`: the original neutral, system-sans review surface
 - `editorial`: a spacious serif-led layout for essays and long-form drafts
 - `technical`: a wider, denser sans/mono layout for code, tables, diagrams, and documentation
+- `screenplay`: a paper-and-ink screenplay review layout in Paper Mono, with sluglines, centered character cues, and a narrower dialogue column for Markdown that follows [screenplay-markdown-v1](docs/spec/screenplay-markdown-v1.md). Other themes render the same file as ordinary Markdown
 
 Without a CLI, project, or global theme setting, Markdown documents and generated folder pages use `bns-pitaya`. Choose `--theme default` to retain the original neutral light/dark surface.
 

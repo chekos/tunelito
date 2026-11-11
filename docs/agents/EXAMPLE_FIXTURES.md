@@ -29,6 +29,7 @@ Use the example fixtures as the shared regression surface for Tunelito UI work. 
 | `examples/markdown/footnotes.md` | GFM footnotes | Table references, repeated two-way links, multiline definitions, source preservation, safe HTML, code boundaries, and comment reattachment |
 | `examples/markdown/details-summary.md` | Safe native disclosures | Block and inline details/summary rendering, attribute stripping, escaped hostile HTML, collapsed comment targeting, and code boundaries |
 | `examples/markdown/kitchen-sink.md` | Full Markdown integration | Every top-level ruler block, code boundaries, local image, Mermaid, ordinary links, wiki links, metadata |
+| `examples/markdown/screenplay.md` | Screenplay review under `--theme screenplay` | screenplay-markdown-v1 dialogue classification, accented and long cues, V.O./O.S./CONT'D, parentheticals, repeated lines under different cues, hard breaks, fallback quotes, fenced literal, light/dark/mobile/print layout, dialogue comment anchoring |
 | `examples/markdown/ruler-density.md` | Dense document performance | At least 150 meaningful blocks, crowding, measurement, target accuracy, label usability |
 | `examples/markdown-vault/index.md` | Folder/index and Obsidian/PARA context | Root documents, collapsed nested folders, a ten-note reference shelf, navigation/property separation, aliases, target-plus-heading and unresolved references |
 

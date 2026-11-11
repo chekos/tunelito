@@ -134,7 +134,7 @@ const HELP_NETWORK = `Network and access:
 `;
 
 const HELP_MARKDOWN = `Markdown presentation:
-  --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya
+  --theme <name>        Markdown theme: default|editorial|technical|bns-pitaya|screenplay
   --markdown-css <href> Add a stylesheet link to rendered Markdown pages
   --no-code-wrap        Scroll long lines in Markdown code blocks instead of wrapping
                         them (--code-wrap restores the wrapping default)
@@ -142,6 +142,9 @@ const HELP_MARKDOWN = `Markdown presentation:
   --editable            Let the direct local owner edit safely served Markdown
   --section-index       Show a sticky Markdown section index on wide viewports
   --owner <name>        Seed the editable owner name for the direct local viewer
+
+Screenplays: --theme screenplay renders Markdown that follows
+screenplay-markdown-v1 (docs/spec/screenplay-markdown-v1.md in the package).
 
 Project defaults live in tunelito.config.json; run \`tunelito config show <target>\`
 to see the resolved values and where each came from.

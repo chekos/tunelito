@@ -168,7 +168,11 @@ With nothing configured it reports `Theme   bns-pitaya   default`.
 Startup prints a `Theme` row only when a CLI, project, or global setting picks
 the theme (or with `--verbose`).
 
-Use `--theme default` for Tunelito's neutral light/dark surface. CLI flags
+Use `--theme default` for Tunelito's neutral light/dark surface. For a
+screenplay written as Markdown, use `--theme screenplay` and follow
+`docs/spec/screenplay-markdown-v1.md`: `##` sluglines, `###` beats, `####`
+transitions, plain paragraphs for action, and one blockquote per dialogue turn
+(`> **CUE**`, a `>`-only line, then dialogue; parentheticals as `> *(...)*`). CLI flags
 override project config, which overrides global config and then built-in
 defaults. `config show` is read-only; do not create or edit
 `tunelito.config.json` merely to start a review unless the user asked to persist

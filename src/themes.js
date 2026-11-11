@@ -3,6 +3,7 @@ export const THEME_NAMES = Object.freeze([
   "editorial",
   "technical",
   "bns-pitaya",
+  "screenplay",
 ]);
 
 export const DEFAULT_THEME_NAME = "bns-pitaya";
@@ -23,6 +24,10 @@ export const THEME_DETAILS = Object.freeze({
   "bns-pitaya": {
     description: "A dark reading theme adapted from BNS Obsidian Pitaya: Timeless Serif and Sans when installed, bundled Paper Mono for code, and no network fonts.",
     colorModes: ["dark"],
+  },
+  screenplay: {
+    description: "A paper-and-ink screenplay review layout in bundled Paper Mono: sluglines, centered character cues, and a narrower dialogue column for documents that follow screenplay-markdown-v1.",
+    colorModes: ["light", "dark"],
   },
 });
 
@@ -355,6 +360,206 @@ const THEMES = {
 }
 :root[data-tunelito-theme="bns-pitaya"] .tunelito-markdown pre {
   box-shadow: inset 3px 0 var(--tl-code-keyword);
+}
+`,
+  screenplay: `
+:root[data-tunelito-theme="screenplay"] {
+  color-scheme: light dark;
+  /* screenplay-markdown-v1 review layout. Paper Mono is bundled and served
+     same-origin; Courier-style faces are installed fallbacks only. */
+  --tl-font-body: "Paper Mono", "Courier Prime", Courier, "Courier New", ui-monospace, monospace;
+  --tl-font-display: "Paper Mono", "Courier Prime", Courier, "Courier New", ui-monospace, monospace;
+  --tl-font-mono: "Paper Mono", "Courier Prime", Courier, "Courier New", ui-monospace, monospace;
+  --tl-page-bg: #e8e5de;
+  --tl-paper-bg: #fffefa;
+  --tl-text: #1b1a18;
+  --tl-muted: #55514a;
+  --tl-faint: #67625a;
+  --tl-heading-1: #1b1a18;
+  --tl-heading-2: #1b1a18;
+  --tl-heading-3: #1b1a18;
+  --tl-heading-4: #1b1a18;
+  --tl-heading-5: #1b1a18;
+  --tl-heading-6: #3d3a35;
+  --tl-accent: #8a3b12;
+  --tl-accent-strong: #6b2c0b;
+  --tl-border: #d9d4c8;
+  --tl-soft: #f4f1e9;
+  --tl-code-bg: #f4f1e9;
+  --tl-code-text: #1b1a18;
+  --tl-inline-code-bg: #efebe1;
+  --tl-quote: #3d3a35;
+  --tl-quote-border: #c9c2b3;
+  --tl-selection: rgba(138, 59, 18, 0.2);
+  --tl-error-bg: #fff3ea;
+  --tl-error-border: #d9a183;
+  --tl-error-text: #7a2e22;
+  --tl-properties-bg: #f4f1e9;
+  --tl-properties-shadow: rgba(40, 32, 20, 0.1);
+  --tl-pill-bg: #efe9dc;
+  --tl-pill-border: #d9cfba;
+  --tl-pill-text: #4f4637;
+  --tl-strong: var(--tl-text);
+  --tl-emphasis: var(--tl-text);
+  --tl-screenplay-action: 68ch;
+  --tl-screenplay-dialogue: 50ch;
+  --tl-screenplay-gutter: 3.5rem;
+  --tl-reading-measure: calc(var(--tl-screenplay-action) + 2 * var(--tl-screenplay-gutter));
+  --tl-page-padding: 64px var(--tl-screenplay-gutter) 96px;
+  --tl-line-height: 1.6;
+  --tl-paragraph-rhythm: 1.1rem;
+  --tl-h1-size: 1.4rem;
+  --tl-h2-size: 1rem;
+  --tl-h3-size: 1rem;
+  --tl-h4-size: 1rem;
+  --tl-h5-size: 1rem;
+  --tl-h6-size: 1rem;
+  --tl-h1-margin: 0 0 2.5rem;
+  --tl-h2-margin: 2.6rem 0 1.1rem;
+  --tl-h3-margin: 2rem 0 1.1rem;
+  --tl-h4-margin: 2.2rem 0 2.2rem;
+  --tl-h1-weight: 700;
+  --tl-heading-line-height: 1.45;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown {
+  font-size: 16px;
+  text-align: left;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h1 {
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h2,
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h3,
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h4,
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h5,
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown h6 {
+  font-weight: 700;
+  letter-spacing: 0;
+  text-wrap: wrap;
+  break-after: avoid;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown p,
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown li {
+  text-align: left;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-markdown blockquote.tunelito-screenplay-dialogue {
+  box-sizing: border-box;
+  width: min(var(--tl-screenplay-dialogue), calc(100% - 2 * var(--tl-screenplay-dialogue-inset, 4rem)));
+  margin: 0 auto var(--tl-paragraph-rhythm);
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--tl-text);
+  font-size: inherit;
+  font-style: normal;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue > p {
+  margin: 0 0 0.55rem;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue > p:last-child {
+  margin-bottom: 0;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue > .tunelito-screenplay-cue {
+  margin: 0;
+  text-align: center;
+  break-after: avoid;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue > .tunelito-screenplay-parenthetical {
+  margin: 0;
+  padding-left: 2ch;
+  break-after: avoid;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue > .tunelito-screenplay-parenthetical em {
+  font-style: normal;
+}
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue strong,
+:root[data-tunelito-theme="screenplay"] .tunelito-screenplay-dialogue em {
+  color: inherit;
+}
+@media (max-width: 640px) {
+  :root[data-tunelito-theme="screenplay"] {
+    --tl-screenplay-gutter: 1.25rem;
+    --tl-screenplay-dialogue-inset: 1.5rem;
+    --tl-page-padding: 36px var(--tl-screenplay-gutter) 72px;
+  }
+}
+@media (max-width: 360px) {
+  :root[data-tunelito-theme="screenplay"] {
+    --tl-screenplay-gutter: 1rem;
+    --tl-screenplay-dialogue-inset: 0.75rem;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-tunelito-theme="screenplay"] {
+    --tl-page-bg: #111112;
+    --tl-paper-bg: #1b1b1c;
+    --tl-text: #e7e3da;
+    --tl-muted: #b5afa4;
+    --tl-faint: #9d978c;
+    --tl-heading-1: #f2eee6;
+    --tl-heading-2: #e7e3da;
+    --tl-heading-3: #e7e3da;
+    --tl-heading-4: #e7e3da;
+    --tl-heading-5: #e7e3da;
+    --tl-heading-6: #c9c3b8;
+    --tl-accent: #e6a271;
+    --tl-accent-strong: #f3c39d;
+    --tl-border: #38362f;
+    --tl-soft: #242422;
+    --tl-code-bg: #242422;
+    --tl-code-text: #e7e3da;
+    --tl-inline-code-bg: #2a2926;
+    --tl-quote: #cfc9be;
+    --tl-quote-border: #5a564d;
+    --tl-selection: rgba(230, 162, 113, 0.26);
+    --tl-error-bg: #3b211a;
+    --tl-error-border: #965945;
+    --tl-error-text: #ffd0bc;
+    --tl-properties-bg: #161617;
+    --tl-properties-shadow: rgba(0, 0, 0, 0.3);
+    --tl-pill-bg: #2c2a25;
+    --tl-pill-border: #4a463c;
+    --tl-pill-text: #ddd5c6;
+  }
+}
+@media print {
+  :root[data-tunelito-theme="screenplay"] {
+    color-scheme: light;
+    --tl-page-bg: #ffffff;
+    --tl-paper-bg: #ffffff;
+    --tl-text: #000000;
+    --tl-heading-1: #000000;
+    --tl-heading-2: #000000;
+    --tl-heading-3: #000000;
+    --tl-heading-4: #000000;
+    --tl-heading-5: #000000;
+    --tl-heading-6: #000000;
+    --tl-quote: #000000;
+    --tl-screenplay-gutter: 0;
+  }
+  :root[data-tunelito-theme="screenplay"] body {
+    background: #ffffff;
+  }
+  :root[data-tunelito-theme="screenplay"] #tunelito-root,
+  :root[data-tunelito-theme="screenplay"] .tunelito-properties,
+  :root[data-tunelito-theme="screenplay"] .tunelito-properties-tab,
+  :root[data-tunelito-theme="screenplay"] [data-tunelito-comment-ignore] {
+    display: none !important;
+  }
+  :root[data-tunelito-theme="screenplay"] .tunelito-page-frame {
+    padding: 0 !important;
+  }
+  :root[data-tunelito-theme="screenplay"] .tunelito-markdown {
+    max-width: var(--tl-screenplay-action);
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  :root[data-tunelito-theme="screenplay"] .tunelito-markdown ::highlight(tunelito-comments) {
+    background: transparent;
+  }
 }
 `,
 };

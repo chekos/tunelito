@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer as createHttpServer } from "node:http";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,6 +43,7 @@ try {
   for (const fixture of accessibilityFixtures) await verifyAccessibility(fixture);
   await verifyVault();
   await verifyThemesAndComments();
+  await verifyScreenplay();
   await verifyFootnotesAndCommentAnchoring();
   await verifyDetailsAndCollapsedCommentTarget();
   await verifyReviewRoom();
@@ -330,6 +332,161 @@ async function verifyThemesAndComments() {
     assert.match(readerText, /Literal comment inside fenced code/);
     assert.match(readerText, /Beforeafter\./);
   });
+}
+
+async function verifyScreenplay() {
+  const tempDir = mkdtempSync(join(tmpdir(), "tunelito-screenplay-browser-"));
+  const filePath = join(tempDir, "primera-chamba.screenplay.md");
+  const commentsPath = join(tempDir, "primera-chamba.screenplay.comments.md");
+  copyFileSync(resolve(repoRoot, "examples/markdown/screenplay.md"), filePath);
+  const sha = () => createHash("sha256").update(readFileSync(filePath)).digest("hex");
+  const originalSha = sha();
+  const instance = await createTunelitoServer({
+    filePath,
+    commentsPath,
+    host: "127.0.0.1",
+    port: 0,
+    accessKey: "browser-check",
+    markdownTheme: "screenplay",
+    sectionIndex: true,
+  });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  const turnSelector = "blockquote.tunelito-screenplay-dialogue";
+  try {
+    await page.goto(instance.localUrl, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => document.querySelectorAll(".tunelito-ruler-marker").length > 0);
+    assert.equal(await page.locator(turnSelector).count(), 9, "every documented dialogue turn should be classified");
+    assert.equal(await page.locator(".tunelito-markdown > blockquote:not(.tunelito-screenplay-dialogue)").count(), 3, "nonmatching quotes stay visible as ordinary quotes");
+
+    const sectionLabels = await page.locator(".tunelito-section-index a").evaluateAll((links) => links.map((link) => link.textContent.trim()));
+    assert.deepEqual(sectionLabels, ["INT. RESTAURANTE LOS LAURELES — DÍA", "MINUTOS DESPUÉS", "ACTO UNO"], "the section index lists scenes and beats, not cues");
+
+    for (const colorScheme of ["light", "dark"]) {
+      for (const width of [1280, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+        const label = `screenplay ${colorScheme} ${width}px`;
+        const geometry = await page.locator(".tunelito-markdown").evaluate((article) => {
+          const box = (node) => node.getBoundingClientRect();
+          const action = article.querySelector(":scope > p");
+          const turn = article.querySelector("blockquote.tunelito-screenplay-dialogue");
+          const cue = turn.querySelector(".tunelito-screenplay-cue");
+          const dialogue = turn.querySelector(":scope > p:not([class])");
+          const longCue = Array.from(article.querySelectorAll(".tunelito-screenplay-cue")).at(-1);
+          const turnStyle = getComputedStyle(turn);
+          return {
+            actionLeft: box(action).left,
+            actionWidth: box(action).width,
+            turnLeft: box(turn).left,
+            turnRight: box(turn).right,
+            turnWidth: box(turn).width,
+            actionRight: box(action).right,
+            cueAlign: getComputedStyle(cue).textAlign,
+            dialogueAlign: getComputedStyle(dialogue).textAlign,
+            borderLeft: turnStyle.borderLeftWidth,
+            fontStyle: turnStyle.fontStyle,
+            fontSize: getComputedStyle(article).fontSize,
+            longCueOverflow: longCue.scrollWidth - longCue.clientWidth,
+          };
+        });
+        assert.equal(geometry.cueAlign, "center", `${label}: cues are centered`);
+        assert.equal(geometry.dialogueAlign, "left", `${label}: dialogue stays left aligned`);
+        assert.equal(geometry.borderLeft, "0px", `${label}: dialogue has no quote rail`);
+        assert.equal(geometry.fontStyle, "normal", `${label}: dialogue is not set in quote italics`);
+        assert.equal(geometry.fontSize, "16px", `${label}: script body stays at 16px`);
+        assert.ok(geometry.turnWidth < geometry.actionWidth, `${label}: dialogue column is narrower than action`);
+        assert.ok(geometry.turnLeft > geometry.actionLeft, `${label}: dialogue keeps an indent`);
+        assert.ok(Math.abs((geometry.turnLeft - geometry.actionLeft) - (geometry.actionRight - geometry.turnRight)) <= 1, `${label}: dialogue column is centered`);
+        assert.ok(geometry.longCueOverflow <= 0, `${label}: long cues wrap`);
+        await assertNoOverflow(page, label);
+        if (width !== 390) await assertAccessible(page, label);
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+
+    await page.waitForFunction(() => document.querySelector("#tunelito-root")?.shadowRoot?.querySelector(".status")?.textContent.startsWith("Connected"));
+    const addComment = async (turnIndex, text, body) => {
+      await page.locator(turnSelector).nth(turnIndex).evaluate((turn, target) => {
+        const walker = document.createTreeWalker(turn, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode()) && !node.textContent.includes(target));
+        const start = node.textContent.indexOf(target);
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + target.length);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      }, text);
+      const commentButton = page.getByRole("button", { name: "Comment", exact: true });
+      await commentButton.waitFor({ state: "visible" });
+      await commentButton.click();
+      const dialog = page.getByRole("dialog", { name: "Add comment" });
+      await dialog.getByRole("textbox").fill(body);
+      await dialog.getByRole("button", { name: "Add comment" }).click();
+      let saved;
+      const deadline = Date.now() + 5000;
+      while (!saved && Date.now() < deadline) {
+        saved = loadCommentsFromMarkdown(commentsPath).find((comment) => comment.body === body);
+        if (!saved) await page.waitForTimeout(50);
+      }
+      assert.ok(saved, `${body} should persist`);
+      await page.evaluate(() => window.getSelection().removeAllRanges());
+      return saved;
+    };
+    const dialogueComment = await addComment(2, "Nadie me dijo que el primer día iba a ser así.", "Dialogue note");
+    assert.equal(dialogueComment.quote, "Nadie me dijo que el primer día iba a ser así.");
+    const parentheticalComment = await addComment(2, "(en voz baja)", "Parenthetical note");
+    assert.equal(parentheticalComment.quote, "(en voz baja)", "parenthetical quotes keep parentheses and drop Markdown markers");
+    const repeatedComment = await addComment(4, "Nada. Ustedes sigan normal.", "Repeated line note");
+    for (const comment of [dialogueComment, parentheticalComment, repeatedComment]) {
+      assert.doesNotMatch(comment.quote, /[>*]|LALO|INÉS|MARIBEL/, "persisted quotes contain only the selected script text");
+    }
+
+    const highlightedTurns = () => page.evaluate((selector) => Array.from(CSS.highlights.get("tunelito-comments") || []).map((range) => {
+      const turn = range.startContainer.parentElement.closest(selector);
+      return {
+        text: range.toString(),
+        turn: turn ? Array.from(document.querySelectorAll(selector)).indexOf(turn) : -1,
+      };
+    }).sort((a, b) => a.turn - b.turn || a.text.localeCompare(b.text)), turnSelector);
+    const expectedHighlights = [
+      { text: "(en voz baja)", turn: 2 },
+      { text: "Nadie me dijo que el primer día iba a ser así.", turn: 2 },
+      { text: "Nada. Ustedes sigan normal.", turn: 4 },
+    ];
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => (CSS.highlights.get("tunelito-comments")?.size || 0) >= 3);
+    assert.deepEqual(await highlightedTurns(), expectedHighlights, "reopened anchors restore to their original turns");
+
+    await page.emulateMedia({ media: "print", colorScheme: "light" });
+    const print = await page.evaluate(() => {
+      const visible = (selector) => Array.from(document.querySelectorAll(selector)).some((node) => getComputedStyle(node).display !== "none");
+      const article = getComputedStyle(document.querySelector(".tunelito-markdown"));
+      return {
+        chrome: ["#tunelito-root", ".tunelito-document-map", ".tunelito-section-index", ".tunelito-properties", ".tunelito-properties-tab"].filter(visible),
+        color: article.color,
+        background: article.backgroundColor,
+      };
+    });
+    assert.deepEqual(print.chrome, [], "print hides review and navigation chrome");
+    assert.equal(print.color, "rgb(0, 0, 0)");
+    assert.equal(print.background, "rgb(255, 255, 255)");
+    await page.emulateMedia({ media: "screen" });
+    assert.equal(sha(), originalSha, "serving, commenting, reload and print must not change the screenplay source");
+
+    writeFileSync(filePath, readFileSync(filePath, "utf8").replace("Se ríe bajito.", "Se ríe bajito y se va."), "utf8");
+    await page.waitForFunction(() => document.querySelector(".tunelito-markdown")?.textContent.includes("Se ríe bajito y se va."));
+    await page.waitForFunction(() => (CSS.highlights.get("tunelito-comments")?.size || 0) >= 3);
+    assert.deepEqual(await highlightedTurns(), expectedHighlights, "an unrelated action edit leaves dialogue anchors attached");
+  } finally {
+    await context.close();
+    await instance.close();
+  }
 }
 
 async function verifyResponsiveAndComments() {

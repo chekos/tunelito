@@ -53,6 +53,7 @@ test("resolveTunelitoConfig reports stable defaults and available themes", () =>
     "editorial",
     "technical",
     "bns-pitaya",
+    "screenplay",
   ]);
 });
 
@@ -132,7 +133,7 @@ test("invalid config and unknown themes fail with the owning file path", () => {
   writeFileSync(paths.projectConfigPath, JSON.stringify({ theme: "unknown" }));
   assert.throws(
     () => resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} }),
-    /Unknown theme "unknown".*default, editorial, technical, bns-pitaya/,
+    /Unknown theme "unknown".*default, editorial, technical, bns-pitaya, screenplay/,
   );
 
   writeFileSync(paths.projectConfigPath, JSON.stringify({ them: "editorial" }));
@@ -245,3 +246,35 @@ test("codeWrap defaults on and follows CLI over project over global", () => {
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+test("screenplay theme resolves from project config and CLI with the usual precedence", () => {
+  const paths = workspace();
+  writeFileSync(paths.globalConfigPath, JSON.stringify({ theme: "editorial" }));
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ theme: "screenplay" }));
+
+  const project = resolveTunelitoConfig({ targetPath: paths.targetPath, homePath: paths.homePath, env: {} });
+  assert.equal(project.theme.value, "screenplay");
+  assert.equal(project.theme.source, "project");
+  assert.deepEqual(project.theme.details.colorModes, ["light", "dark"]);
+
+  const cli = resolveTunelitoConfig({
+    targetPath: paths.targetPath,
+    homePath: paths.homePath,
+    env: {},
+    cliTheme: "Screenplay",
+    cliThemeProvided: true,
+  });
+  assert.equal(cli.theme.value, "screenplay");
+  assert.equal(cli.theme.source, "cli");
+
+  writeFileSync(paths.projectConfigPath, JSON.stringify({ theme: "technical" }));
+  const override = resolveTunelitoConfig({
+    targetPath: paths.targetPath,
+    homePath: paths.homePath,
+    env: {},
+    cliTheme: "screenplay",
+    cliThemeProvided: true,
+  });
+  assert.equal(override.theme.value, "screenplay");
+  assert.equal(override.theme.source, "cli");
+});
