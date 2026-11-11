@@ -108,15 +108,11 @@ Use npm-valid semver prereleases such as `0.6.3-rc.0` or `0.6.3-beta.0`.
 
 Use `docs/agents/RELEASE_PLAYBOOK.md` for release readiness and `docs/RELEASING.md` for the public npm release process.
 
-## 8. Draft and Publish
+## 8. Publish
 
-After the version PR is merged to `main`, create a draft GitHub Release:
+Merging the version PR publishes. When the merged `package.json` version is unpublished and its CHANGELOG heading is dated, the `Publish Package` workflow runs CI, creates the `vX.Y.Z` GitHub Release with generated notes, and publishes to npm through trusted publishing. Confirm that run, smoke the npm install, and sync the skill to BNS Marketplace (`docs/agents/RELEASE_PLAYBOOK.md`). The old `gh workflow run "Draft Release"` plus manual publish path still works but is no longer required.
 
-```bash
-gh workflow run "Draft Release" -f version=<version>
-```
-
-Review the generated notes. Publishing the GitHub Release triggers the `Publish Package` workflow, which publishes to npm through trusted publishing.
+When the user asks for a feature in Tunelito, they expect it live: ship the feature PR, then a version PR (patch for fixes, minor for features), unless they say otherwise.
 
 Do not publish from a local shell. The Claude hook blocks direct `npm publish` because releases should go through GitHub trusted publishing.
 
