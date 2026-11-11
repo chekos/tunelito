@@ -773,7 +773,7 @@ test("config show resolves project settings and reports CLI overrides", () => {
   assert.equal(report.theme.source, "cli");
   assert.equal(report.configFiles.global.exists, true);
   assert.equal(report.configFiles.project.exists, true);
-  assert.deepEqual(report.availableThemes.map(({ name }) => name), ["default", "editorial", "technical", "bns-pitaya"]);
+  assert.deepEqual(report.availableThemes.map(({ name }) => name), ["default", "editorial", "technical", "bns-pitaya", "screenplay"]);
 });
 
 test("config show reports code block wrapping and its CLI override", () => {
@@ -1057,4 +1057,26 @@ test("skill rejects an unknown subcommand with a nonzero exit", () => {
   const code = runSkillCommand(["bogus"], { stdout, stderr });
   assert.equal(code, 2);
   assert.match(stderr.text(), /Unknown skill command bogus/);
+});
+
+test("config show --json reports a project-selected screenplay theme", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tunelito-config-cli-screenplay-"));
+  const homePath = join(dir, "home");
+  const projectPath = join(dir, "project");
+  mkdirSync(projectPath, { recursive: true });
+  mkdirSync(homePath);
+  writeFileSync(join(projectPath, "tunelito.config.json"), JSON.stringify({ theme: "screenplay" }));
+  writeFileSync(join(projectPath, "script.md"), "# Script");
+
+  const stdout = streamCollector();
+  const code = runConfigCommand(["show", join(projectPath, "script.md"), "--json"], {
+    stdout,
+    stderr: streamCollector(),
+    env: {},
+    homePath,
+  });
+  assert.equal(code, 0);
+  const report = JSON.parse(stdout.text());
+  assert.equal(report.theme.value, "screenplay");
+  assert.equal(report.theme.source, "project");
 });

@@ -13,6 +13,7 @@ Tunelito keeps Markdown presentation separate from Markdown content. Themes and 
 | `default` | General review with Tunelito's original neutral system-sans surface | Light and dark |
 | `editorial` | Essays, reports, and long-form drafts | Light and dark |
 | `technical` | Code, tables, Mermaid diagrams, and dense documentation | Light and dark |
+| `screenplay` | Screenplays written in [screenplay-markdown-v1](https://github.com/chekos/tunelito/blob/main/docs/spec/screenplay-markdown-v1.md) | Light and dark |
 
 Select a theme for one session:
 
@@ -21,6 +22,12 @@ tunelito ./notes.md --theme editorial
 ```
 
 All themes are packaged with Tunelito, work offline, and use system font fallbacks. `bns-pitaya` adapts reading tokens from the [BNS Obsidian Pitaya Theme](https://github.com/chekos/bns-obsidian-pitaya-theme); it uses Timeless Serif for headings and Timeless Sans for text when the viewer has them installed (get them from [timeless.co](https://timeless.co); their license does not allow bundling), falls back to installed humanist faces, and sets code in Paper Mono. Paper Mono is the one bundled font: it ships with Tunelito under the SIL Open Font License (`src/fonts/PaperMono-OFL.txt`) and is served from the review server itself. No theme copies the Obsidian stylesheet or downloads assets.
+
+`screenplay` sets the script in Paper Mono and turns blockquotes that follow the screenplay-markdown-v1 dialogue shape (`> **CUE**`, a `>`-only line, then dialogue) into centered cues over a narrower dialogue column. Headings act as sluglines (`##`), beats (`###`), and transitions (`####`). Quotes that do not match stay ordinary blockquotes, and other themes render the same file as plain Markdown. It is a review layout, not production pagination:
+
+```bash
+tunelito ./primera-chamba.screenplay.md --theme screenplay --section-index --no-tunnel
+```
 
 Without a CLI, project, or global theme setting, Markdown documents and generated folder pages use `bns-pitaya`. Choose `--theme default` to retain the original neutral light/dark surface.
 

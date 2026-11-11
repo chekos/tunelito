@@ -1013,7 +1013,7 @@ body.tunelito-comments-open .tunelito-document-map {
 }
 `;
 
-function createMarkdownParser() {
+function createMarkdownParser({ screenplay = false } = {}) {
   let hasMermaid = false;
   const defaultRenderer = new Renderer();
   const parser = new Marked(markedFootnote({
@@ -1021,6 +1021,15 @@ function createMarkdownParser() {
     backRefLabel: "Back to footnote reference",
   }), {
     gfm: true,
+    hooks: {
+      processAllTokens(tokens) {
+        // Only document-level quotes may become screenplay dialogue turns.
+        for (const token of tokens) {
+          if (token.type === "blockquote") token.tunelitoTopLevel = true;
+        }
+        return tokens;
+      },
+    },
     extensions: [
       {
         name: "escaped-inline-html",
@@ -1092,6 +1101,15 @@ function createMarkdownParser() {
         const title = token?.title ? ` title="${escapeAttribute(token.title)}"` : "";
         return `<img src="${escapeAttribute(src)}" alt="${alt}"${title}>`;
       },
+      blockquote(token) {
+        const turn = screenplay && token?.tunelitoTopLevel ? classifyScreenplayDialogue(token) : null;
+        if (!turn) return defaultRenderer.blockquote.call(this, token);
+        const paragraphs = turn.map(({ role, paragraph }) => {
+          const className = role === "dialogue" ? "" : ` class="tunelito-screenplay-${role}"`;
+          return `<p${className}>${this.parser.parseInline(paragraph.tokens || [])}</p>\n`;
+        }).join("");
+        return `<blockquote class="tunelito-screenplay-dialogue">\n${paragraphs}</blockquote>\n`;
+      },
       code(token) {
         if (String(token?.lang || "").trim().toLowerCase() !== "mermaid") {
           return defaultRenderer.code.call(this, token);
@@ -1102,6 +1120,44 @@ function createMarkdownParser() {
     },
   });
   return { parser, hasMermaid: () => hasMermaid };
+}
+
+// screenplay-markdown-v1 (docs/spec/screenplay-markdown-v1.md): a dialogue turn
+// is a top-level blockquote of paragraphs only, whose first paragraph is one
+// bold cue of plain text, followed by at least one spoken paragraph. A
+// paragraph that is only an emphasis wrapped in parentheses is a parenthetical.
+// Anything else returns null and keeps ordinary blockquote rendering.
+function classifyScreenplayDialogue(token) {
+  const children = (token?.tokens || []).filter((child) => child.type !== "space");
+  if (children.length < 2 || children.some((child) => child.type !== "paragraph")) return null;
+  const [cue, ...rest] = children;
+  if (!isScreenplayCue(cue)) return null;
+  const turn = [{ role: "cue", paragraph: cue }];
+  let spoken = 0;
+  for (const paragraph of rest) {
+    if (isScreenplayParenthetical(paragraph)) {
+      turn.push({ role: "parenthetical", paragraph });
+    } else {
+      spoken += 1;
+      turn.push({ role: "dialogue", paragraph });
+    }
+  }
+  return spoken > 0 ? turn : null;
+}
+
+function isScreenplayCue(paragraph) {
+  const inline = paragraph.tokens || [];
+  if (inline.length !== 1 || inline[0].type !== "strong") return false;
+  const parts = inline[0].tokens || [];
+  if (!parts.length || parts.some((part) => part.type !== "text" && part.type !== "escape")) return false;
+  return parts.map((part) => part.text || "").join("").trim().length > 0;
+}
+
+function isScreenplayParenthetical(paragraph) {
+  const inline = paragraph.tokens || [];
+  if (inline.length !== 1 || inline[0].type !== "em") return false;
+  const text = String(inline[0].text || "").trim();
+  return text.length >= 2 && text.startsWith("(") && text.endsWith(")");
 }
 
 function renderSafeMarkdownHtml(value) {
@@ -1216,7 +1272,7 @@ export function renderMarkdownDocument({
   const title = String(sourceName || "Markdown page");
   const theme = normalizeThemeName(themeName);
   const frontMatter = extractFrontMatter(markdownSource);
-  const markdown = createMarkdownParser();
+  const markdown = createMarkdownParser({ screenplay: theme === "screenplay" });
   const body = stampReviewTokens(stampExplicitAnchors(markdown.parser.parse(frontMatter.body)));
   const customCssHref = normalizeMarkdownCssHref(cssHref, { throwOnUnsafe: false });
   const customCss = customCssHref ? `  <link rel="stylesheet" href="${escapeAttribute(customCssHref)}">\n` : "";
